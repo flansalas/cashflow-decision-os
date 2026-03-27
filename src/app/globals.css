@@ -1,26 +1,362 @@
 @import "tailwindcss";
 
+/* ── Design Tokens — "Clean Desk" Light Mode ─────────────────────────────── */
+/*  Palette rationale:                                                         */
+/*  • Page feels like quality paper, not a terminal screen                     */
+/*  • AR (inflows) = Sage Emerald — calm, healthy                              */
+/*  • AP (outflows) = Muted Rose — planned, not alarming                       */
+/*  • Alert Red reserved ONLY for actual cash danger (negative balance)        */
+/*  • High-contrast ink navy for all text — easy to read for long sessions     */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ── Page Surface ──────────────────────────────────────────────── */
+  --bg-base:    #f8f9fa;   /* Cool Pearl — root page background          */
+  --bg-surface: #ffffff;   /* Pure White — cards, panels                 */
+  --bg-raised:  #f1f5f9;   /* Slate 50 — hover, sub-panels               */
+  --bg-input:   #f8fafc;   /* Slate 50 — form inputs                     */
+
+  /* ── Structural Borders ────────────────────────────────────────── */
+  --border-subtle:  rgba(15, 23, 42, 0.08);  /* Subtly bleeds background */
+  --border-default: rgba(15, 23, 42, 0.12);  /* Standard divider         */
+  --border-strong:  rgba(15, 23, 42, 0.20);  /* Stronger separation      */
+
+  /* ── Semantic Status Colors ────────────────────────────────────── */
+  --color-positive: #059669; /* Sage */
+  --color-negative: #64748b; /* Slate */
+  --color-danger:   #e11d48; /* Vibrant Rose */
+  --color-caution:  #d97706; /* Amber */
+  --color-primary:      #0f172a; /* Midnight Navy */
+  --color-primary-glow: rgba(15, 23, 42, 0.05);
+
+  /* ── Risk Colors for Grid and Statuses ─────────────────────────── */
+  --color-risk-low:      #059669; 
+  --color-risk-med:      #d97706; 
+  --color-risk-high:     #e11d48; 
+  --color-risk-normal:   #0f172a; 
+  --color-risk-critical: #e11d48; 
+
+  /* ── Typography ────────────────────────────────────────────────── */
+  --text-primary:   #0f172a;  /* Deep Ink Navy — headings, amounts       */
+  --text-secondary: #334155;  /* Slate 700 — body text                   */
+  --text-muted:     #64748b;  /* Slate 500 — labels, helper text         */
+  --text-faint:     #94a3b8;  /* Slate 400 — placeholders, timestamps    */
+
+  /* ── Fonts ──────────────────────────────────────────────────────── */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ── Base Reset ──────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── Native Select/Option dark theming ───────────────────────────────────── */
+select option {
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+}
+
+/* ── Date input appearance ───────────────────────────────────────────────── */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.6) sepia(0.3) hue-rotate(180deg);
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+/* ── Financial Number Typography ─────────────────────────────────────────── */
+/* Apply to any element containing dollar amounts for perfect column alignment */
+.font-financial {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 99px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+/* ── Glow Effects (replaced with strict borders) ───────────────────────────── */
+.glow-red {
+  border: 1px solid var(--color-danger);
+  box-shadow: none;
+}
+
+.glow-blue {
+  border: 1px solid var(--color-primary);
+  box-shadow: none;
+}
+
+.glow-emerald {
+  border: 1px solid var(--color-positive);
+  box-shadow: none;
+}
+
+/* ── Typography Strict Enforcements ───────────────────────────────────────── */
+.text-micro {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ── Standard Buttons ────────────────────────────────────────────────────── */
+.btn-pill {
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  color: #ffffff;
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.btn-pill:hover {
+  background: #1e293b;
+  border-color: #1e293b;
+}
+
+.btn-outline {
+  padding: 0.375rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.btn-outline:hover {
+  background: var(--bg-raised);
+}
+
+/* ── Glass Panel ──────────────────────────────────────────────────────────── */
+.glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0,0,0,0.02);
+  border-radius: 12px; /* Enforced 12px */
+}
+
+/* ── Priority P1 Pulse Animation ─────────────────────────────────────────── */
+@keyframes p1-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0);
+  }
+
+  50% {
+    box-shadow: 0 0 14px 3px rgba(248, 113, 113, 0.30);
+  }
+}
+
+.p1-pulse {
+  animation: p1-pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  border-color: rgba(248, 113, 113, 0.4) !important;
+}
+
+/* ── Skeleton Loading Shimmer ─────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #ece9e3 25%, #f5f3ef 50%, #ece9e3 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.8s infinite linear;
+  border-radius: 6px;
+}
+
+/* ── Transition Defaults ─────────────────────────────────────────────────── */
+button,
+a,
+input,
+select,
+textarea {
+  transition-property: background-color, border-color, color, box-shadow, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Forecast View Switch Animation ─────────────────────────────────────── */
+/*  Triggered by React key-change unmount/remount on the view wrapper.       */
+/*  Slides up 12px and fades in — feels fluid without being distracting.     */
+@keyframes view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.995);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+.view-enter {
+  animation: view-enter 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Staggered Item Entry */
+@keyframes item-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.stagger-item {
+  animation: item-fade-in 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Hover Elevation */
+.hover-elevate {
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hover-elevate:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -10px rgba(0,0,0,0.1);
+}
+
+/* Tab indicator slide – the active pill slides to the right position */
+@keyframes tab-pop {
+  from {
+    opacity: 0.5;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.tab-active-pop {
+  animation: tab-pop 140ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Modal overlay fade-in */
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+    background: rgba(15, 23, 42, 0);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(12px);
+    background: rgba(15, 23, 42, 0.45);
+  }
+}
+
+@keyframes modal-spring-up {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-overlay-enter {
+  animation: overlay-in 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.modal-card-enter {
+  animation: modal-spring-up 550ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes drawer-slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0.8;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.drawer-enter {
+  animation: drawer-slide-in 450ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes highlight-flash {
+  0% { box-shadow: 0 0 0 4px rgba(79, 70, 229, 0); transform: scale(1); }
+  15% { box-shadow: 0 0 0 8px rgba(79, 70, 229, 0.6); transform: scale(1.03); z-index: 50; }
+  100% { box-shadow: 0 0 0 0px rgba(79, 70, 229, 0); transform: scale(1); z-index: 1; }
+}
+
+.animate-highlight-flash {
+  animation: highlight-flash 3.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.persistent-focus-glow {
+  box-shadow: 0 0 15px 4px rgba(99, 102, 241, 0.7) !important;
+  border: 2px solid rgba(99, 102, 241, 0.9) !important;
+  animation: focus-breathing 2s ease-in-out infinite;
+  z-index: 40;
+  position: relative;
+  background-color: rgba(99, 102, 241, 0.05) !important;
+}
+
+@keyframes focus-breathing {
+  0% { box-shadow: 0 0 0px 0px rgba(99, 102, 241, 0); transform: scale(1); }
+  50% { box-shadow: 0 0 20px 8px rgba(99, 102, 241, 0.3); transform: scale(1.02); }
+  100% { box-shadow: 0 0 0px 0px rgba(99, 102, 241, 0); transform: scale(1); }
+}
+
+/* Subtle Paper Texture Overlay */
+.paper-texture::before {
+  content: "";
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  opacity: 0.015;
+  z-index: 9999;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }

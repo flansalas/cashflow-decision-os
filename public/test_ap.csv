@@ -1,0 +1,6 @@
+Vendor Name,Bill #,Amount Open,Bill Date,Due Date,Status,Days Past Due
+Office Supplies Co,BILL-001,1250.00,2026-01-10,2026-02-09,open,15
+Rent Corp LLC,BILL-002,8500.00,2026-02-01,2026-03-01,open,0
+Software Subscriptions,BILL-003,599.00,2026-02-15,2026-03-15,open,0
+Insurance Premium,BILL-004,3200.00,2026-01-05,2026-02-05,open,19
+Fuel Depot,BILL-005,4100.00,2026-02-10,2026-03-10,open,0

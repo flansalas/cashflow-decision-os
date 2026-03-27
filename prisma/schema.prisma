@@ -1,0 +1,404 @@
+// Cash Flow Decision OS – Prisma Schema
+// SQLite datasource, single-user local dev
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ────────────────────────────────────────────────
+// COMPANY
+// ────────────────────────────────────────────────
+
+model Company {
+  id                  String   @id @default(uuid())
+  name                String
+  isDemo              Boolean  @default(false)
+  onboardingCompleted Boolean  @default(false)
+  onboardingStep      Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  notes               CompanyNote[]
+  cashSnapshots        CashSnapshot[]
+  cashAdjustments      CashAdjustment[]
+  customerProfiles     CustomerProfile[]
+  vendorProfiles       VendorProfile[]
+  receivableInvoices   ReceivableInvoice[]
+  payableBills         PayableBill[]
+  assumptions          Assumption[]
+  bankAccounts         BankAccount[]
+  bankTransactions     BankTransaction[]
+  recurringPatterns    RecurringPattern[]
+  mappingProfiles      MappingProfile[]
+  overrides            Override[]
+  changeLogs           ChangeLog[]
+  forecastWeeks        ForecastWeek[]
+  actionItems          ActionItem[]
+  scenarioItems        ScenarioItem[]
+  cashFlowCategories   CashFlowCategory[]
+  cashFlowEntries      CashFlowEntry[]
+}
+
+model CompanyNote {
+  id        String   @id @default(uuid())
+  companyId String
+  noteText  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ────────────────────────────────────────────────
+// CASH
+// ────────────────────────────────────────────────
+
+model CashSnapshot {
+  id          String   @id @default(uuid())
+  companyId   String
+  asOfDate    DateTime
+  bankBalance Float
+  createdAt   DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// type: pending_deposit | uncleared_check | restricted_cash | other
+model CashAdjustment {
+  id            String   @id @default(uuid())
+  companyId     String
+  type          String
+  amount        Float
+  effectiveDate DateTime
+  note          String?
+  createdAt     DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ────────────────────────────────────────────────
+// PROFILES
+// ────────────────────────────────────────────────
+
+// riskTag: low | med | high
+model CustomerProfile {
+  id                  String   @id @default(uuid())
+  companyId           String
+  customerName        String
+  typicalDelayWeeks   Int?
+  riskTag             String   @default("low")
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// criticality: critical | normal
+model VendorProfile {
+  id          String   @id @default(uuid())
+  companyId   String
+  vendorName  String
+  criticality String   @default("normal")
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ────────────────────────────────────────────────
+// AR / AP
+// ────────────────────────────────────────────────
+
+// status: open | paid | void
+model ReceivableInvoice {
+  id             String    @id @default(uuid())
+  companyId      String
+  customerName   String
+  invoiceNo      String
+  invoiceDate    DateTime?
+  dueDate        DateTime?
+  amountOpen     Float
+  daysPastDue    Int?
+  status         String    @default("open")
+  metaJson       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// status: open | paid | void
+model PayableBill {
+  id          String    @id @default(uuid())
+  companyId   String
+  vendorName  String
+  billNo      String
+  billDate    DateTime?
+  dueDate     DateTime?
+  amountOpen  Float
+  daysPastDue Int?
+  status      String    @default("open")
+  metaJson    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ────────────────────────────────────────────────
+// ASSUMPTIONS
+// ────────────────────────────────────────────────
+
+// payrollCadence: weekly | biweekly
+model Assumption {
+  id                    String   @id @default(uuid())
+  companyId             String
+  bufferMin             Float    @default(10000)
+  fixedWeeklyOutflow    Float    @default(0)
+  payrollCadence        String   @default("biweekly")
+  payrollAllInAmount    Float?
+  payrollNextDate       DateTime?
+  rentMonthlyAmount     Float?
+  rentDayOfMonth        Int?
+  paymentCurveJson      String   @default("{\"current\":0,\"1-14\":1,\"15-30\":2,\"31-60\":3,\"61+\":4}")
+  highRiskAgingDays     Int      @default(61)
+  projectionSafetyMargin Float   @default(1.0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ────────────────────────────────────────────────
+// BANK DATA (optional)
+// ────────────────────────────────────────────────
+
+model BankAccount {
+  id        String   @id @default(uuid())
+  companyId String
+  name      String?
+  createdAt DateTime @default(now())
+
+  company      Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transactions BankTransaction[]
+}
+
+// direction: inflow | outflow
+model BankTransaction {
+  id          String   @id @default(uuid())
+  companyId   String
+  accountId   String?
+  txDate      DateTime
+  amount      Float
+  description String
+  direction   String
+  txHash      String?
+  createdAt   DateTime @default(now())
+
+  company Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  account BankAccount?  @relation(fields: [accountId], references: [id])
+
+  @@unique([companyId, txHash])
+}
+
+// ────────────────────────────────────────────────
+// RECURRING / BASELINE
+// ────────────────────────────────────────────────
+
+// direction: inflow | outflow
+// cadence: weekly | biweekly | monthly | irregular
+// confidence: high | med | low
+// category: payroll | rent | loan | subscription | utilities | fuel | materials | taxes | card_payment | other
+model RecurringPattern {
+  id                String    @id @default(uuid())
+  companyId         String
+  direction         String
+  merchantKey       String
+  displayName       String
+  typicalAmount     Float
+  amountStdDev      Float     @default(0)
+  cadence           String
+  nextExpectedDate  DateTime?
+  confidence        String    @default("med")
+  category          String    @default("other")
+  isIncluded        Boolean   @default(true)
+  isCritical        Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ────────────────────────────────────────────────
+// MAPPINGS
+// ────────────────────────────────────────────────
+
+// kind: ar | ap | bank
+model MappingProfile {
+  id          String   @id @default(uuid())
+  companyId   String
+  kind        String
+  mappingJson String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, kind])
+}
+
+// ────────────────────────────────────────────────
+// OVERRIDES + AUDIT
+// ────────────────────────────────────────────────
+
+// type: partial_payment | mark_paid | delay_due_date | adjust_amount |
+//       add_one_time_outflow | add_one_time_inflow |
+//       set_expected_payment_date | set_bill_due_date |
+//       set_customer_delay | set_vendor_criticality |
+//       set_recurring_pattern | toggle_recurring_included |
+//       set_payroll | set_rent | set_fixed_outflow | add_cash_adjustment
+// targetType: invoice | bill | assumption | cash | customer | vendor | recurring
+// status: active | orphaned | archived
+model Override {
+  id            String    @id @default(uuid())
+  companyId     String
+  type          String
+  targetType    String
+  targetId      String?
+  amount        Float?
+  effectiveDate DateTime?
+  metaJson      String?
+  status        String    @default("active")
+  createdAt     DateTime  @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// source: user_ui | command_box | system
+model ChangeLog {
+  id                      String   @id @default(uuid())
+  companyId               String
+  timestamp               DateTime @default(now())
+  source                  String
+  action                  String
+  inputText               String?
+  diffJson                String
+  forecastVersionHashAfter String
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ────────────────────────────────────────────────
+// FORECAST OUTPUT
+// ────────────────────────────────────────────────
+
+// zone: committed | pattern | uncertain
+model ForecastWeek {
+  id                String   @id @default(uuid())
+  companyId         String
+  weekStart         DateTime
+  weekEnd           DateTime
+  startCash         Float
+  inflowsExpected   Float
+  outflowsExpected  Float
+  endCashExpected   Float
+  inflowsBest       Float
+  outflowsBest      Float
+  endCashBest       Float
+  inflowsWorst      Float
+  outflowsWorst     Float
+  endCashWorst      Float
+  zone              String
+  confidenceScore   Int      @default(100)
+  breakdownJson     String?
+  computedAt        DateTime @default(now())
+  forecastVersionHash String
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, weekStart, forecastVersionHash])
+}
+
+// ────────────────────────────────────────────────
+// ACTIONS
+// ────────────────────────────────────────────────
+
+// type: collect_ar | delay_ap | reduce_outflows | add_cash_adjustment | other | risk_alert
+// priority: p1 | p2 | p3
+// impactCertainty: high | med | low
+// targetType: invoice | bill | assumption | cash | customer | vendor | recurring
+model ActionItem {
+  id                String   @id @default(uuid())
+  companyId         String
+  type              String
+  priority          String
+  title             String
+  description       String
+  amountImpact      Float
+  impactCertainty   String
+  constraintWeekStart DateTime?
+  targetType        String
+  targetId          String?
+  reasoningJson     String
+  createdAt         DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+// ────────────────────────────────────────────────
+// SCENARIO / WHAT-IF
+// ────────────────────────────────────────────────
+
+// direction: in | out
+model ScenarioItem {
+  id          String   @id @default(uuid())
+  companyId   String
+  label       String
+  direction   String   // "in" | "out"
+  weekNumber  Int
+  amount      Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ────────────────────────────────────────────────
+// CASH FLOW CATEGORIES (custom in/out)
+// ────────────────────────────────────────────────
+
+// direction: inflow | outflow
+model CashFlowCategory {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  direction   String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  entries CashFlowEntry[]
+
+  @@unique([companyId, name, direction])
+}
+
+model CashFlowEntry {
+  id           String    @id @default(uuid())
+  companyId    String
+  categoryId   String
+  label        String
+  amount       Float
+  weekNumber   Int
+  note         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category CashFlowCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+}

@@ -1,0 +1,9 @@
+Customer Name,Invoice #,Amount Open,Invoice Date,Due Date,Status,Days Past Due
+Apex Mechanical Corp,INV-001,12500.00,2026-01-15,2026-02-14,open,10
+Blue Ridge Plumbing,INV-002,8750.50,2026-01-20,2026-02-19,open,5
+Summit HVAC Ltd,INV-003,31200.00,2025-12-01,2025-12-31,open,55
+River Valley Electric,INV-004,4200.00,2026-02-01,2026-03-03,open,0
+Mountain Gas Services,INV-005,15800.00,2025-11-15,2025-12-15,open,71
+Coastal Refrigeration,INV-006,9400.00,2026-01-28,2026-02-27,open,0
+Prairie Metal Works,INV-007,22100.00,2026-01-10,2026-02-09,open,15
+Lakeside HVAC Solutions,INV-008,5600.00,2026-02-10,2026-03-12,open,0
