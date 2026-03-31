@@ -36,6 +36,11 @@ interface Props {
     isCompact?: boolean;
     companyName?: string;
     onToggleSetup?: () => void;
+    // Drill-down + scenario numbers (replaces ForecastBanner sidebar)
+    onDrillIn?: () => void;
+    lowestExpected?: number;
+    lowestWorst?: number;
+    zoneBoundary?: string;
 }
 
 function SummarySection({ title, label, value, subValue, children, colorClass, highlight, isCompact }: { title: string, label?: string, value: string, subValue?: string, children?: React.ReactNode, colorClass?: string, highlight?: boolean, isCompact?: boolean }) {
@@ -70,7 +75,8 @@ export function HeaderTruthBar({
     bankBalance, adjustmentsTotal, adjustedCash, buffer,
     confidence, lastUpdated, asOfDate, companyId,
     payroll, payrollPromptNeeded, adjustments, onUpdateBalanceClick, onBalanceUpdated,
-    expectedRunOutWeek, worstCaseRunOutWeek, inflow30, outflow30, isCompact, companyName, onToggleSetup
+    expectedRunOutWeek, worstCaseRunOutWeek, inflow30, outflow30, isCompact, companyName, onToggleSetup,
+    onDrillIn, lowestExpected, lowestWorst, zoneBoundary
 }: Props) {
     const [showAdj, setShowAdj] = useState(false);
     const [showReasons, setShowReasons] = useState(false);
@@ -230,28 +236,63 @@ export function HeaderTruthBar({
                 </SummarySection>
 
             {/* Section 4: Forecast Health */}
-            <div className="lg:col-span-1 border-t md:border-t-0 p-6 flex flex-col justify-between group relative bg-white">
+            <div className="lg:col-span-1 border-t md:border-t-0 p-4 flex flex-col justify-between group relative bg-white">
                 {(() => {
                     const isExpectedSafe = expectedRunOutWeek === null;
                     const isWorstSafe = worstCaseRunOutWeek === null;
                     const status = (isExpectedSafe && isWorstSafe) ? "STABLE" : isExpectedSafe ? "VULNERABLE" : "CRITICAL";
                     
                     const statusConfig = {
-                        STABLE: { 
-                            glow: "bg-emerald-400/10"
-                        },
-                        VULNERABLE: { 
-                            glow: "bg-amber-400/10"
-                        },
-                        CRITICAL: { 
-                            glow: "bg-rose-400/10"
-                        }
+                        STABLE: { glow: "bg-emerald-400/10" },
+                        VULNERABLE: { glow: "bg-amber-400/10" },
+                        CRITICAL: { glow: "bg-rose-400/10" }
                     }[status];
 
                     return (
                         <>
                             <div className={`absolute top-0 right-0 w-48 h-48 rounded-full -mr-20 -mt-20 blur-3xl opacity-50 ${statusConfig.glow} pointer-events-none`} />
                             <RunwayMetric expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} />
+
+                            {/* Scenario floor numbers — compact, below the metric */}
+                            {(lowestExpected !== undefined || lowestWorst !== undefined) && (
+                                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-slate-100">
+                                    {lowestExpected !== undefined && (
+                                        <div className="flex-1">
+                                            <p className="text-[8px] uppercase font-bold tracking-[0.2em] text-slate-400 mb-0.5">Floor</p>
+                                            <p className={`text-sm font-bold font-financial tracking-tight ${lowestExpected < 0 ? "text-rose-600" : "text-slate-800"}`}>
+                                                {fmt(lowestExpected)}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {lowestWorst !== undefined && (
+                                        <>
+                                            <div className="w-px h-6 bg-slate-100" />
+                                            <div className="flex-1">
+                                                <p className="text-[8px] uppercase font-bold tracking-[0.2em] text-slate-400 mb-0.5">Worst</p>
+                                                <p className={`text-sm font-bold font-financial tracking-tight ${lowestWorst < 0 ? "text-rose-500" : "text-slate-400"}`}>
+                                                    {fmt(lowestWorst)}
+                                                </p>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Drill-down portal — only when there's a gap to review */}
+                            {onDrillIn && status !== "STABLE" && (
+                                <button
+                                    onClick={onDrillIn}
+                                    className="mt-3 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-slate-900 hover:text-indigo-600 transition-colors group/drill"
+                                >
+                                    Review gap
+                                    <ArrowRight className="w-3 h-3 group-hover/drill:translate-x-0.5 transition-transform" />
+                                </button>
+                            )}
+                            {zoneBoundary && (
+                                <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                                    {zoneBoundary}
+                                </p>
+                            )}
                         </>
                     );
                 })()}

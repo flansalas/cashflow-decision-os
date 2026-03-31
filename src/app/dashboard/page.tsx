@@ -5,7 +5,6 @@ import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { HeaderTruthBar } from "@/ui/HeaderTruthBar";
-import { ForecastBanner } from "@/ui/ForecastBanner";
 import { ForecastChart } from "@/ui/ForecastChart";
 import { ForecastRunwayView } from "@/ui/ForecastRunwayView";
 import { ForecastPulseView } from "@/ui/ForecastPulseView";
@@ -317,16 +316,19 @@ function DashboardContent() {
                         worstCaseRunOutWeek={data.forecast.worstCaseRunOutWeek}
                         inflow30={data.forecast.weeks.slice(0, 4).reduce((s, w) => s + w.inflowsExpected, 0)}
                         outflow30={data.forecast.weeks.slice(0, 4).reduce((s, w) => s + w.outflowsExpected, 0)}
+                        onDrillIn={data.forecast.constraintWeek ? () => setSelectedWeekNumber(data.forecast.constraintWeek!) : undefined}
+                        lowestExpected={data.forecast.lowestExpectedBalance}
+                        lowestWorst={data.forecast.lowestWorstBalance}
+                        zoneBoundary={data.zoneBoundary}
                     />
                 </div>
             </div>
 
             <main className="max-w-[88rem] mx-auto px-6 py-6 space-y-6">
                 {/* ── Dashboard Pulse Grid ─────────────────────────── */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                    
-                    {/* LEFT COLUMN: The Pulse (Chart) */}
-                    <div className="lg:col-span-9 flex flex-col order-2 lg:order-1 bg-white border rounded-2xl shadow-sm overflow-visible" style={{ borderColor: 'var(--border-default)' }}>
+                <div className="flex flex-col gap-5">
+                    {/* FULL WIDTH: The Pulse (Chart) */}
+                    <div className="flex flex-col bg-white border rounded-2xl shadow-sm overflow-visible" style={{ borderColor: 'var(--border-default)' }}>
                         
                         {/* INTEGRATED TOOLBAR */}
                         <div className="px-6 py-2 border-b bg-slate-50/50 flex flex-wrap items-center justify-between gap-4 rounded-t-2xl" style={{ borderColor: 'var(--border-subtle)' }}>
@@ -417,85 +419,41 @@ function DashboardContent() {
                             )}
                         </div>
                     </div>
-
-                    {/* RIGHT COLUMN: Sidebar Insights & Checklist */}
-                    <div className="lg:col-span-3 flex flex-col gap-6 order-1 lg:order-2">
-                        {/* Zone 2: Urgency — Banner */}
-                        <div className={`transition-all duration-700 ${isScrolled ? 'opacity-40 scale-[0.98] translate-y-[-10px] pointer-events-none blur-[1px]' : 'opacity-100 scale-100 translate-y-0'}`}>
-                            <ForecastBanner
-                                expectedRunOutWeek={data.forecast.expectedRunOutWeek}
-                                worstCaseRunOutWeek={data.forecast.worstCaseRunOutWeek}
-                                lowestExpected={data.forecast.lowestExpectedBalance}
-                                lowestWorst={data.forecast.lowestWorstBalance}
-                                zoneBoundary={data.zoneBoundary}
-                                weeks={data.forecast.weeks}
-                                onDrillIn={data.forecast.constraintWeek ? () => setSelectedWeekNumber(data.forecast.constraintWeek!) : undefined}
-                            />
-                        </div>
-
-                        {/* Getting Started Tracker (Checklist) */}
-                        {(() => {
-                            const hasBalance = data.cash.bankBalance > 0;
-                            const hasPayroll = data.payroll !== null;
-                            const hasCommitments = data.commitmentsCount > 1;
-                            const hasARAPData = (data.backlog.overdueAP.length + data.backlog.overdueAR.length) > 0;
-                            const hasBuffer = data.assumptions.bufferMin > 0;
-                            
-                            const isAllDone = hasBalance && hasPayroll && hasCommitments && hasARAPData && hasBuffer;
-                            if (isAllDone) return null;
-
-                            return (
-                                <div className="rounded-2xl border overflow-hidden shadow-sm" style={{ background: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}>
-                                    <div className="px-6 py-4 border-b bg-slate-50/50" style={{ borderColor: 'var(--border-subtle)' }}>
-                                        <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-                                            <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                                            Setup Checklist
-                                        </span>
-                                    </div>
-                                    <div className="px-5 py-4">
-                                        <GettingStartedTracker
-                                            companyId={data.company.id}
-                                            hasBalance={hasBalance}
-                                            hasPayroll={hasPayroll}
-                                            hasCommitments={hasCommitments}
-                                            hasARAPData={hasARAPData}
-                                            hasBuffer={hasBuffer}
-                                            onOpenSetup={() => setSetupOpen(true)}
-                                            onOpenCommitments={() => window.location.href = "/recurring"}
-                                        />
-                                    </div>
-                                </div>
-                            );
-                        })()}
-
-                        {/* Event Anchoring: Upcoming Big Commitments */}
-                        {data.commitments.filter((c: any) => c.isCritical && c.direction === "outflow").length > 0 && (
-                            <div className="rounded-2xl border overflow-hidden shadow-sm bg-white" style={{ borderColor: "var(--border-subtle)" }}>
-                                <div className="px-6 py-4 border-b bg-slate-50/50 flex justify-between items-center" style={{ borderColor: 'var(--border-subtle)' }}>
-                                    <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-800">
-                                        Major Outflows Ahead
-                                    </span>
-                                    <a href="/recurring" className="text-[10px] uppercase tracking-widest text-indigo-600 font-bold hover:underline">All Events &rarr;</a>
-                                </div>
-                                <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
-                                    {data.commitments.filter((c: any) => c.isCritical && c.direction === "outflow").slice(0, 3).map((c: any) => (
-                                        <div key={c.id} className="p-4 flex items-center justify-between group hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => window.location.href = "/recurring"}>
-                                            <div className="flex flex-col gap-0.5">
-                                                <span className="text-xs font-bold text-slate-800">{c.displayName}</span>
-                                                <span className="text-[10px] uppercase font-bold text-slate-400">{c.nextExpectedDate ? new Date(c.nextExpectedDate).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : c.category.replace(/_/g,' ')}</span>
-                                            </div>
-                                            <span className="text-sm font-financial font-bold text-rose-600">
-                                                -{Math.round(c.typicalAmount).toLocaleString()}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
                 </div>
 
-
+                {/* ── Getting Started Checklist (only when setup incomplete) ── */}
+                {(() => {
+                    const hasBalance = data.cash.bankBalance > 0;
+                    const hasPayroll = data.payroll !== null;
+                    const hasCommitments = data.commitmentsCount > 1;
+                    const hasARAPData = (data.backlog.overdueAP.length + data.backlog.overdueAR.length) > 0;
+                    const hasBuffer = data.assumptions.bufferMin > 0;
+                    const isAllDone = hasBalance && hasPayroll && hasCommitments && hasARAPData && hasBuffer;
+                    if (isAllDone) return null;
+                    return (
+                        <details className="rounded-2xl border overflow-hidden shadow-sm group transition-shadow hover:shadow-[0_8px_16px_rgba(15,23,42,0.04)]" style={{ background: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}>
+                            <summary className="px-6 py-4 cursor-pointer text-xs font-semibold uppercase tracking-wider select-none flex items-center justify-between" style={{ color: "var(--text-secondary)" }}>
+                                <span className="flex items-center gap-2">
+                                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                                    Setup Checklist
+                                </span>
+                                <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180 transition-transform" />
+                            </summary>
+                            <div className="px-5 py-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                                <GettingStartedTracker
+                                    companyId={data.company.id}
+                                    hasBalance={hasBalance}
+                                    hasPayroll={hasPayroll}
+                                    hasCommitments={hasCommitments}
+                                    hasARAPData={hasARAPData}
+                                    hasBuffer={hasBuffer}
+                                    onOpenSetup={() => setSetupOpen(true)}
+                                    onOpenCommitments={() => window.location.href = "/recurring"}
+                                />
+                            </div>
+                        </details>
+                    );
+                })()}
 
                 {/* ── 13-Week Forecast Summary Grid ─────────── */}
                 <details className="rounded-2xl border overflow-hidden shadow-sm group transition-shadow hover:shadow-[0_8px_16px_rgba(15,23,42,0.04)]" style={{ background: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}>
