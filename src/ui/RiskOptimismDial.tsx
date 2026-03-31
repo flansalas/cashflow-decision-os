@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ThermometerSun, ShieldCheck, ShieldAlert, Info } from "lucide-react";
+import { ThermometerSun, ShieldCheck, ShieldAlert } from "lucide-react";
+import { HelpBubble } from "./HelpBubble";
 
 interface Props {
     companyId: string;
@@ -51,20 +52,11 @@ export function RiskOptimismDial({ companyId, initialMargin, onChanged }: Props)
                      </p>
                 </div>
                 
-                <div className="ml-1 opacity-40 hover:opacity-100 cursor-help transition-opacity">
-                    <Info className="w-3.5 h-3.5" />
-                    <div className="absolute top-full mt-3 right-0 w-72 p-5 bg-slate-900 text-white text-[11px] rounded-2xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-300 z-[110] shadow-2xl border border-white/10 ring-1 ring-black scale-95 group-hover:scale-100 origin-top">
-                        {/* Tooltip Arrow */}
-                        <div className="absolute -top-1.5 right-8 w-3 h-3 bg-slate-900 border-l border-t border-white/10 rotate-45" />
-
-                        <p className="font-bold mb-1.5 uppercase tracking-[0.1em] text-indigo-300">Historical Engine Tune</p>
-                        <p className="leading-relaxed opacity-90">
-                            Adjusts the safety margin applied to manual projections. 
-                            <span className="block mt-2 font-bold text-amber-400">Decrease</span> to model extreme skepticism. 
-                            <span className="block mt-1 font-bold text-emerald-400">Increase</span> to model aggressive collection growth.
-                        </p>
-                    </div>
-                </div>
+                <HelpBubble
+                    position="bottom-left"
+                    width="w-72"
+                    text="Adjusts the safety margin applied to your variable spend projections. Decrease below 1.0x to model extreme skepticism (conservative). Increase above 1.0x for aggressive growth assumptions."
+                />
             </div>
 
             <div className="flex items-center gap-3 border-l pl-3" style={{ borderColor: 'var(--border-subtle)' }}>
