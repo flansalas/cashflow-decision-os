@@ -6,7 +6,6 @@ import { Package, Printer, Inbox } from "lucide-react";
 import { ARAPCard, type GridItem, type DragPayload } from "./ARAPCard";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
 import { ExecutionPlanModal } from "./ExecutionPlanModal";
-import { HelpBubble } from "./HelpBubble";
 
 interface WeekMeta {
     weekNumber: number;
@@ -499,97 +498,14 @@ export function CashflowGrid({
                                                 ${isDropTarget ? "border-indigo-200" : "border-[var(--border-subtle)]"}`}
                                                 style={{ background: isDropTarget ? "#f5f3ff" : "var(--bg-raised)" }}
                                             >
-                                                {/* ── In row ── */}
-                                                {(() => {
-                                                    const scheduledAR = items.ar.reduce((s, i) => s + i.amountOpen, 0);
-                                                    const projIn = Math.max(0, bal.inflows - scheduledAR - recIn);
-                                                    const inflowContent = (
-                                                        <div className="space-y-1.5">
-                                                            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>Inflow Breakdown</p>
-                                                            {scheduledAR > 0 && (
-                                                                <div className="flex justify-between gap-3">
-                                                                    <span style={{ color: 'var(--text-muted)' }}>Scheduled AR</span>
-                                                                    <span className="font-semibold" style={{ color: '#059669' }}>+{fmt(scheduledAR)}</span>
-                                                                </div>
-                                                            )}
-                                                            {recIn > 0 && (
-                                                                <div className="flex justify-between gap-3">
-                                                                    <span style={{ color: 'var(--text-muted)' }}>Recurring In</span>
-                                                                    <span className="font-semibold" style={{ color: '#059669' }}>+{fmt(recIn)}</span>
-                                                                </div>
-                                                            )}
-                                                            {projIn > 0 && (
-                                                                <div className="flex justify-between gap-3">
-                                                                    <span style={{ color: 'var(--text-muted)' }}>Projected Collections</span>
-                                                                    <span className="font-semibold" style={{ color: '#6b7280' }}>+{fmt(projIn)}</span>
-                                                                </div>
-                                                            )}
-                                                            {projIn > 0 && (
-                                                                <p className="text-[9px] mt-1 border-t pt-1" style={{ color: 'var(--text-faint)', borderColor: 'var(--border-subtle)' }}>
-                                                                    ⚙ Engine estimate based on 90-day historical average
-                                                                </p>
-                                                            )}
-                                                            {scheduledAR === 0 && recIn === 0 && projIn === 0 && (
-                                                                <p style={{ color: 'var(--text-faint)' }}>No inflow this week</p>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                    return (
-                                                        <div className="flex justify-between text-[10px]">
-                                                            <span className="flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-                                                                In
-                                                                <HelpBubble content={inflowContent} position="bottom-right" width="w-64" />
-                                                            </span>
-                                                            <span style={{ color: '#059669' }}>+{fmt(bal.inflows)}</span>
-                                                        </div>
-                                                    );
-                                                })()}
-
-                                                {/* ── Out row ── */}
-                                                {(() => {
-                                                    const scheduledAP = items.ap.reduce((s, i) => s + i.amountOpen, 0);
-                                                    const projOut = Math.max(0, bal.outflows - scheduledAP - recOut);
-                                                    const outflowContent = (
-                                                        <div className="space-y-1.5">
-                                                            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>Outflow Breakdown</p>
-                                                            {scheduledAP > 0 && (
-                                                                <div className="flex justify-between gap-3">
-                                                                    <span style={{ color: 'var(--text-muted)' }}>Scheduled AP</span>
-                                                                    <span className="font-semibold" style={{ color: '#e11d48' }}>−{fmt(scheduledAP)}</span>
-                                                                </div>
-                                                            )}
-                                                            {recOut > 0 && (
-                                                                <div className="flex justify-between gap-3">
-                                                                    <span style={{ color: 'var(--text-muted)' }}>Recurring Out</span>
-                                                                    <span className="font-semibold" style={{ color: '#e11d48' }}>−{fmt(recOut)}</span>
-                                                                </div>
-                                                            )}
-                                                            {projOut > 0 && (
-                                                                <div className="flex justify-between gap-3">
-                                                                    <span style={{ color: 'var(--text-muted)' }}>Projected Variable Spend</span>
-                                                                    <span className="font-semibold" style={{ color: '#6b7280' }}>−{fmt(projOut)}</span>
-                                                                </div>
-                                                            )}
-                                                            {projOut > 0 && (
-                                                                <p className="text-[9px] mt-1 border-t pt-1" style={{ color: 'var(--text-faint)', borderColor: 'var(--border-subtle)' }}>
-                                                                    ⚙ Engine estimate: historical avg spend minus known bills
-                                                                </p>
-                                                            )}
-                                                            {scheduledAP === 0 && recOut === 0 && projOut === 0 && (
-                                                                <p style={{ color: 'var(--text-faint)' }}>No outflow this week</p>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                    return (
-                                                        <div className="flex justify-between text-[10px]">
-                                                            <span className="flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-                                                                Out
-                                                                <HelpBubble content={outflowContent} position="bottom-right" width="w-64" />
-                                                            </span>
-                                                            <span style={{ color: '#e11d48' }}>−{fmt(bal.outflows)}</span>
-                                                        </div>
-                                                    );
-                                                })()}
+                                                <div className="flex justify-between text-[10px]">
+                                                    <span style={{ color: 'var(--text-muted)' }}>In</span>
+                                                    <span style={{ color: '#059669' }}>+{fmt(bal.inflows)}</span>
+                                                </div>
+                                                <div className="flex justify-between text-[10px]">
+                                                    <span style={{ color: 'var(--text-muted)' }}>Out</span>
+                                                    <span style={{ color: '#e11d48' }}>−{fmt(bal.outflows)}</span>
+                                                </div>
 
                                                 <div className="flex justify-between text-[10px] font-semibold border-t pt-1 mt-1" style={{ borderColor: 'var(--border-subtle)' }}>
                                                     <span style={{ color: 'var(--text-muted)' }}>Net</span>
