@@ -180,7 +180,7 @@ export function ARAPCard({ item, weeks, companyId, onMoved, onSelect, isSelected
 
                 {/* Row 2: amount + badges */}
                 <div className="flex items-center justify-between mt-1.5 gap-2 flex-wrap">
-                    <span className={`font-bold font-financial text-sm ${isAR ? "text-emerald-700" : "text-indigo-600"}`}>
+                    <span className={`font-bold font-financial text-sm ${isAR ? "text-emerald-700" : "text-rose-600"}`}>
                         {isAR ? "+" : "−"}{fmt(item.amountOpen)}
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">

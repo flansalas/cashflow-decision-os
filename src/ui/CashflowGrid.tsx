@@ -242,9 +242,9 @@ export function CashflowGrid({
                         <span className="text-xs font-semibold" style={{ color: '#059669' }}>+{fmt(totalAR)}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#6366f1' }} />
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#e11d48' }} />
                         <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{bills.length} AP</span>
-                        <span className="text-xs font-semibold" style={{ color: '#6366f1' }}>−{fmt(totalAP)}</span>
+                        <span className="text-xs font-semibold" style={{ color: '#e11d48' }}>−{fmt(totalAP)}</span>
                     </div>
                     {overriddenCount > 0 && (
                         <div className="flex items-center gap-1.5">
@@ -504,7 +504,7 @@ export function CashflowGrid({
                                                 </div>
                                                 <div className="flex justify-between text-[10px]">
                                                     <span style={{ color: 'var(--text-muted)' }}>Out</span>
-                                                    <span style={{ color: '#6366f1' }}>−{fmt(bal.outflows)}</span>
+                                                    <span style={{ color: '#e11d48' }}>−{fmt(bal.outflows)}</span>
                                                 </div>
                                                 <div className="flex justify-between text-[10px] font-semibold border-t pt-1 mt-1" style={{ borderColor: 'var(--border-subtle)' }}>
                                                     <span style={{ color: 'var(--text-muted)' }}>Net</span>
@@ -558,7 +558,7 @@ export function CashflowGrid({
                                                     {recOut > 0 && (
                                                         <div className="flex justify-between">
                                                             <span style={{ color: 'var(--text-muted)' }}>Recurring out</span>
-                                                            <span style={{ color: '#6366f1' }} className="font-medium">−{fmt(recOut)}</span>
+                                                            <span style={{ color: '#e11d48' }} className="font-medium">−{fmt(recOut)}</span>
                                                         </div>
                                                     )}
                                                 </div>
