@@ -43,10 +43,10 @@ interface Props {
     zoneBoundary?: string;
 }
 
-function SummarySection({ title, label, value, subValue, children, colorClass, highlight, isCompact }: { title: string, label?: string, value: string, subValue?: string, children?: React.ReactNode, colorClass?: string, highlight?: boolean, isCompact?: boolean }) {
+function SummarySection({ title, label, value, subValue, children, colorClass, highlight, isCompact }: { title: string, label?: string, value: string | React.ReactNode, subValue?: string, children?: React.ReactNode, colorClass?: string, highlight?: boolean, isCompact?: boolean }) {
     if (isCompact) {
         return (
-            <div className="flex items-center gap-3 px-4 py-1.5 whitespace-nowrap group">
+            <div className="flex items-center gap-3 px-4 py-1.5 whitespace-nowrap group relative">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 group-hover:text-slate-600 transition-colors">{title}:</span>
                 <span className={`text-base font-black font-financial ${colorClass || "text-slate-900"}`}>{value}</span>
                 {children}
@@ -59,7 +59,7 @@ function SummarySection({ title, label, value, subValue, children, colorClass, h
             <div>
                 <p className="text-[10px] font-bold mb-0.5 uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>{title}</p>
                 <div className="flex items-center justify-between">
-                    <p className={`text-2xl font-black font-financial leading-none tracking-tight gap-1 ${colorClass || "text-slate-900"}`}>{value}</p>
+                    <div className={`text-2xl font-black font-financial leading-none tracking-tight gap-1 relative ${colorClass || "text-slate-900"}`}>{value}</div>
                 </div>
                 {subValue && <p className="text-[11px] font-medium mt-1 text-slate-500 truncate">{subValue}</p>}
                 {label && <p className="text-[11px] font-medium mt-1 text-slate-500">{label}</p>}
@@ -69,7 +69,7 @@ function SummarySection({ title, label, value, subValue, children, colorClass, h
     );
 }
 
-import { Box, Settings2, Search } from "lucide-react";
+import { Box, Settings2, Search, Trash2, CheckCircle2 } from "lucide-react";
 
 export function HeaderTruthBar({
     bankBalance, adjustmentsTotal, adjustedCash, buffer,
@@ -81,6 +81,50 @@ export function HeaderTruthBar({
     const [showAdj, setShowAdj] = useState(false);
     const [showReasons, setShowReasons] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
+
+    // Edit Balance Popover
+    const [editBalanceOpen, setEditBalanceOpen] = useState(false);
+    const [tempBalance, setTempBalance] = useState(bankBalance.toString());
+    const [tempAdjustments, setTempAdjustments] = useState(adjustments);
+    const [isSavingBalance, setIsSavingBalance] = useState(false);
+
+    useEffect(() => {
+        if (editBalanceOpen) {
+            setTempBalance(bankBalance.toString());
+            setTempAdjustments(adjustments);
+        }
+    }, [editBalanceOpen, bankBalance, adjustments]);
+
+    const handleSaveBalance = async () => {
+        setIsSavingBalance(true);
+        try {
+            const parsedBalance = parseFloat(tempBalance.replace(/[$,\s]/g, ""));
+            const res = await fetch("/api/cash-checkin", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    companyId,
+                    bankBalance: isNaN(parsedBalance) ? 0 : parsedBalance,
+                    asOfDate,
+                    adjustments: tempAdjustments.map(({ id, ...rest }) => rest), // Remove id
+                }),
+            });
+            if (res.ok) {
+                setEditBalanceOpen(false);
+                onBalanceUpdated();
+            }
+        } finally {
+            setIsSavingBalance(false);
+        }
+    };
+
+    const handleRemoveTempAdj = (id: string) => {
+        setTempAdjustments(prev => prev.filter(a => a.id !== id));
+    };
+
+    const tempParsedBalance = parseFloat(tempBalance.replace(/[$,\s]/g, ""));
+    const tempAdjTotal = tempAdjustments.reduce((sum, a) => sum + a.amount, 0);
+    const tempAdjustedCash = (isNaN(tempParsedBalance) ? 0 : tempParsedBalance) + tempAdjTotal;
 
     // Global Cmd+K listener
     useEffect(() => {
@@ -137,7 +181,86 @@ export function HeaderTruthBar({
                 {/* Section 1: Cash on Hand */}
                 <SummarySection 
                     title="Cash on Hand" 
-                    value={fmt(adjustedCash)} 
+                    value={
+                        <div className="relative inline-block w-full">
+                            <span 
+                                onClick={() => setEditBalanceOpen(!editBalanceOpen)} 
+                                className="cursor-pointer hover:text-indigo-600 transition-colors border-b border-dashed border-slate-300 hover:border-indigo-600 block line-clamp-1 truncate w-[80%] md:w-auto overflow-hidden whitespace-nowrap"
+                                title="Click to edit balance and outstanding items"
+                            >
+                                {fmt(adjustedCash)}
+                            </span>
+                            
+                            {editBalanceOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-[50]" onClick={() => setEditBalanceOpen(false)} />
+                                    <div className="absolute z-[60] top-full mt-2 w-80 border rounded-2xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
+                                        <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+                                            <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Fast Reconcile</p>
+                                            <button onClick={() => setEditBalanceOpen(false)} className="text-slate-400 hover:text-slate-700 transition">&times;</button>
+                                        </div>
+                                        
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">State Balance</label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-financial">$</span>
+                                                    <input 
+                                                        type="text" 
+                                                        inputMode="decimal"
+                                                        value={tempBalance} 
+                                                        onChange={e => setTempBalance(e.target.value)} 
+                                                        className="w-full border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none rounded-xl pl-7 pr-3 py-2 text-sm font-financial font-bold transition-all text-slate-800"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {tempAdjustments.length > 0 && (
+                                                <div>
+                                                    <label className="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Outstanding Items</label>
+                                                    <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
+                                                        {tempAdjustments.map(a => (
+                                                            <div key={a.id} className="flex justify-between items-center text-xs p-2 rounded-lg border border-slate-100 bg-slate-50 group hover:border-slate-200 transition-colors">
+                                                                <div className="truncate pr-2 flex-1 min-w-0">
+                                                                    <p className="text-slate-700 font-medium truncate">{a.note || a.type.replace(/_/g, " ")}</p>
+                                                                    <p className="text-[9px] text-slate-400 uppercase font-black">{a.type.replace(/_/g, " ")}</p>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 shrink-0">
+                                                                    <span className={`font-financial font-bold tracking-tight ${a.amount >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                                                        {a.amount >= 0 ? "+" : ""}{fmt(a.amount)}
+                                                                    </span>
+                                                                    <button 
+                                                                        onClick={() => handleRemoveTempAdj(a.id)}
+                                                                        className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-rose-50"
+                                                                        title="Remove item"
+                                                                    >
+                                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center text-sm">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Adjusted</span>
+                                                <span className={`font-financial font-black ${tempAdjustedCash < 0 ? 'text-rose-600' : 'text-slate-900'}`}>{fmt(tempAdjustedCash)}</span>
+                                            </div>
+
+                                            <button 
+                                                onClick={handleSaveBalance} 
+                                                disabled={isSavingBalance}
+                                                className="w-full py-2.5 rounded-xl text-xs font-black tracking-widest uppercase text-white transition-all bg-indigo-600 hover:bg-indigo-700 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                                            >
+                                                {isSavingBalance ? "Saving..." : <><CheckCircle2 className="w-4 h-4" /> Save & Re-Roll</>}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    } 
                     subValue={adjustmentsTotal !== 0 ? `Adjusted from ${fmt(bankBalance)} bank` : "Verified Bank Balance"}
                     colorClass="text-slate-900"
                     highlight
