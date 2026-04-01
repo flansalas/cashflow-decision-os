@@ -281,7 +281,7 @@ export function HeaderTruthBar({
                                         <div className="flex-1">
                                             <div className="flex items-center gap-1 mb-0.5">
                                                 <p className="text-[8px] uppercase font-bold tracking-[0.2em] text-slate-400">Floor</p>
-                                                <HelpBubble text="The lowest cash balance expected in the next 13 weeks, assuming average scenario outcomes." position="bottom-right" />
+                                                <HelpBubble text="The lowest cash balance expected in the next 13 weeks, assuming average scenario outcomes." position="bottom-left" />
                                             </div>
                                             <p className={`text-sm font-bold font-financial tracking-tight ${lowestExpected < 0 ? "text-rose-600" : "text-slate-800"}`}>
                                                 {fmt(lowestExpected)}
@@ -294,7 +294,7 @@ export function HeaderTruthBar({
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-1 mb-0.5">
                                                     <p className="text-[8px] uppercase font-bold tracking-[0.2em] text-slate-400">Worst</p>
-                                                    <HelpBubble text="The absolute minimum cash level predicted if the most pessimistic scenario plays out (e.g., major payment delays)." position="bottom-right" />
+                                                    <HelpBubble text="The absolute minimum cash level predicted if the most pessimistic scenario plays out (e.g., major payment delays)." position="bottom-left" />
                                                 </div>
                                                 <p className={`text-sm font-bold font-financial tracking-tight ${lowestWorst < 0 ? "text-rose-500" : "text-slate-400"}`}>
                                                     {fmt(lowestWorst)}
