@@ -266,11 +266,14 @@ export function CashflowGrid({
             highlightConsumedRef.current = true; // mark consumed immediately
             setSelectedItem(target);
             setSidebarMode("detail");
-            // Strip highlightId from URL after 2s so glow pulses first then clears
+            // Keep the glow until the user clicks anywhere — then strip the URL param
             if (onClearHighlight) {
-                setTimeout(() => {
+                const clear = () => {
                     onClearHighlight();
-                }, 2000);
+                    document.removeEventListener("mousedown", clear, true);
+                };
+                // Use capture so it fires before any inner click handlers (e.g. card toggle)
+                document.addEventListener("mousedown", clear, { capture: true, once: true });
             }
         }
     // Only re-run if highlightId or the item lists change, NOT on selectedItem change
