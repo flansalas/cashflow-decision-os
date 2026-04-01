@@ -266,9 +266,11 @@ export function CashflowGrid({
             highlightConsumedRef.current = true; // mark consumed immediately
             setSelectedItem(target);
             setSidebarMode("detail");
-            // Strip highlightId from URL so glow clears and back-nav works
+            // Strip highlightId from URL after 2s so glow pulses first then clears
             if (onClearHighlight) {
-                onClearHighlight();
+                setTimeout(() => {
+                    onClearHighlight();
+                }, 2000);
             }
         }
     // Only re-run if highlightId or the item lists change, NOT on selectedItem change
