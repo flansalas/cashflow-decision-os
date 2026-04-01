@@ -63,8 +63,8 @@ function ProvenanceCard({ info }: { info: HoveredInfo }) {
     const top = info.y + OFFSET_Y;
 
     const methodNote = isIn
-        ? "Engine estimate based on 90-day collection history, net of scheduled invoices and recurring items."
-        : "Engine estimate based on historical avg. spend, net of known AP bills and recurring commitments.";
+        ? "Gap between the 90-day avg. collection total and the invoices + recurring items already logged for this week. If known items cover the avg, this is $0."
+        : "Gap between the 90-day avg. outflow total and the AP bills + recurring commitments already logged for this week. If known items cover the avg, this is $0.";
 
     return (
         <div
@@ -203,19 +203,13 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                     Cash In
                                 </td>
                                 {weeks.map((w: any) => {
-                                    // Calculate "Known" by summing all items in the breakdown
-                                    const known = w.breakdown.inflows.reduce((s: number, i: any) => s + i.amount, 0);
-                                    // Gap between total forecast and known items
-                                    const projected = Math.max(0, w.inflowsExpected - known);
-                                    
-                                    // Helpers for the methodology note (optional but kept for internal logic if needed)
                                     const scheduled = w.breakdown.inflows
                                         .filter((i: any) => i.sourceType === "invoice")
                                         .reduce((s: number, i: any) => s + i.amount, 0);
                                     const recurring = w.breakdown.inflows
                                         .filter((i: any) => i.sourceType === "recurring")
                                         .reduce((s: number, i: any) => s + i.amount, 0);
-
+                                    const projected = Math.max(0, w.inflowsExpected - scheduled - recurring);
                                     return (
                                         <td
                                             key={w.weekNumber}
@@ -305,18 +299,13 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                     Cash Out
                                 </td>
                                 {weeks.map((w: any) => {
-                                    // Calculate "Known" by summing all items in the breakdown (bills, payroll, recurring, etc)
-                                    const known = w.breakdown.outflows.reduce((s: number, i: any) => s + i.amount, 0);
-                                    // Gap between total forecast and known items
-                                    const projected = Math.max(0, w.outflowsExpected - known);
-
                                     const scheduled = w.breakdown.outflows
                                         .filter((i: any) => i.sourceType === "bill")
                                         .reduce((s: number, i: any) => s + i.amount, 0);
                                     const recurring = w.breakdown.outflows
                                         .filter((i: any) => i.sourceType === "recurring")
                                         .reduce((s: number, i: any) => s + i.amount, 0);
-
+                                    const projected = Math.max(0, w.outflowsExpected - scheduled - recurring);
                                     return (
                                         <td
                                             key={w.weekNumber}
