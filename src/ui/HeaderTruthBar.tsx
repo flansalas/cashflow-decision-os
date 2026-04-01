@@ -55,16 +55,16 @@ function SummarySection({ title, label, value, subValue, children, colorClass, h
     }
 
     return (
-        <div className={`p-4 h-full flex flex-col justify-between group relative border-l-4 md:border-l-0 overflow-visible ${highlight ? 'border-l-slate-800 md:border-t-4 md:border-t-slate-800' : 'border-l-transparent md:border-t-4 md:border-t-transparent'}`}>
+        <div className={`px-5 py-3 h-full flex flex-col justify-between group relative border-l-4 md:border-l-0 overflow-visible ${highlight ? 'border-l-slate-800 md:border-t-4 md:border-t-slate-800' : 'border-l-transparent md:border-t-4 md:border-t-transparent'}`}>
             <div>
-                <p className="text-xs font-semibold mb-1 uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>{title}</p>
+                <p className="text-[10px] font-bold mb-0.5 uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>{title}</p>
                 <div className="flex items-center justify-between">
-                    <p className={`text-2xl sm:text-3xl font-bold font-financial leading-none tracking-tight gap-1 ${colorClass || "text-slate-900"}`}>{value}</p>
+                    <p className={`text-2xl font-black font-financial leading-none tracking-tight gap-1 ${colorClass || "text-slate-900"}`}>{value}</p>
                 </div>
-                {subValue && <p className="text-xs font-medium mt-1 text-slate-500 truncate">{subValue}</p>}
-                {label && <p className="text-xs font-medium mt-1 text-slate-500">{label}</p>}
+                {subValue && <p className="text-[11px] font-medium mt-1 text-slate-500 truncate">{subValue}</p>}
+                {label && <p className="text-[11px] font-medium mt-1 text-slate-500">{label}</p>}
             </div>
-            {children && <div className="mt-3">{children}</div>}
+            {children && <div className="mt-2">{children}</div>}
         </div>
     );
 }
@@ -142,18 +142,18 @@ export function HeaderTruthBar({
                     colorClass="text-slate-900"
                     highlight
                 >
-                    <div className="flex flex-col gap-2">
-                        <div className="flex items-center gap-2">
-                            <button onClick={onUpdateBalanceClick} className="btn-pill !py-1 text-xs !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-8">
-                                <RotateCw className="w-3.5 h-3.5 mr-1" /> Reconcile
+                    <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-1.5">
+                            <button onClick={onUpdateBalanceClick} className="btn-pill !py-0.5 px-2 text-[10px] !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-6">
+                                <RotateCw className="w-3 h-3 mr-1" /> Reconcile
                             </button>
-                            <button onClick={() => setShowAdj(!showAdj)} className="h-8 px-3 rounded-lg border text-xs font-medium hover:bg-slate-50 transition-colors" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }}>
+                            <button onClick={() => setShowAdj(!showAdj)} className="h-6 px-2 rounded-md border text-[10px] font-medium hover:bg-slate-50 transition-colors" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }}>
                                 Adjustments
                             </button>
-                            <button onClick={() => setSearchOpen(true)} className="h-8 px-3 rounded-lg border text-xs font-medium hover:bg-slate-50 transition-colors flex items-center justify-center" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }} title="Search (Cmd+K)">
-                                <Search className="w-3.5 h-3.5" />
+                            <button onClick={() => setSearchOpen(true)} className="h-6 px-2 rounded-md border text-[10px] font-medium hover:bg-slate-50 transition-colors flex items-center justify-center" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }} title="Search (Cmd+K)">
+                                <Search className="w-3 h-3" />
                             </button>
-                            {isStale && <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" title="Bank data is stale" />}
+                            {isStale && <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse ml-1" title="Bank data is stale" />}
                         </div>
 
                     </div>
@@ -193,9 +193,9 @@ export function HeaderTruthBar({
                     subValue="Projected Collections"
                     colorClass="text-emerald-700"
                 >
-                    <div className="flex flex-col gap-2">
-                        <div className="flex items-center gap-2">
-                            <button onClick={() => setShowReasons(!showReasons)} className={`px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100 transition-colors h-8`}>
+                    <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-1.5">
+                            <button onClick={() => setShowReasons(!showReasons)} className={`px-2 py-0.5 rounded-md text-[10px] font-medium flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100 transition-colors h-6`}>
                                  {confidence.score}% Confidence
                             </button>
                         </div>
@@ -223,18 +223,18 @@ export function HeaderTruthBar({
                     subValue="Drafts & Commitments"
                     colorClass="text-rose-600"
                 >
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-1.5">
                         <div className="flex items-center gap-1.5">
                             {payroll ? (
-                                <div className="px-3 py-1 rounded-lg border text-xs font-medium inline-flex items-center gap-1 bg-slate-50 border-slate-200 text-slate-600 h-8">
+                                <div className="px-2 py-0.5 rounded-md border text-[10px] font-medium inline-flex items-center gap-1 bg-slate-50 border-slate-200 text-slate-600 h-6">
                                     Payroll {new Date(payroll.nextDate!).toLocaleDateString(undefined, { month: 'short', day: 'numeric'})}
                                 </div>
                             ) : payrollPromptNeeded ? (
-                                <div className="px-3 py-1 rounded-lg border text-xs font-medium inline-flex items-center gap-1 bg-amber-50 border-amber-200 text-amber-700 h-8">
-                                    <AlertTriangle className="w-3.5 h-3.5" /> Payroll Info
+                                <div className="px-2 py-0.5 rounded-md border text-[10px] font-medium inline-flex items-center gap-1 bg-amber-50 border-amber-200 text-amber-700 h-6">
+                                    <AlertTriangle className="w-3 h-3" /> Payroll Info
                                 </div>
                             ) : (
-                                <div className="h-8 px-2 flex items-center text-xs font-medium text-slate-400">
+                                <div className="h-6 px-1 flex items-center text-[10px] font-medium text-slate-400">
                                     Stability: High
                                 </div>
                             )}
@@ -244,7 +244,7 @@ export function HeaderTruthBar({
                 </SummarySection>
 
             {/* Section 4: Forecast Health */}
-            <div className="lg:col-span-1 border-t md:border-t-0 p-4 flex flex-col justify-between group relative bg-white">
+            <div className="lg:col-span-1 border-t md:border-t-0 px-5 py-3 flex flex-col justify-center group relative bg-white min-h-[100px]">
                 {(() => {
                     const isExpectedSafe = expectedRunOutWeek === null;
                     const isWorstSafe = worstCaseRunOutWeek === null;
