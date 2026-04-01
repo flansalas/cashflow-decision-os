@@ -52,19 +52,19 @@ function SourceRow({
 
 function ProvenanceCard({ info }: { info: HoveredInfo }) {
     const isIn = info.type === "in";
-    const accentText = isIn ? "text-emerald-700" : "text-rose-700";
-    const accentLight = isIn ? "text-emerald-600" : "text-rose-600";
-    const dotPrimary = isIn ? "bg-emerald-500" : "bg-rose-500";
-    const dotSecondary = isIn ? "bg-emerald-300" : "bg-rose-300";
 
-    const CARD_W = 236;
+    const CARD_W = 220;
     const OFFSET_X = 18;
-    const OFFSET_Y = -16;
+    const OFFSET_Y = -12;
     const vpW = typeof window !== "undefined" ? window.innerWidth : 1200;
     const left = info.x + OFFSET_X + CARD_W > vpW
         ? info.x - CARD_W - OFFSET_X
         : info.x + OFFSET_X;
     const top = info.y + OFFSET_Y;
+
+    const methodNote = isIn
+        ? "Engine estimate based on 90-day collection history, net of scheduled invoices and recurring items."
+        : "Engine estimate based on historical avg. spend, net of known AP bills and recurring commitments.";
 
     return (
         <div
@@ -80,44 +80,25 @@ function ProvenanceCard({ info }: { info: HoveredInfo }) {
                 backdropFilter: "blur(16px)",
                 WebkitBackdropFilter: "blur(16px)",
             }}
-            className="rounded-xl border shadow-2xl px-4 py-3 animate-in fade-in zoom-in-95 duration-100"
+            className="rounded-xl border shadow-xl px-4 py-3 animate-in fade-in zoom-in-95 duration-100"
         >
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] mb-2.5" style={{ color: "var(--text-muted)" }}>
-                {info.weekLabel}
+            {/* Label */}
+            <div className="flex items-center justify-between mb-2">
+                <span className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--text-muted)" }}>
+                    {isIn ? "Projected Collections" : "Projected Spend"}
+                </span>
+                <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-400 font-semibold">est.</span>
+            </div>
+
+            {/* The number */}
+            <p className="text-xl font-black font-financial tracking-tight text-slate-700 mb-2.5">
+                {fmt(info.projected)}
             </p>
 
-            <div className="space-y-1.5">
-                <SourceRow
-                    dot={dotPrimary}
-                    label={isIn ? "Scheduled AR" : "Scheduled AP"}
-                    value={fmt(info.scheduled)}
-                    valueClass={accentText}
-                />
-                <SourceRow
-                    dot={dotSecondary}
-                    label="Recurring"
-                    value={fmt(info.recurring)}
-                    valueClass={accentLight}
-                />
-                {info.projected > 0 && (
-                    <SourceRow
-                        dot="bg-slate-300"
-                        label={isIn ? "Projected collections" : "Projected spend"}
-                        value={fmt(info.projected)}
-                        valueClass="text-slate-500"
-                    >
-                        <span className="text-[8px] px-1 py-0.5 rounded-full bg-slate-100 text-slate-400 ml-1 shrink-0">est.</span>
-                    </SourceRow>
-                )}
-            </div>
-
-            <div
-                className="mt-2.5 pt-2 border-t flex justify-between items-center"
-                style={{ borderColor: "var(--border-subtle)" }}
-            >
-                <span className="text-[9px] uppercase tracking-widest font-bold" style={{ color: "var(--text-muted)" }}>Total</span>
-                <span className={`text-sm font-black font-financial tracking-tight ${accentText}`}>{fmt(info.total)}</span>
-            </div>
+            {/* Methodology note */}
+            <p className="text-[10px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                {methodNote}
+            </p>
         </div>
     );
 }
@@ -154,7 +135,7 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
 
     return (
         <>
-            {hoveredInfo && <ProvenanceCard info={hoveredInfo} />}
+            {hoveredInfo && hoveredInfo.projected > 0 && <ProvenanceCard info={hoveredInfo} />}
 
             <div className="rounded-xl border overflow-hidden mt-6 mb-8" style={{ background: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}>
                 <div className="px-5 py-3 border-b flex items-center justify-between" style={{ background: "var(--bg-raised)", borderColor: "var(--border-subtle)" }}>
