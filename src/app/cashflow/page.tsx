@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, Suspense, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { CashflowGrid } from "@/ui/CashflowGrid";
 import { ARAPUploadStep } from "@/ui/ARAPUploadStep";
 import { BankUploadStep } from "@/ui/BankUploadStep";
@@ -63,10 +63,20 @@ interface GridData {
 
 function CashflowContent() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const urlCompanyId = searchParams.get("companyId");
     const highlightWeek = searchParams.get("highlightWeek") ? Number(searchParams.get("highlightWeek")) : null;
     const highlightId = searchParams.get("highlightId");
     const mode = searchParams.get("mode") as "ar" | "ap" | null;
+
+    // Called by CashflowGrid once the highlight is consumed — strips it from URL
+    // so the glow stops and the drawer toggle works normally.
+    const clearHighlight = useCallback(() => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("highlightId");
+        params.delete("highlightWeek");
+        router.replace(`/cashflow${params.size > 0 ? `?${params}` : ""}`, { scroll: false });
+    }, [router, searchParams]);
 
     const [data, setData] = useState<GridData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -244,6 +254,7 @@ function CashflowContent() {
                     highlightWeek={highlightWeek}
                     highlightId={highlightId}
                     onRefresh={fetchGrid}
+                    onClearHighlight={clearHighlight}
                 />
             </main>
 

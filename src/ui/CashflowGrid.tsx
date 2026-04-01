@@ -2,6 +2,7 @@
 "use client";
 
 import { useMemo, useState, useCallback, useEffect, useRef, type DragEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Package, Printer, Inbox, Search, X } from "lucide-react";
 import { ARAPCard, type GridItem, type DragPayload } from "./ARAPCard";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
@@ -29,6 +30,7 @@ interface Props {
     highlightWeek?: number | null;
     highlightId?: string | null;
     onRefresh: () => void;
+    onClearHighlight?: () => void;
 }
 
 function fmt(n: number): string {
@@ -46,8 +48,9 @@ function fmtDate(d: string): string {
 export function CashflowGrid({
     weeks, invoices, bills, openingCash,
     weeklyRecurringOutflows, weeklyRecurringInflows,
-    companyId, highlightWeek, highlightId, onRefresh,
+    companyId, highlightWeek, highlightId, onRefresh, onClearHighlight,
 }: Props) {
+    const router = useRouter();
     const [dropTargetWeek, setDropTargetWeek] = useState<number | null>(null);
     const [dropTargetDock, setDropTargetDock] = useState(false);
     const [dropping, setDropping] = useState(false);
@@ -252,17 +255,25 @@ export function CashflowGrid({
         return                      { bg: "var(--bg-surface)",        border: "var(--border-subtle)",   label: "" };
     }
 
-    // Auto-select searched highlighted items
+    // Auto-select searched highlighted items — one-shot, consumed via ref so
+    // closing the drawer doesn't re-open it and glow stops after first load.
+    const highlightConsumedRef = useRef(false);
     useEffect(() => {
-        if (highlightId && !selectedItem) {
-            const allItems = [...invoices, ...bills];
-            const target = allItems.find(i => String(i.id) === String(highlightId));
-            if (target) {
-                setSelectedItem(target);
-                setSidebarMode("detail");
+        if (!highlightId || highlightConsumedRef.current) return;
+        const allItems = [...invoices, ...bills];
+        const target = allItems.find(i => String(i.id) === String(highlightId));
+        if (target) {
+            highlightConsumedRef.current = true; // mark consumed immediately
+            setSelectedItem(target);
+            setSidebarMode("detail");
+            // Strip highlightId from URL so glow clears and back-nav works
+            if (onClearHighlight) {
+                onClearHighlight();
             }
         }
-    }, [highlightId, invoices, bills, selectedItem]);
+    // Only re-run if highlightId or the item lists change, NOT on selectedItem change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [highlightId, invoices, bills]);
 
     const sidebarOpen = sidebarMode !== null;
 
