@@ -122,6 +122,10 @@ export function HeaderTruthBar({
         setTempAdjustments(prev => prev.filter(a => a.id !== id));
     };
 
+    const handleUpdateTempAdj = (id: string, updates: Partial<{ amount: number; note: string | null }>) => {
+        setTempAdjustments(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+    };
+
     const tempParsedBalance = parseFloat(tempBalance.replace(/[$,\s]/g, ""));
     const tempAdjTotal = tempAdjustments.reduce((sum, a) => sum + a.amount, 0);
     const tempAdjustedCash = (isNaN(tempParsedBalance) ? 0 : tempParsedBalance) + tempAdjTotal;
@@ -217,25 +221,45 @@ export function HeaderTruthBar({
 
                                             {tempAdjustments.length > 0 && (
                                                 <div>
-                                                    <label className="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Outstanding Items</label>
-                                                    <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
+                                                    <label className="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Outstanding Items (Click to Edit)</label>
+                                                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
                                                         {tempAdjustments.map(a => (
-                                                            <div key={a.id} className="flex justify-between items-center text-xs p-2 rounded-lg border border-slate-100 bg-slate-50 group hover:border-slate-200 transition-colors">
-                                                                <div className="truncate pr-2 flex-1 min-w-0">
-                                                                    <p className="text-slate-700 font-medium truncate">{a.note || a.type.replace(/_/g, " ")}</p>
-                                                                    <p className="text-[9px] text-slate-400 uppercase font-black">{a.type.replace(/_/g, " ")}</p>
-                                                                </div>
-                                                                <div className="flex items-center gap-2 shrink-0">
-                                                                    <span className={`font-financial font-bold tracking-tight ${a.amount >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                                                                        {a.amount >= 0 ? "+" : ""}{fmt(a.amount)}
-                                                                    </span>
-                                                                    <button 
-                                                                        onClick={() => handleRemoveTempAdj(a.id)}
-                                                                        className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-rose-50"
-                                                                        title="Remove item"
-                                                                    >
-                                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                                    </button>
+                                                            <div key={a.id} className="flex flex-col gap-1.5 p-2 rounded-lg border border-slate-100 bg-slate-50 group hover:border-indigo-200 transition-colors">
+                                                                <div className="flex justify-between items-center gap-2">
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <input 
+                                                                            type="text"
+                                                                            value={a.note || ""}
+                                                                            placeholder={a.type.replace(/_/g, " ")}
+                                                                            onChange={(e) => handleUpdateTempAdj(a.id, { note: e.target.value })}
+                                                                            className="w-full bg-transparent border-none p-0 text-xs font-medium text-slate-700 focus:ring-0 placeholder:text-slate-400 outline-none"
+                                                                        />
+                                                                        <p className="text-[8px] text-slate-400 uppercase font-black">{a.type.replace(/_/g, " ")}</p>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                        <div className="relative">
+                                                                            <span className={`absolute left-1 top-1/2 -translate-y-1/2 text-[10px] font-financial font-bold ${a.amount >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                                                                                {a.amount >= 0 ? "+" : "–"}
+                                                                            </span>
+                                                                            <input 
+                                                                                type="text"
+                                                                                value={Math.abs(a.amount).toString()}
+                                                                                onChange={(e) => {
+                                                                                    const val = parseFloat(e.target.value.replace(/[^-0-9.]/g, ""));
+                                                                                    if (!isNaN(val)) {
+                                                                                        handleUpdateTempAdj(a.id, { amount: a.amount >= 0 ? val : -val });
+                                                                                    }
+                                                                                }}
+                                                                                className={`w-14 bg-transparent border-none p-0 pl-3.5 text-xs font-financial font-bold focus:ring-0 text-right outline-none ${a.amount >= 0 ? "text-emerald-600" : "text-rose-600"}`}
+                                                                            />
+                                                                        </div>
+                                                                        <button 
+                                                                            onClick={() => handleRemoveTempAdj(a.id)}
+                                                                            className="text-slate-300 hover:text-rose-500 transition-colors p-1 rounded hover:bg-white"
+                                                                        >
+                                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         ))}
