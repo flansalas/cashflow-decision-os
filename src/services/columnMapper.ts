@@ -215,9 +215,10 @@ function parseInt2(val: string | undefined): number | null {
 
 /**
  * Identify summary/total rows commonly found in accounting exports.
- * Only returns true if the string IS exactly a summary label, not if it just contains it (to avoid false positives like "Total Gym LLC").
+ * Handles both exact matches ("Total", "Grand Total") and prefix patterns
+ * common in QBO reports ("Total for John Smith").
  */
-const SUMMARY_LABELS = new Set([
+const SUMMARY_EXACT = new Set([
     "total",
     "grandtotal",
     "subtotal",
@@ -226,13 +227,78 @@ const SUMMARY_LABELS = new Set([
     "summary",
     "all",
     "totalreceivables",
-    "totalpayables"
+    "totalpayables",
+    "totalbalance",
+    "totaloutstanding",
+    "totalpastdue",
+    "totalcurrent",
 ]);
+
+/** Prefixes that indicate a subtotal/grouping row — the rest of the string is the entity name */
+const SUMMARY_PREFIXES = [
+    "total for ",
+    "subtotal for ",
+    "total - ",
+    "subtotal - ",
+];
 
 function isSummaryRow(name: string): boolean {
     if (!name) return false;
-    const norm = normalize(name);
-    return SUMMARY_LABELS.has(norm);
+    const trimmed = name.trim();
+    const lower = trimmed.toLowerCase();
+    const norm = normalize(trimmed);
+
+    // Exact match
+    if (SUMMARY_EXACT.has(norm)) return true;
+
+    // Prefix match: "Total for John Smith" → true
+    for (const prefix of SUMMARY_PREFIXES) {
+        if (lower.startsWith(prefix)) return true;
+    }
+
+    return false;
+}
+
+/**
+ * Pre-filter raw parsed rows before column mapping to remove obvious noise.
+ * Returns { cleanRows, rawTotal, filteredOut, skippedLabels }.
+ * This is used to give users an early estimate of real transaction count
+ * right after file upload, before they even configure column mapping.
+ */
+export function preFilterRows(
+    rows: Record<string, string>[],
+    headers: string[]
+): { cleanRows: Record<string, string>[]; rawTotal: number; filteredOut: number; skippedLabels: string[] } {
+    const rawTotal = rows.length;
+    const skippedLabels: string[] = [];
+
+    const cleanRows = rows.filter(row => {
+        // Count non-empty values
+        const values = headers.map(h => (row[h] ?? "").trim()).filter(Boolean);
+        // Skip rows with fewer than 2 populated columns — likely headers or spacers
+        if (values.length < 2) {
+            skippedLabels.push("spacer/header");
+            return false;
+        }
+
+        // Check if any name-like field is a summary row
+        for (const h of headers) {
+            const val = (row[h] ?? "").trim();
+            if (val && isSummaryRow(val)) {
+                skippedLabels.push(val);
+                return false;
+            }
+        }
+
+        return true;
+    });
+
+    return {
+        cleanRows,
+        rawTotal,
+        filteredOut: rawTotal - cleanRows.length,
+        skippedLabels: [...new Set(skippedLabels)],
+    };
 }
 
 // ─── Apply mapping ────────────────────────────────────────────────────────────
@@ -253,7 +319,12 @@ export function applyARMapping(
             status: (row[mapping.status ?? ""] || "open").toLowerCase(),
             daysPastDue: parseInt2(row[mapping.daysPastDue ?? ""]),
         };
-    }).filter(r => r.customerName && r.amountOpen > 0 && !isSummaryRow(r.customerName));
+    }).filter(r =>
+        r.customerName &&
+        r.amountOpen > 0 &&
+        !isSummaryRow(r.customerName) &&
+        !isSummaryRow(r.invoiceNo)
+    );
 }
 
 export function applyAPMapping(
@@ -272,7 +343,12 @@ export function applyAPMapping(
             status: (row[mapping.status ?? ""] || "open").toLowerCase(),
             daysPastDue: parseInt2(row[mapping.daysPastDue ?? ""]),
         };
-    }).filter(r => r.vendorName && r.amountOpen > 0 && !isSummaryRow(r.vendorName));
+    }).filter(r =>
+        r.vendorName &&
+        r.amountOpen > 0 &&
+        !isSummaryRow(r.vendorName) &&
+        !isSummaryRow(r.billNo)
+    );
 }
 
 export function applyBankMapping(
@@ -301,18 +377,20 @@ export function applyBankMapping(
 
 // ─── Preview summary ──────────────────────────────────────────────────────────
 
-export function arSummary(rows: NormalizedARRow[]) {
+export function arSummary(rows: NormalizedARRow[], rawRowCount?: number) {
     const open = rows.filter(r => r.status === "open" || !r.status);
     const totalOpen = open.reduce((s, r) => s + r.amountOpen, 0);
     const missingDates = rows.filter(r => !r.dueDate && !r.invoiceDate).length;
-    return { open: open.length, totalOpen, missingDates, total: rows.length };
+    const filteredOut = (rawRowCount ?? rows.length) - rows.length;
+    return { open: open.length, totalOpen, missingDates, total: rows.length, filteredOut };
 }
 
-export function apSummary(rows: NormalizedAPRow[]) {
+export function apSummary(rows: NormalizedAPRow[], rawRowCount?: number) {
     const open = rows.filter(r => r.status === "open" || !r.status);
     const totalOpen = open.reduce((s, r) => s + r.amountOpen, 0);
     const missingDates = rows.filter(r => !r.dueDate && !r.billDate).length;
-    return { open: open.length, totalOpen, missingDates, total: rows.length };
+    const filteredOut = (rawRowCount ?? rows.length) - rows.length;
+    return { open: open.length, totalOpen, missingDates, total: rows.length, filteredOut };
 }
 
 export function bankSummary(rows: NormalizedBankRow[]) {

@@ -36,7 +36,6 @@ interface Props {
     outflow30: number;
     isCompact?: boolean;
     companyName?: string;
-    onToggleSetup?: () => void;
     // Drill-down + scenario numbers (replaces ForecastBanner sidebar)
     onDrillIn?: () => void;
     lowestExpected?: number;
@@ -76,7 +75,7 @@ export function HeaderTruthBar({
     bankBalance, adjustmentsTotal, adjustedCash, buffer,
     confidence, lastUpdated, asOfDate, companyId,
     payroll, payrollPromptNeeded, adjustments, onUpdateBalanceClick, onBalanceUpdated,
-    expectedRunOutWeek, worstCaseRunOutWeek, inflow30, outflow30, isCompact, companyName, onToggleSetup,
+    expectedRunOutWeek, worstCaseRunOutWeek, inflow30, outflow30, isCompact, companyName,
     onDrillIn, lowestExpected, lowestWorst, zoneBoundary
 }: Props) {
     const [showAdj, setShowAdj] = useState(false);
@@ -129,9 +128,6 @@ export function HeaderTruthBar({
                     <button onClick={() => setSearchOpen(true)} className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors" title="Search (Cmd+K)">
                         <Search className="w-3.5 h-3.5 text-slate-400" />
                     </button>
-                    <button onClick={onToggleSetup} className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
-                        <Settings2 className="w-3.5 h-3.5 text-slate-400" />
-                    </button>
                 </div>
             </div>
 
@@ -159,10 +155,7 @@ export function HeaderTruthBar({
                             </button>
                             {isStale && <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" title="Bank data is stale" />}
                         </div>
-                        {/* QBO Contextual Link */}
-                        <a href="/cash-adjustments" className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1 mt-2 transition-colors pl-1">
-                             Manual Adjustments <ArrowRight className="w-3.5 h-3.5" />
-                        </a>
+
                     </div>
                     {/* Popover for adj */}
                     {showAdj && (
@@ -206,10 +199,7 @@ export function HeaderTruthBar({
                                  {confidence.score}% Confidence
                             </button>
                         </div>
-                        {/* QBO Contextual Link */}
-                        <a href="/cashflow" className="text-xs font-medium text-emerald-600 hover:text-emerald-800 flex items-center gap-1 mt-2 transition-colors pl-1">
-                             Review AR Grid <ArrowRight className="w-3.5 h-3.5" />
-                        </a>
+
                         {showReasons && (
                             <div className="absolute z-[60] top-full mt-2 w-80 border rounded-xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
                                  <div className="flex justify-between items-center mb-3">
@@ -249,10 +239,7 @@ export function HeaderTruthBar({
                                 </div>
                             )}
                         </div>
-                        {/* QBO Contextual Link */}
-                        <a href="/recurring" className="text-xs font-medium text-slate-500 hover:text-slate-800 flex items-center gap-1 mt-2 transition-colors pl-1">
-                             Review Commitments <ArrowRight className="w-3.5 h-3.5" />
-                        </a>
+
                     </div>
                 </SummarySection>
 

@@ -12,6 +12,7 @@ import {
     applyARMapping, applyAPMapping,
     NormalizedARRow, NormalizedAPRow,
     arSummary, apSummary,
+    preFilterRows,
 } from "@/services/columnMapper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -23,12 +24,20 @@ interface Props {
 
 type Phase = "upload" | "mapping" | "preview" | "done";
 
+interface FilteredInfo {
+    rawTotal: number;
+    filteredOut: number;
+    cleanCount: number;
+    skippedLabels: string[];
+}
+
 interface FileState {
     parsed: ParsedFile | null;
     mapping: Record<string, string>;
     savedMappingLoaded: boolean;
     error: string | null;
     loading: boolean;
+    filterInfo: FilteredInfo | null;
 }
 
 const emptyFile = (): FileState => ({
@@ -37,11 +46,12 @@ const emptyFile = (): FileState => ({
     savedMappingLoaded: false,
     error: null,
     loading: false,
+    filterInfo: null,
 });
 
 interface ImportResult {
-    ar?: { imported: number; updated: number; deleted: number; total: number };
-    ap?: { imported: number; updated: number; deleted: number; total: number };
+    ar?: { imported: number; updated: number; deleted: number; total: number; filteredOut?: number };
+    ap?: { imported: number; updated: number; deleted: number; total: number; filteredOut?: number };
 }
 
 function fmt(n: number) {
@@ -63,10 +73,11 @@ function SectionHeader({ icon, title, sub }: { icon: React.ReactNode; title: str
 }
 
 function Dropzone({
-    label, icon, file, onFiles, error, loading,
+    label, icon, file, onFiles, error, loading, filterInfo,
 }: {
     label: string; icon: React.ReactNode; file: ParsedFile | null;
     onFiles: (files: File[]) => void; error: string | null; loading: boolean;
+    filterInfo?: FilteredInfo | null;
 }) {
     const inputRef = useRef<HTMLInputElement>(null);
     const [dragging, setDragging] = useState(false);
@@ -105,7 +116,11 @@ function Dropzone({
                 <div className="space-y-1">
                     <div className="text-emerald-700 font-medium text-sm">{icon} {label}</div>
                     <div className="text-xs font-mono truncate" style={{ color: "var(--text-secondary)" }}>{file.fileName}</div>
-                    <div className="text-xs" style={{ color: "var(--text-muted)" }}>{file.rowCount.toLocaleString()} rows · {file.headers.length} columns</div>
+                    <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {filterInfo
+                            ? <><span className="font-semibold" style={{ color: "var(--text-primary)" }}>{filterInfo.cleanCount.toLocaleString()}</span> data rows detected · {file.headers.length} columns{filterInfo.filteredOut > 0 && <span className="text-amber-600 ml-1">({filterInfo.filteredOut} header/total rows skipped)</span>}</>
+                            : <>{file.rowCount.toLocaleString()} rows · {file.headers.length} columns</>}
+                    </div>
                     <div className="text-xs text-emerald-600 mt-1">Click to replace</div>
                 </div>
             ) : (
@@ -163,7 +178,7 @@ function PreviewTable<T extends Record<string, unknown>>({
 }: {
     title: string; icon: React.ReactNode;
     rows: T[]; fields: FieldDef[];
-    summary: { open: number; totalOpen: number; missingDates: number; total: number };
+    summary: { open: number; totalOpen: number; missingDates: number; total: number; filteredOut: number };
 }) {
     const preview = rows.slice(0, 20);
     const fieldKeys = fields.map(f => f.key);
@@ -172,9 +187,12 @@ function PreviewTable<T extends Record<string, unknown>>({
         <div className="space-y-3">
             <SectionHeader icon={icon} title={title} />
             {/* Summary bar */}
-            <div className="flex gap-4 rounded-xl px-4 py-3 text-[11px] border shadow-sm" style={{ background: "var(--bg-raised)", borderColor: "var(--border-subtle)" }}>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl px-4 py-3 text-[11px] border shadow-sm" style={{ background: "var(--bg-raised)", borderColor: "var(--border-subtle)" }}>
                 <span className="flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> <span className="font-bold text-slate-900">{summary.open}</span> open items</span>
                 <span className="flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>Total Exposure: <span className="text-slate-900 font-bold">{fmt(summary.totalOpen)}</span></span>
+                {summary.filteredOut > 0 && (
+                    <span className="flex items-center gap-1.5 text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200">{summary.filteredOut} subtotal/header rows excluded</span>
+                )}
                 {summary.missingDates > 0 && (
                     <span className="text-rose-600 font-bold flex items-center gap-1.5 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100"><AlertTriangle className="w-3.5 h-3.5" /> {summary.missingDates} rows missing dates</span>
                 )}
@@ -260,16 +278,28 @@ export function ARAPUploadStep({ companyId, onDone }: Props) {
                 totalRows += p.rowCount;
             }
 
+            const headersArray = Array.from(allHeaders);
+
+            // Pre-filter to strip QBO summary/subtotal/spacer rows
+            const { cleanRows, rawTotal, filteredOut, skippedLabels } = preFilterRows(allRows, headersArray);
+
             const mergedParsed: ParsedFile = {
-                headers: Array.from(allHeaders),
-                rows: allRows,
-                rowCount: totalRows,
+                headers: headersArray,
+                rows: cleanRows,
+                rowCount: cleanRows.length,
                 fileName: fileNames.length > 1 ? `${fileNames.length} files (${fileNames[0]}...)` : fileNames[0]
+            };
+
+            const filterInfo: FilteredInfo = {
+                rawTotal,
+                filteredOut,
+                cleanCount: cleanRows.length,
+                skippedLabels,
             };
 
             const detected = autoDetect(mergedParsed.headers, fields);
             const mapping = Object.keys(state.mapping).length > 0 ? state.mapping : detected;
-            setter(s => ({ ...s, parsed: mergedParsed, mapping, loading: false }));
+            setter(s => ({ ...s, parsed: mergedParsed, mapping, loading: false, filterInfo }));
         } catch (e: unknown) {
             setter(s => ({ ...s, loading: false, error: (e as Error).message }));
         }
@@ -319,8 +349,8 @@ export function ARAPUploadStep({ companyId, onDone }: Props) {
         ? applyAPMapping(ap.parsed.rows, ap.mapping)
         : [];
 
-    const arSum = arSummary(arRows);
-    const apSum = apSummary(apRows);
+    const arSum = arSummary(arRows, ar.parsed?.rowCount);
+    const apSum = apSummary(apRows, ap.parsed?.rowCount);
 
     // ── Import ───────────────────────────────────────────────────────────────
 
@@ -385,6 +415,7 @@ export function ARAPUploadStep({ companyId, onDone }: Props) {
                             onFiles={fs => handleFiles("ar", fs)}
                             error={ar.error}
                             loading={ar.loading}
+                            filterInfo={ar.filterInfo}
                         />
                         <Dropzone
                             label="Accounts Payable (AP)"
@@ -393,6 +424,7 @@ export function ARAPUploadStep({ companyId, onDone }: Props) {
                             onFiles={fs => handleFiles("ap", fs)}
                             error={ap.error}
                             loading={ap.loading}
+                            filterInfo={ap.filterInfo}
                         />
                     </div>
 

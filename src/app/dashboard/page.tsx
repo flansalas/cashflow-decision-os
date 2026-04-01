@@ -177,6 +177,11 @@ function DashboardContent() {
                 } else {
                     console.log("Dashboard Commitments:", d.commitments);
                     setData(d);
+                    
+                    try {
+                        localStorage.setItem('cfdo_company_name', d.company.name);
+                        localStorage.setItem('cfdo_is_demo', String(d.company.isDemo));
+                    } catch { /* noop */ }
 
                     // ── What changed since last visit ─────────────────────────
                     const SNAPSHOT_KEY = `cfdo_forecast_snapshot_${id ?? "demo"}`;
@@ -215,6 +220,19 @@ function DashboardContent() {
         if (companyId !== null) fetchDashboard(companyId);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [companyId]);
+
+    // Setup Wizard Listener
+    useEffect(() => {
+        const handleOpenSetup = () => setSetupOpen(true);
+        window.addEventListener('open-setup', handleOpenSetup);
+        
+        if (searchParams.get('setup') === 'true') {
+            setSetupOpen(true);
+            window.history.replaceState({}, '', '/dashboard');
+        }
+        
+        return () => window.removeEventListener('open-setup', handleOpenSetup);
+    }, [searchParams]);
 
     if (loading) {
         return (
@@ -279,15 +297,7 @@ function DashboardContent() {
                                 </div>
                             </div>
                             <div className="flex items-center gap-4">
-                                {!data.company.isDemo && (
-                                    <button 
-                                        onClick={() => setSetupOpen(true)} 
-                                        className="group flex items-center gap-2.5 px-5 py-2.5 rounded-2xl border border-slate-200 bg-white text-slate-600 hover:text-indigo-600 hover:border-indigo-100 hover:bg-indigo-50/40 transition-all shadow-sm active:scale-95"
-                                    >
-                                        <span className="text-[10px] font-black uppercase tracking-[0.2em]">Platform Setup</span>
-                                        <Settings2 className="w-4 h-4 group-hover:rotate-90 transition-transform duration-700" />
-                                    </button>
-                                )}
+                                {/* Platform Setup was moved to the Sidebar */}
                             </div>
                         </header>
                     </div>
@@ -296,7 +306,6 @@ function DashboardContent() {
                     <HeaderTruthBar
                         isCompact={isScrolled}
                         companyName={data.company.name}
-                        onToggleSetup={() => setSetupOpen(true)}
                         bankBalance={data.cash.bankBalance}
                         adjustmentsTotal={data.cash.adjustmentsTotal}
                         adjustedCash={data.cash.adjustedOpeningCash}
