@@ -1,8 +1,8 @@
 // ui/CashflowGrid.tsx — 13-column grid + unified right sidebar (Backlog Dock ↔ Item Detail Drawer)
 "use client";
 
-import { useMemo, useState, useCallback, useEffect, type DragEvent } from "react";
-import { Package, Printer, Inbox } from "lucide-react";
+import { useMemo, useState, useCallback, useEffect, useRef, type DragEvent } from "react";
+import { Package, Printer, Inbox, Search, X } from "lucide-react";
 import { ARAPCard, type GridItem, type DragPayload } from "./ARAPCard";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
 import { ExecutionPlanModal } from "./ExecutionPlanModal";
@@ -54,23 +54,51 @@ export function CashflowGrid({
     const [summaryView, setSummaryView] = useState(false);
     const [sortMode, setSortMode] = useState<"az" | "amount" | "aging">("az");
     const [showPlan, setShowPlan] = useState(false);
+    const [filterQuery, setFilterQuery] = useState("");
+    const filterInputRef = useRef<HTMLInputElement>(null);
 
     // Sidebar state: null = closed, "detail" = item detail
     const [sidebarMode, setSidebarMode] = useState<"detail" | null>(null);
     const [selectedItem, setSelectedItem] = useState<GridItem | null>(null);
 
+    // Filter items by query (name, number, or amount)
+    const filterItems = useCallback((items: GridItem[]): GridItem[] => {
+        const q = filterQuery.trim().toLowerCase();
+        if (!q) return items;
+        const asNumber = parseFloat(q.replace(/[^0-9.]/g, ""));
+        const isNumericSearch = !isNaN(asNumber) && q.replace(/[^0-9.]/g, "").length > 0;
+        return items.filter(item => {
+            if (isNumericSearch) {
+                const lo = asNumber * 0.99;
+                const hi = asNumber * 1.01;
+                return item.amountOpen >= lo && item.amountOpen <= hi;
+            }
+            return (
+                item.label.toLowerCase().includes(q) ||
+                (item.invoiceNo ?? "").toLowerCase().includes(q) ||
+                (item.billNo ?? "").toLowerCase().includes(q) ||
+                (item.customerName ?? "").toLowerCase().includes(q) ||
+                (item.vendorName ?? "").toLowerCase().includes(q)
+            );
+        });
+    }, [filterQuery]);
+
+    // Filtered item sets (applied before byWeek grouping)
+    const filteredInvoices = useMemo(() => filterItems(invoices), [filterItems, invoices]);
+    const filteredBills = useMemo(() => filterItems(bills), [filterItems, bills]);
+
     // Group items by week
     const byWeek = useMemo(() => {
         const map = new Map<number, { ar: GridItem[]; ap: GridItem[] }>();
         for (let w = 1; w <= 13; w++) map.set(w, { ar: [], ap: [] });
-        for (const inv of invoices) {
+        for (const inv of filteredInvoices) {
             if (inv.effectiveWeek && map.has(inv.effectiveWeek)) map.get(inv.effectiveWeek)!.ar.push(inv);
         }
-        for (const bill of bills) {
+        for (const bill of filteredBills) {
             if (bill.effectiveWeek && map.has(bill.effectiveWeek)) map.get(bill.effectiveWeek)!.ap.push(bill);
         }
         return map;
-    }, [invoices, bills]);
+    }, [filteredInvoices, filteredBills]);
 
     // Sort helper — applied at render time so sort changes are instant
     const sortItems = useCallback((items: GridItem[]): GridItem[] => {
@@ -106,14 +134,14 @@ export function CashflowGrid({
         return balances;
     }, [byWeek, openingCash, weeklyRecurringOutflows, weeklyRecurringInflows]);
 
-    // Backlog items
-    const beyondAR = sortItems(invoices.filter(i => i.effectiveWeek === null));
-    const beyondAP = sortItems(bills.filter(b => b.effectiveWeek === null));
+    // Backlog items (use filtered sets so filter affects backlog too)
+    const beyondAR = sortItems(filteredInvoices.filter(i => i.effectiveWeek === null));
+    const beyondAP = sortItems(filteredBills.filter(b => b.effectiveWeek === null));
     const backlogCount = beyondAR.length + beyondAP.length;
 
     // Auto-select first item if needed? (optional, usually better to leave closed)
 
-    // Summary stats
+    // Summary stats (always use full unfiltered set for header tallies)
     const totalAR = invoices.reduce((s, i) => s + i.amountOpen, 0);
     const totalAP = bills.reduce((s, i) => s + i.amountOpen, 0);
     const overriddenCount = [...invoices, ...bills].filter(i => i.overrideDate).length;
@@ -271,9 +299,36 @@ export function CashflowGrid({
                         </div>
                     )}
                     {dropping && <span className="text-xs animate-pulse" style={{ color: 'var(--text-muted)' }}>Saving…</span>}
+                    {filterQuery && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-600">
+                            {filteredInvoices.length + filteredBills.length} match
+                            {filteredInvoices.length + filteredBills.length !== 1 ? "es" : ""}
+                        </span>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {/* Inline filter search */}
+                    <div className={`flex items-center gap-1.5 rounded-lg border px-2.5 transition-all duration-200 ${
+                        filterQuery ? "border-indigo-300 bg-indigo-50/50 ring-1 ring-indigo-200" : "hover:border-slate-300"
+                    }`} style={{ borderColor: filterQuery ? undefined : "var(--border-default)", background: filterQuery ? undefined : "var(--bg-raised)" }}>
+                        <Search className="w-3 h-3 shrink-0" style={{ color: filterQuery ? "var(--color-primary)" : "var(--text-faint)" }} />
+                        <input
+                            ref={filterInputRef}
+                            type="text"
+                            placeholder="Filter items…"
+                            value={filterQuery}
+                            onChange={e => setFilterQuery(e.target.value)}
+                            className="bg-transparent border-none outline-none text-xs py-1.5 w-32 focus:w-44 transition-all duration-200 placeholder:text-slate-400"
+                            style={{ color: "var(--text-primary)" }}
+                        />
+                        {filterQuery && (
+                            <button onClick={() => setFilterQuery("")} className="shrink-0 text-slate-400 hover:text-slate-700 transition-colors">
+                                <X className="w-3 h-3" />
+                            </button>
+                        )}
+                    </div>
+
                     {/* View mode toggle */}
                     <div className="flex rounded-lg overflow-hidden border text-xs font-semibold uppercase tracking-wide" style={{ borderColor: "var(--border-default)" }}>
                         <button onClick={() => setSummaryView(false)} className="px-3 py-1.5"
