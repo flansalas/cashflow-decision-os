@@ -224,6 +224,18 @@ export function CashflowGrid({
         return                      { bg: "var(--bg-surface)",        border: "var(--border-subtle)",   label: "" };
     }
 
+    // Auto-select searched highlighted items
+    useEffect(() => {
+        if (highlightId && !selectedItem) {
+            const allItems = [...invoices, ...bills];
+            const target = allItems.find(i => String(i.id) === String(highlightId));
+            if (target) {
+                setSelectedItem(target);
+                setSidebarMode("detail");
+            }
+        }
+    }, [highlightId, invoices, bills, selectedItem]);
+
     const sidebarOpen = sidebarMode !== null;
 
     return (

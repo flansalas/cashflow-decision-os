@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { AlertTriangle, RotateCw, ChevronDown, ArrowRight, ListFilter, ClipboardList, TrendingUp, TrendingDown } from "lucide-react";
 import { RunwayMetric } from "./RunwayMetric";
 import { HelpBubble } from "./HelpBubble";
+import { GlobalSearch } from "./GlobalSearch";
 
 function fmt(n: number): string {
     return "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -69,7 +70,7 @@ function SummarySection({ title, label, value, subValue, children, colorClass, h
     );
 }
 
-import { Box, Settings2 } from "lucide-react";
+import { Box, Settings2, Search } from "lucide-react";
 
 export function HeaderTruthBar({
     bankBalance, adjustmentsTotal, adjustedCash, buffer,
@@ -80,6 +81,19 @@ export function HeaderTruthBar({
 }: Props) {
     const [showAdj, setShowAdj] = useState(false);
     const [showReasons, setShowReasons] = useState(false);
+    const [searchOpen, setSearchOpen] = useState(false);
+
+    // Global Cmd+K listener
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                setSearchOpen((prev) => !prev);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     const [now, setNow] = useState<number | null>(null);
     useEffect(() => {
@@ -90,6 +104,7 @@ export function HeaderTruthBar({
 
     return (
         <div className={`transition-all duration-500 ease-in-out border shadow-sm bg-white relative ${isCompact ? 'rounded-xl max-h-12 overflow-hidden' : 'rounded-2xl max-h-[800px] overflow-visible'}`} style={{ borderColor: 'var(--border-default)' }}>
+            <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
             
             {/* COMPACT VIEW (Absolute positioned over the top) */}
             <div className={`absolute inset-0 w-full h-12 px-4 flex items-center justify-between transition-all duration-500 ${isCompact ? 'opacity-100 pointer-events-auto delay-150' : 'opacity-0 pointer-events-none -translate-y-2'}`}>
@@ -111,6 +126,9 @@ export function HeaderTruthBar({
 
                 <div className="flex items-center gap-3">
                     <button onClick={onUpdateBalanceClick} className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-indigo-600 transition-colors">Reconcile</button>
+                    <button onClick={() => setSearchOpen(true)} className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors" title="Search (Cmd+K)">
+                        <Search className="w-3.5 h-3.5 text-slate-400" />
+                    </button>
                     <button onClick={onToggleSetup} className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
                         <Settings2 className="w-3.5 h-3.5 text-slate-400" />
                     </button>
@@ -135,6 +153,9 @@ export function HeaderTruthBar({
                             </button>
                             <button onClick={() => setShowAdj(!showAdj)} className="h-8 px-3 rounded-lg border text-xs font-medium hover:bg-slate-50 transition-colors" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }}>
                                 Adjustments
+                            </button>
+                            <button onClick={() => setSearchOpen(true)} className="h-8 px-3 rounded-lg border text-xs font-medium hover:bg-slate-50 transition-colors flex items-center justify-center" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }} title="Search (Cmd+K)">
+                                <Search className="w-3.5 h-3.5" />
                             </button>
                             {isStale && <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" title="Bank data is stale" />}
                         </div>
