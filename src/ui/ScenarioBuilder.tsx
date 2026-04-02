@@ -1,7 +1,7 @@
 // ui/ScenarioBuilder.tsx – Persisted what-if scenario panel with edit/delete
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Zap, CheckCircle, Pencil, X, ChevronUp, ChevronDown } from "lucide-react";
 import { HelpBubble } from "./HelpBubble";
 
@@ -40,6 +40,7 @@ export function ScenarioBuilder({ companyId, weeks, items, onAdd, onUpdate, onRe
     const [open, setOpen] = useState(items.length > 0);
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState(EMPTY_FORM);
+    const itemLabelRef = useRef<HTMLInputElement>(null);
     const [, setFormError] = useState<string | null>(null);
     const [bulkResults, setBulkResults] = useState<{ count: number; label: string } | null>(null);
     const [saving, setSaving] = useState(false);
@@ -52,6 +53,13 @@ export function ScenarioBuilder({ companyId, weeks, items, onAdd, onUpdate, onRe
 
     const [deleting, setDeleting] = useState<string | null>(null);
     const [clearSaving, setClearSaving] = useState(false);
+
+    // Auto-focus when form is shown
+    useEffect(() => {
+        if (showForm && itemLabelRef.current) {
+            itemLabelRef.current.focus();
+        }
+    }, [showForm]);
 
     const hasItems = items.length > 0;
 
@@ -187,7 +195,7 @@ export function ScenarioBuilder({ companyId, weeks, items, onAdd, onUpdate, onRe
         }}>
             {/* Header — div not button, to avoid nested <button> (HelpBubble is a button) */}
             <div
-                className="w-full px-5 py-4 flex items-center gap-3 text-left hover:bg-slate-50 transition-colors rounded-xl cursor-pointer select-none"
+                className="w-full px-5 py-4 flex items-center gap-3 text-left hover:bg-slate-50 active:bg-slate-100 transition-colors rounded-xl cursor-pointer select-none group/header"
                 onClick={() => setOpen(!open)}
                 role="button"
                 tabIndex={0}
@@ -205,7 +213,8 @@ export function ScenarioBuilder({ companyId, weeks, items, onAdd, onUpdate, onRe
                         {items.length} ACTIVE
                     </span>
                 )}
-                <span className="ml-auto text-xs" style={{ color: "var(--text-faint)" }}>
+                <span className="ml-auto flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 opacity-0 group-hover/header:opacity-100 transition-opacity">
+                    {open ? "Collapse" : "Expand"}
                     <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
                 </span>
             </div>
@@ -332,11 +341,12 @@ export function ScenarioBuilder({ companyId, weeks, items, onAdd, onUpdate, onRe
                                 </p>
                             )}
                             <input
+                                ref={itemLabelRef}
                                 type="text"
                                 value={form.label}
                                 onChange={e => setForm(f => ({ ...f, label: e.target.value }))}
                                 placeholder="e.g. Consulting fee, New client payment"
-                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                 style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}
                             />
                             <div className="grid grid-cols-2 gap-2">
