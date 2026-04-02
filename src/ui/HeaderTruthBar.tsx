@@ -191,11 +191,13 @@ export function HeaderTruthBar({
                             {companyName}
                         </span>
 
-                        <div className="flex gap-1.5 border-l border-slate-200 pl-4 py-1">
-                            <button onClick={onUpdateBalanceClick} className="btn-pill !py-0 px-2 text-[9px] uppercase font-bold tracking-widest !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-6 flex items-center shrink-0">
-                                <RotateCw className="w-2 h-2 mr-1" /> Reconcile
+                        <div className="flex gap-2 border-l border-slate-200 pl-4 py-1">
+                            <button onClick={onUpdateBalanceClick} className="btn-pill !py-0 px-3 text-[9px] uppercase font-bold tracking-widest !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-6 shadow-sm flex items-center shrink-0">
+                                <RotateCw className="w-2.5 h-2.5 mr-1.5" /> Reconcile
                             </button>
-
+                            <button onClick={() => setSearchOpen(true)} className="h-6 px-3 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 bg-white hover:bg-slate-50 transition-colors shadow-sm" title="Search (Cmd+K)">
+                                <Search className="w-2.5 h-2.5 mr-1.5" /> <span className="text-[9px] font-bold uppercase tracking-widest leading-none">Search</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -444,14 +446,7 @@ export function HeaderTruthBar({
                     })()}
                 </div>
 
-                {/* End of compact actions -> if we also had 'Search', we'll add it on the right edge here */}
-                {isCompact && (
-                    <div className="hidden lg:flex items-center overflow-hidden transition-all duration-500 ml-1 pr-3">
-                        <button onClick={() => setSearchOpen(true)} className="w-8 h-8 rounded-full border border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-center text-slate-600" title="Search (Cmd+K)">
-                            <Search className="w-3.5 h-3.5" />
-                        </button>
-                    </div>
-                )}
+                {/* Removed floating compact search button to prevent breaking right-side rounded styling */}
 
             </div>
         </div>
