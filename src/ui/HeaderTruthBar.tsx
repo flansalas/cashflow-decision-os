@@ -401,24 +401,40 @@ export function HeaderTruthBar({
 
                 {/* Health & Runway */}
                 <div className={`w-full lg:flex-[1.5] flex items-center justify-between relative group/health transition-all duration-500 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-5 py-3 lg:min-w-[250px]'}`}>
-                    {/* Contextual Action */}
-                    <div className="relative z-10 flex shrink-0 items-center justify-start h-full">
-                        {onDrillIn && healthStatus !== "STABLE" && (
-                            <button
-                                onClick={onDrillIn}
-                                className={`flex items-center gap-1.5 font-black uppercase text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded transition-colors group/drill border border-transparent hover:border-rose-100 ${isCompact ? 'text-[9px] px-2 py-1' : 'tracking-[0.15em] text-[10px] px-3 py-1.5'}`}
-                            >
-                                Review Gap
-                                <ArrowRight className="w-3 h-3 group-hover/drill:translate-x-0.5 transition-transform" />
-                            </button>
-                        )}
-                    </div>
+                    {/* Contextual Action - Visible Only When Expanded */}
+                    {!isCompact && (
+                        <div className="relative z-10 flex shrink-0 items-center justify-start h-full">
+                            {onDrillIn && healthStatus !== "STABLE" && (
+                                <button
+                                    onClick={onDrillIn}
+                                    className="flex items-center gap-1.5 font-black uppercase text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded transition-colors group/drill border border-transparent hover:border-rose-100 tracking-[0.15em] text-[10px] px-3 py-1.5"
+                                >
+                                    Review Gap
+                                    <ArrowRight className="w-3 h-3 group-hover/drill:translate-x-0.5 transition-transform" />
+                                </button>
+                            )}
+                        </div>
+                    )}
 
-                    <div className="flex flex-col items-end justify-center w-full relative z-10 pt-2 lg:pt-0">
-                        <RunwayMetric expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} isCompact={isCompact} />
+                    <div className={`flex flex-col items-end justify-center w-full relative z-10 ${isCompact ? '' : 'pt-2 lg:pt-0'}`}>
+                        {isCompact ? (
+                            <div className="flex items-baseline w-full gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 w-12">Health</span>
+                                <div className="flex-1 flex justify-end gap-3 items-center">
+                                    <RunwayMetric expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} isCompact={isCompact} />
+                                    {onDrillIn && healthStatus !== "STABLE" && (
+                                        <button onClick={onDrillIn} className="flex items-center gap-1 border border-rose-200 text-rose-500 hover:bg-rose-50 px-2 py-0.5 rounded text-[8px] uppercase font-black whitespace-nowrap bg-white/50 shadow-sm shrink-0 transition-colors">
+                                           Fix <ArrowRight className="w-2.5 h-2.5" />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <RunwayMetric expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} isCompact={isCompact} />
+                        )}
                         
-                        {(lowestExpected !== undefined || lowestWorst !== undefined) && (
-                            <div className={`flex items-center justify-end gap-2 font-bold uppercase tracking-widest opacity-60 group-hover/health:opacity-100 transition-all duration-500 ${isCompact ? 'text-[8px] mt-0.5' : 'text-[9px] mt-1.5'}`}>
+                        {!isCompact && (lowestExpected !== undefined || lowestWorst !== undefined) && (
+                            <div className="flex items-center justify-end gap-2 font-bold uppercase tracking-widest opacity-60 group-hover/health:opacity-100 transition-all duration-500 text-[9px] mt-1.5">
                                 {lowestExpected !== undefined && (
                                     <span className="flex items-center gap-1 text-slate-500">
                                         Floor: <span className={`font-financial font-bold ${lowestExpected < 0 ? 'text-rose-600' : 'text-slate-700'}`}>{fmt(lowestExpected)}</span>
