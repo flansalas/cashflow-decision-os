@@ -148,15 +148,7 @@ export function HeaderTruthBar({
                         {/* {isStale && <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse ml-1" title="Bank data is stale" />} */}
                     </div>
                     <div className="flex items-center gap-2.5 relative z-20">
-                        {onDrillIn && healthStatus !== "STABLE" && (
-                            <button
-                                onClick={onDrillIn}
-                                className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded transition-colors group/drill"
-                            >
-                                Review Gap
-                                <ArrowRight className="w-3 h-3 group-hover/drill:translate-x-0.5 transition-transform" />
-                            </button>
-                        )}
+
                         <button onClick={onUpdateBalanceClick} className="btn-pill !py-1 px-3 text-[10px] uppercase font-bold tracking-widest !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-7 flex items-center">
                             <RotateCw className="w-3 h-3 mr-1.5" /> Reconcile
                         </button>
@@ -182,11 +174,7 @@ export function HeaderTruthBar({
                             <button onClick={onUpdateBalanceClick} className="btn-pill !py-0 px-2 text-[9px] uppercase font-bold tracking-widest !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-6 flex items-center shrink-0">
                                 <RotateCw className="w-2 h-2 mr-1" /> Reconcile
                             </button>
-                            {onDrillIn && healthStatus !== "STABLE" && (
-                                <button onClick={onDrillIn} className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.15em] text-rose-600 hover:bg-rose-50 px-1.5 h-6 rounded transition-colors shrink-0">
-                                    Review Gap
-                                </button>
-                            )}
+
                         </div>
                     </div>
                 </div>
@@ -389,7 +377,20 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Health & Runway */}
-                <div className={`w-full lg:flex-[1.5] flex items-center relative group/health overflow-hidden transition-all duration-500 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-5 py-3 lg:min-w-[250px]'}`}>
+                <div className={`w-full lg:flex-[1.5] flex items-center justify-between relative group/health overflow-hidden transition-all duration-500 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-5 py-3 lg:min-w-[250px]'}`}>
+                    {/* Contextual Action */}
+                    <div className="relative z-10 flex shrink-0 items-center justify-start h-full">
+                        {onDrillIn && healthStatus !== "STABLE" && (
+                            <button
+                                onClick={onDrillIn}
+                                className={`flex items-center gap-1.5 font-black uppercase text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded transition-colors group/drill border border-transparent hover:border-rose-100 ${isCompact ? 'text-[9px] px-2 py-1' : 'tracking-[0.15em] text-[10px] px-3 py-1.5'}`}
+                            >
+                                Review Gap
+                                <ArrowRight className="w-3 h-3 group-hover/drill:translate-x-0.5 transition-transform" />
+                            </button>
+                        )}
+                    </div>
+
                     <div className="flex flex-col items-end justify-center w-full relative z-10 pt-2 lg:pt-0">
                         <RunwayMetric expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} isCompact={isCompact} />
                         
