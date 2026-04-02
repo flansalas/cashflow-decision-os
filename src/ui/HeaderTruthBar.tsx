@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, RotateCw, ChevronDown, ArrowRight, ListFilter, ClipboardList, TrendingUp, TrendingDown } from "lucide-react";
+import { AlertTriangle, RotateCw, ChevronDown, ArrowRight, ListFilter, ClipboardList, TrendingUp, TrendingDown, Box, Settings2, Search, Trash2, CheckCircle2 } from "lucide-react";
 import { RunwayMetric } from "./RunwayMetric";
 import { HelpBubble } from "./HelpBubble";
 import { GlobalSearch } from "./GlobalSearch";
@@ -31,45 +31,15 @@ interface Props {
     onBalanceUpdated: () => void;
     expectedRunOutWeek: number | null;
     worstCaseRunOutWeek: number | null;
-    // New fields for the ribbon
     inflow30: number;
     outflow30: number;
     isCompact?: boolean;
     companyName?: string;
-    // Drill-down + scenario numbers (replaces ForecastBanner sidebar)
     onDrillIn?: () => void;
     lowestExpected?: number;
     lowestWorst?: number;
     zoneBoundary?: string;
 }
-
-function SummarySection({ title, label, value, subValue, children, colorClass, highlight, isCompact }: { title: string, label?: string, value: string | React.ReactNode, subValue?: string, children?: React.ReactNode, colorClass?: string, highlight?: boolean, isCompact?: boolean }) {
-    if (isCompact) {
-        return (
-            <div className="flex items-center gap-3 px-4 py-1.5 whitespace-nowrap group relative">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 group-hover:text-slate-600 transition-colors">{title}:</span>
-                <span className={`text-base font-black font-financial ${colorClass || "text-slate-900"}`}>{value}</span>
-                {children}
-            </div>
-        );
-    }
-
-    return (
-        <div className={`px-5 py-3 h-full flex flex-col justify-between group relative border-l-4 md:border-l-0 overflow-visible ${highlight ? 'border-l-slate-800 md:border-t-4 md:border-t-slate-800' : 'border-l-transparent md:border-t-4 md:border-t-transparent'}`}>
-            <div>
-                <p className="text-[10px] font-bold mb-0.5 uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>{title}</p>
-                <div className="flex items-center justify-between">
-                    <div className={`text-2xl font-black font-financial leading-none tracking-tight gap-1 relative ${colorClass || "text-slate-900"}`}>{value}</div>
-                </div>
-                {subValue && <p className="text-[11px] font-medium mt-1 text-slate-500 truncate">{subValue}</p>}
-                {label && <p className="text-[11px] font-medium mt-1 text-slate-500">{label}</p>}
-            </div>
-            {children && <div className="mt-2">{children}</div>}
-        </div>
-    );
-}
-
-import { Box, Settings2, Search, Trash2, CheckCircle2 } from "lucide-react";
 
 export function HeaderTruthBar({
     bankBalance, adjustmentsTotal, adjustedCash, buffer,
@@ -149,56 +119,70 @@ export function HeaderTruthBar({
     }, [asOfDate]);
     const isStale = now ? Math.floor((now - new Date(asOfDate).getTime()) / 86_400_000) >= 5 : false;
 
+    const isExpectedSafe = expectedRunOutWeek === null;
+    const isWorstSafe = worstCaseRunOutWeek === null;
+    const healthStatus = (isExpectedSafe && isWorstSafe) ? "STABLE" : isExpectedSafe ? "VULNERABLE" : "CRITICAL";
+
     return (
-        <div className={`transition-all duration-500 ease-in-out border shadow-sm bg-white relative ${isCompact ? 'rounded-xl max-h-12 overflow-hidden' : 'rounded-2xl max-h-[800px] overflow-visible'}`} style={{ borderColor: 'var(--border-default)' }}>
+        <div className="border shadow-sm bg-white relative rounded-2xl flex flex-col z-[50]" style={{ borderColor: 'var(--border-default)' }}>
             <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
             
-            {/* COMPACT VIEW (Absolute positioned over the top) */}
-            <div className={`absolute inset-0 w-full h-12 px-4 flex items-center justify-between transition-all duration-500 ${isCompact ? 'opacity-100 pointer-events-auto delay-150' : 'opacity-0 pointer-events-none -translate-y-2'}`}>
-                <div className="flex items-center gap-1">
-                     <span className="font-black text-[10px] tracking-[0.2em] flex items-center gap-2 text-slate-900 mr-6">
-                        <Box className="w-4 h-4 text-indigo-600" /> {companyName}
-                     </span>
-                     
-                     <div className="flex items-center divide-x divide-slate-100">
-                        <SummarySection title="Cash" value={fmt(adjustedCash)} isCompact />
-                        <SummarySection title="In" value={fmt(inflow30)} colorClass="text-emerald-700" isCompact />
-                        <SummarySection title="Out" value={fmt(outflow30)} colorClass="text-rose-600" isCompact />
-                        <div className="px-4 flex items-center gap-2">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Survival:</span>
-                            <span className="text-sm font-black text-amber-600">{worstCaseRunOutWeek ?? '13'}+ Wks</span>
-                        </div>
-                     </div>
+            {/* Top Row: Command Strip Actions */}
+            <div className="flex items-center justify-between px-5 py-2.5 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl">
+                <div className="flex items-center gap-2">
+                    <span className="font-black text-xs tracking-[0.1em] flex items-center gap-2 text-slate-900">
+                        <Box className="w-4 h-4 text-indigo-600" /> {companyName || "Casio and Sons Construction"}
+                    </span>
+                    {isStale && <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse ml-1" title="Bank data is stale" />}
                 </div>
-
-                <div className="flex items-center gap-3">
-                    <button onClick={onUpdateBalanceClick} className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-indigo-600 transition-colors">Reconcile</button>
-                    <button onClick={() => setSearchOpen(true)} className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors" title="Search (Cmd+K)">
-                        <Search className="w-3.5 h-3.5 text-slate-400" />
+                <div className="flex items-center gap-2.5 relative z-20">
+                    {onDrillIn && healthStatus !== "STABLE" && (
+                        <button
+                            onClick={onDrillIn}
+                            className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded transition-colors group/drill"
+                        >
+                            Review Gap
+                            <ArrowRight className="w-3 h-3 group-hover/drill:translate-x-0.5 transition-transform" />
+                        </button>
+                    )}
+                    <button onClick={onUpdateBalanceClick} className="btn-pill !py-1 px-3 text-[10px] uppercase font-bold tracking-widest !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-7 flex items-center">
+                        <RotateCw className="w-3 h-3 mr-1.5" /> Reconcile
+                    </button>
+                    <button onClick={() => setSearchOpen(true)} className="h-7 px-3 rounded text-[10px] font-bold uppercase tracking-widest bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-center text-slate-600" title="Search (Cmd+K)">
+                        <Search className="w-3 h-3 mr-1.5" /> Search
                     </button>
                 </div>
             </div>
 
-            {/* FULL VIEW */}
-            <div className={`transition-all duration-500 ${isCompact ? 'opacity-0 scale-y-95 pointer-events-none' : 'opacity-100 scale-y-100 pointer-events-auto duration-700 delay-100'}`}>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 w-full divide-y md:divide-y-0 lg:divide-x" style={{ borderColor: 'var(--border-subtle)' }}>
-                {/* Section 1: Cash on Hand */}
-                <SummarySection 
-                    title="Cash on Hand" 
-                    value={
-                        <div className="relative inline-block w-full">
+            {/* Bottom Row: Pulse Metrics */}
+            <div className="flex flex-wrap lg:flex-nowrap items-center divide-y lg:divide-y-0 lg:divide-x divide-slate-100 relative z-10">
+                
+                {/* Cash */}
+                <div className="w-full lg:flex-1 px-5 py-3 flex items-center justify-between relative group/cash">
+                    <div className="flex items-baseline gap-3 w-full">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 w-16 shrink-0">Cash</span>
+                        <div className="flex flex-col items-start relative w-full">
                             <span 
                                 onClick={() => setEditBalanceOpen(!editBalanceOpen)} 
-                                className="cursor-pointer hover:text-indigo-600 transition-colors border-b border-dashed border-slate-300 hover:border-indigo-600 block line-clamp-1 truncate w-[80%] md:w-auto overflow-hidden whitespace-nowrap"
+                                className="text-xl sm:text-2xl font-black font-financial cursor-pointer hover:text-indigo-600 border-b border-dashed border-slate-300 transition-colors text-slate-900"
                                 title="Click to edit balance and outstanding items"
                             >
                                 {fmt(adjustedCash)}
                             </span>
                             
+                            {/* Adjusted/Muted details below */}
+                            {adjustmentsTotal !== 0 && (
+                                <button onClick={() => setShowAdj(!showAdj)} className="text-[9px] font-medium text-slate-400 hover:text-slate-600 absolute -bottom-3 flex items-center gap-1 opacity-80 group-hover/cash:opacity-100 transition-opacity">
+                                    <ListFilter className="w-2.5 h-2.5" />
+                                    Includes {fmt(adjustmentsTotal)} adj.
+                                </button>
+                            )}
+                            
+                            {/* Fast Reconcile Popover */}
                             {editBalanceOpen && (
                                 <>
                                     <div className="fixed inset-0 z-[50]" onClick={() => setEditBalanceOpen(false)} />
-                                    <div className="absolute z-[60] top-full mt-2 w-80 border rounded-2xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
+                                    <div className="absolute z-[60] top-full mt-4 w-80 border rounded-2xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
                                         <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
                                             <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Fast Reconcile</p>
                                             <button onClick={() => setEditBalanceOpen(false)} className="text-slate-400 hover:text-slate-700 transition">&times;</button>
@@ -283,182 +267,121 @@ export function HeaderTruthBar({
                                     </div>
                                 </>
                             )}
-                        </div>
-                    } 
-                    subValue={adjustmentsTotal !== 0 ? `Adjusted from ${fmt(bankBalance)} bank` : "Verified Bank Balance"}
-                    colorClass="text-slate-900"
-                    highlight
-                >
-                    <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-1.5">
-                            <button onClick={onUpdateBalanceClick} className="btn-pill !py-0.5 px-2 text-[10px] !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-6">
-                                <RotateCw className="w-3 h-3 mr-1" /> Reconcile
-                            </button>
-                            <button onClick={() => setShowAdj(!showAdj)} className="h-6 px-2 rounded-md border text-[10px] font-medium hover:bg-slate-50 transition-colors" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }}>
-                                Adjustments
-                            </button>
-                            <button onClick={() => setSearchOpen(true)} className="h-6 px-2 rounded-md border text-[10px] font-medium hover:bg-slate-50 transition-colors flex items-center justify-center" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }} title="Search (Cmd+K)">
-                                <Search className="w-3 h-3" />
-                            </button>
-                            {isStale && <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse ml-1" title="Bank data is stale" />}
-                        </div>
 
-                    </div>
-                    {/* Popover for adj */}
-                    {showAdj && (
-                        <div className="absolute z-[60] top-full mt-2 w-72 border rounded-xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
-                            <div className="flex justify-between items-center mb-3">
-                                 <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Ledger Discrepancies</p>
-                                 <button onClick={() => setShowAdj(false)} className="text-slate-300 hover:text-slate-600">&times;</button>
-                            </div>
-                            {adjustments.length === 0 ? (
-                                <p className="text-xs italic text-slate-400">No pending adjustments</p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {adjustments.map(a => (
-                                        <div key={a.id} className="flex justify-between text-xs">
-                                            <span className="truncate pr-4 text-slate-500">{a.type.replace(/_/g, " ")}{a.note ? ` — ${a.note}` : ""}</span>
-                                            <span className="font-financial font-bold text-slate-700">
-                                                {a.amount >= 0 ? "+" : ""}{fmt(a.amount)}
-                                            </span>
+                            {/* Adjustment breakdown Popover */}
+                            {showAdj && (
+                                <>
+                                    <div className="fixed inset-0 z-[50]" onClick={() => setShowAdj(false)} />
+                                    <div className="absolute z-[60] top-full mt-4 w-72 border rounded-xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Ledger Discrepancies</p>
+                                            <button onClick={() => setShowAdj(false)} className="text-slate-300 hover:text-slate-600">&times;</button>
                                         </div>
-                                    ))}
-                                    <div className="pt-2 border-t mt-2 flex justify-between text-xs font-bold text-slate-900 uppercase tracking-wide">
-                                        <span>Calculated Start</span>
-                                        <span>{fmt(adjustedCash)}</span>
+                                        {adjustments.length === 0 ? (
+                                            <p className="text-xs italic text-slate-400">No pending adjustments</p>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {adjustments.map(a => (
+                                                    <div key={a.id} className="flex justify-between text-xs">
+                                                        <span className="truncate pr-4 text-slate-500">{a.type.replace(/_/g, " ")}{a.note ? ` — ${a.note}` : ""}</span>
+                                                        <span className={`font-financial font-bold ${a.amount >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                                            {a.amount >= 0 ? "+" : ""}{fmt(a.amount)}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                                <div className="pt-2 border-t mt-2 flex justify-between text-xs font-bold text-slate-900 uppercase tracking-wide">
+                                                    <span>Calculated Start</span>
+                                                    <span className="font-financial">{fmt(adjustedCash)}</span>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
+                                </>
                             )}
                         </div>
-                    )}
-                </SummarySection>
+                    </div>
+                </div>
 
-                {/* Section 2: Money In */}
-                <SummarySection 
-                    title="Incoming (Next 30d)" 
-                    value={fmt(inflow30)} 
-                    subValue="Projected Collections"
-                    colorClass="text-emerald-700"
-                >
-                    <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-1.5">
-                            <button onClick={() => setShowReasons(!showReasons)} className={`px-2 py-0.5 rounded-md text-[10px] font-medium flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100 transition-colors h-6`}>
-                                 {confidence.score}% Confidence
+                {/* Inflow */}
+                <div className="w-full lg:flex-1 px-5 py-3 flex items-center justify-between relative group/in">
+                    <div className="flex items-baseline gap-3 w-full">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 w-16 shrink-0">In (30d)</span>
+                        <div className="flex flex-col items-start relative w-full">
+                            <span className="text-xl sm:text-2xl font-black font-financial text-emerald-700">{fmt(inflow30)}</span>
+                            <button onClick={() => setShowReasons(!showReasons)} className="text-[9px] font-medium text-slate-400 hover:text-emerald-700 absolute -bottom-3 flex items-center gap-1 opacity-80 group-hover/in:opacity-100 transition-opacity whitespace-nowrap">
+                                <TrendingUp className="w-2.5 h-2.5" />
+                                {confidence.score}% Confidence
                             </button>
-                        </div>
 
-                        {showReasons && (
-                            <div className="absolute z-[60] top-full mt-2 w-80 border rounded-xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
-                                 <div className="flex justify-between items-center mb-3">
-                                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Inflow Quality Score</p>
-                                    <button onClick={() => setShowReasons(false)} className="text-slate-300 hover:text-slate-600">&times;</button>
-                                 </div>
-                                 {confidence.reasons.map((r, i) => (
-                                    <div key={i} className="text-xs mb-1.5 flex gap-2 text-slate-600">
-                                        <span className="text-emerald-200">•</span> {r}
+                            {/* Confidence Reasons Popover */}
+                            {showReasons && (
+                                <>
+                                    <div className="fixed inset-0 z-[50]" onClick={() => setShowReasons(false)} />
+                                    <div className="absolute z-[60] top-full mt-4 w-80 border rounded-xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Inflow Quality Score</p>
+                                            <button onClick={() => setShowReasons(false)} className="text-slate-300 hover:text-slate-600">&times;</button>
+                                        </div>
+                                        {confidence.reasons.map((r, i) => (
+                                            <div key={i} className="text-xs mb-1.5 flex gap-2 text-slate-600">
+                                                <span className="text-emerald-400 font-black">•</span> {r}
+                                            </div>
+                                        ))}
                                     </div>
-                                 ))}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Outflow */}
+                <div className="w-full lg:flex-1 px-5 py-3 flex items-center justify-between relative group/out">
+                    <div className="flex items-baseline gap-3 w-full">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 w-16 shrink-0">Out (30d)</span>
+                        <div className="flex flex-col items-start relative w-full">
+                            <span className="text-xl sm:text-2xl font-black font-financial text-rose-600">{fmt(outflow30)}</span>
+                            {payroll ? (
+                                <span className="text-[9px] font-medium text-slate-400 absolute -bottom-3.5 whitespace-nowrap flex items-center gap-1 opacity-80 group-hover/out:opacity-100 transition-opacity">
+                                    <TrendingDown className="w-2.5 h-2.5" />
+                                    Payroll {new Date(payroll.nextDate!).toLocaleDateString(undefined, { month: 'short', day: 'numeric'})}
+                                </span>
+                            ) : payrollPromptNeeded ? (
+                                <span className="text-[9px] font-medium text-amber-600 absolute -bottom-3.5 whitespace-nowrap flex items-center gap-1 opacity-80 group-hover/out:opacity-100 transition-opacity">
+                                    <AlertTriangle className="w-2.5 h-2.5" /> Payroll Info Missing
+                                </span>
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Health & Runway */}
+                <div className="w-full lg:flex-[1.5] px-5 py-3 flex items-center relative group/health min-w-[250px] overflow-hidden">
+                    <div className="flex flex-col items-end justify-center w-full relative z-10 pt-2 lg:pt-0">
+                        <RunwayMetric expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} />
+                        
+                        {(lowestExpected !== undefined || lowestWorst !== undefined) && (
+                            <div className="flex items-center justify-end gap-2 text-[9px] font-bold uppercase tracking-widest mt-1.5 opacity-60 group-hover/health:opacity-100 transition-opacity">
+                                {lowestExpected !== undefined && (
+                                    <span className="text-slate-500">Floor: <span className="font-financial font-bold text-slate-700">{fmt(lowestExpected)}</span></span>
+                                )}
+                                {lowestExpected !== undefined && lowestWorst !== undefined && <span className="text-slate-300">|</span>}
+                                {lowestWorst !== undefined && (
+                                    <span className="text-slate-500">Worst: <span className="font-financial font-bold text-slate-700">{fmt(lowestWorst)}</span></span>
+                                )}
                             </div>
                         )}
                     </div>
-                </SummarySection>
+                    {/* Background glow color tint */}
+                    {(() => {
+                        const statusConfig = {
+                            STABLE: { glow: "bg-emerald-400/5 lg:rounded-br-2xl" },
+                            VULNERABLE: { glow: "bg-amber-400/10 lg:rounded-br-2xl" },
+                            CRITICAL: { glow: "bg-rose-400/10 lg:rounded-br-2xl" }
+                        }[healthStatus];
+                        return <div className={`absolute inset-0 ${statusConfig.glow} pointer-events-none transition-colors duration-500`} />;
+                    })()}
+                </div>
 
-                {/* Section 3: Money Out */}
-                <SummarySection 
-                    title="Outgoing (Next 30d)" 
-                    value={fmt(outflow30)} 
-                    subValue="Drafts & Commitments"
-                    colorClass="text-rose-600"
-                >
-                    <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-1.5">
-                            {payroll ? (
-                                <div className="px-2 py-0.5 rounded-md border text-[10px] font-medium inline-flex items-center gap-1 bg-slate-50 border-slate-200 text-slate-600 h-6">
-                                    Payroll {new Date(payroll.nextDate!).toLocaleDateString(undefined, { month: 'short', day: 'numeric'})}
-                                </div>
-                            ) : payrollPromptNeeded ? (
-                                <div className="px-2 py-0.5 rounded-md border text-[10px] font-medium inline-flex items-center gap-1 bg-amber-50 border-amber-200 text-amber-700 h-6">
-                                    <AlertTriangle className="w-3 h-3" /> Payroll Info
-                                </div>
-                            ) : (
-                                <div className="h-6 px-1 flex items-center text-[10px] font-medium text-slate-400">
-                                    Stability: High
-                                </div>
-                            )}
-                        </div>
-
-                    </div>
-                </SummarySection>
-
-            {/* Section 4: Forecast Health */}
-            <div className="lg:col-span-1 border-t md:border-t-0 px-5 py-3 flex flex-col justify-center group relative bg-white min-h-[100px]">
-                {(() => {
-                    const isExpectedSafe = expectedRunOutWeek === null;
-                    const isWorstSafe = worstCaseRunOutWeek === null;
-                    const status = (isExpectedSafe && isWorstSafe) ? "STABLE" : isExpectedSafe ? "VULNERABLE" : "CRITICAL";
-                    
-                    const statusConfig = {
-                        STABLE: { glow: "bg-emerald-400/10" },
-                        VULNERABLE: { glow: "bg-amber-400/10" },
-                        CRITICAL: { glow: "bg-rose-400/10" }
-                    }[status];
-
-                    return (
-                        <>
-                            <div className={`absolute top-0 right-0 w-48 h-48 rounded-full -mr-20 -mt-20 blur-3xl opacity-50 ${statusConfig.glow} pointer-events-none`} />
-                            <RunwayMetric expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} />
-
-                            {/* Scenario floor numbers — compact, below the metric */}
-                            {(lowestExpected !== undefined || lowestWorst !== undefined) && (
-                                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-slate-100">
-                                    {lowestExpected !== undefined && (
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-1 mb-0.5">
-                                                <p className="text-[8px] uppercase font-bold tracking-[0.2em] text-slate-400">Floor</p>
-                                                <HelpBubble text="The lowest cash balance expected in the next 13 weeks, assuming average scenario outcomes." position="bottom-left" />
-                                            </div>
-                                            <p className={`text-sm font-bold font-financial tracking-tight ${lowestExpected < 0 ? "text-rose-600" : "text-slate-800"}`}>
-                                                {fmt(lowestExpected)}
-                                            </p>
-                                        </div>
-                                    )}
-                                    {lowestWorst !== undefined && (
-                                        <>
-                                            <div className="w-px h-6 bg-slate-100" />
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-1 mb-0.5">
-                                                    <p className="text-[8px] uppercase font-bold tracking-[0.2em] text-slate-400">Worst</p>
-                                                    <HelpBubble text="The absolute minimum cash level predicted if the most pessimistic scenario plays out (e.g., major payment delays)." position="bottom-left" />
-                                                </div>
-                                                <p className={`text-sm font-bold font-financial tracking-tight ${lowestWorst < 0 ? "text-rose-500" : "text-slate-400"}`}>
-                                                    {fmt(lowestWorst)}
-                                                </p>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Drill-down portal — only when there's a gap to review */}
-                            {onDrillIn && status !== "STABLE" && (
-                                <button
-                                    onClick={onDrillIn}
-                                    className="mt-3 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-slate-900 hover:text-indigo-600 transition-colors group/drill"
-                                >
-                                    Review gap
-                                    <ArrowRight className="w-3 h-3 group-hover/drill:translate-x-0.5 transition-transform" />
-                                </button>
-                            )}
-                            {zoneBoundary && (
-                                <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400">
-                                    {zoneBoundary}
-                                </p>
-                            )}
-                        </>
-                    );
-                })()}
-            </div>
-            </div>
             </div>
         </div>
     );
