@@ -271,41 +271,15 @@ function DashboardContent() {
 
             {/* STICKY TOP CONTAINER: Unified "Morphing" Header */}
             <div 
-                className={`sticky top-0 z-50 transition-all duration-500 ease-in-out border-b ${isScrolled ? 'py-1 shadow-md bg-white/95 backdrop-blur-md px-6' : 'py-3 bg-slate-50/50 backdrop-blur-sm px-6'}`} 
+                className={`sticky top-0 z-50 transition-all duration-300 ease-in-out border-b ${isScrolled ? 'py-3 shadow-md bg-white/95 backdrop-blur-md px-6' : 'py-5 bg-slate-50/50 backdrop-blur-sm px-6'}`} 
                 style={{ borderColor: 'var(--border-subtle)' }}
             >
-                <div className="max-w-[88rem] mx-auto flex flex-col gap-2">
-                    {/* Full Header: CSS Transitioned to collapse */}
-                    <div className={`transition-all duration-500 origin-top overflow-hidden ${isScrolled ? 'max-h-0 opacity-0 mb-0 pointer-events-none' : 'max-h-[100px] opacity-100 mb-2 pointer-events-auto'}`}>
-                        <header className="flex items-center justify-between pb-1">
-                            <div className="flex items-center gap-6">
-                                <div className="flex items-center gap-3 pr-6 border-r border-slate-200">
-                                     <span className="font-black text-xs tracking-[0.2em] flex items-center gap-2 text-slate-900 group cursor-default">
-                                        <Box className="w-5 h-5 text-indigo-600 transition-transform group-hover:scale-110" /> 
-                                        CF/D·OS
-                                     </span>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <h1 className="text-2xl font-black font-display tracking-tight text-slate-900">
-                                        {data.company.name}
-                                    </h1>
-                                    {data.company.isDemo && (
-                                        <span className="px-2.5 py-1 text-[9px] rounded-lg font-black uppercase tracking-[0.2em] border border-amber-200 bg-amber-50 text-amber-700 shadow-sm animate-pulse">
-                                            Demo Environment
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                {/* Platform Setup was moved to the Sidebar */}
-                            </div>
-                        </header>
-                    </div>
-
+                <div className="max-w-[88rem] mx-auto flex flex-col">
                     {/* The Ribbon: Morphs based on isScrolled */}
                     <HeaderTruthBar
                         isCompact={isScrolled}
                         companyName={data.company.name}
+                        isCompanyDemo={data.company.isDemo}
                         bankBalance={data.cash.bankBalance}
                         adjustmentsTotal={data.cash.adjustmentsTotal}
                         adjustedCash={data.cash.adjustedOpeningCash}

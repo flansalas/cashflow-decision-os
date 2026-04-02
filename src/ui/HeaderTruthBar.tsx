@@ -35,6 +35,7 @@ interface Props {
     outflow30: number;
     isCompact?: boolean;
     companyName?: string;
+    isCompanyDemo?: boolean;
     onDrillIn?: () => void;
     lowestExpected?: number;
     lowestWorst?: number;
@@ -45,7 +46,7 @@ export function HeaderTruthBar({
     bankBalance, adjustmentsTotal, adjustedCash, buffer,
     confidence, lastUpdated, asOfDate, companyId,
     payroll, payrollPromptNeeded, adjustments, onUpdateBalanceClick, onBalanceUpdated,
-    expectedRunOutWeek, worstCaseRunOutWeek, inflow30, outflow30, isCompact, companyName,
+    expectedRunOutWeek, worstCaseRunOutWeek, inflow30, outflow30, isCompact, companyName, isCompanyDemo,
     onDrillIn, lowestExpected, lowestWorst, zoneBoundary
 }: Props) {
     const [showAdj, setShowAdj] = useState(false);
@@ -124,47 +125,80 @@ export function HeaderTruthBar({
     const healthStatus = (isExpectedSafe && isWorstSafe) ? "STABLE" : isExpectedSafe ? "VULNERABLE" : "CRITICAL";
 
     return (
-        <div className="border shadow-sm bg-white relative rounded-2xl flex flex-col z-[50]" style={{ borderColor: 'var(--border-default)' }}>
+        <div className={`border shadow-sm bg-white relative flex flex-col z-[50] transition-all duration-500 ease-in-out ${isCompact ? 'rounded-2xl lg:rounded-full' : 'rounded-2xl'}`} style={{ borderColor: 'var(--border-default)' }}>
             <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
             
-            {/* Top Row: Command Strip Actions */}
-            <div className="flex items-center justify-between px-5 py-2.5 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl">
-                <div className="flex items-center gap-2">
-                    <span className="font-black text-xs tracking-[0.1em] flex items-center gap-2 text-slate-900">
-                        <Box className="w-4 h-4 text-indigo-600" /> {companyName || "Casio and Sons Construction"}
-                    </span>
-                    {isStale && <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse ml-1" title="Bank data is stale" />}
-                </div>
-                <div className="flex items-center gap-2.5 relative z-20">
-                    {onDrillIn && healthStatus !== "STABLE" && (
-                        <button
-                            onClick={onDrillIn}
-                            className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded transition-colors group/drill"
-                        >
-                            Review Gap
-                            <ArrowRight className="w-3 h-3 group-hover/drill:translate-x-0.5 transition-transform" />
+            {/* Top Row: Full Header / Command Strip Actions */}
+            <div className={`transition-all duration-500 origin-top flex flex-col overflow-hidden ${isCompact ? 'max-h-0 opacity-0 pointer-events-none border-b-0' : 'max-h-24 opacity-100 pointer-events-auto border-b border-slate-100'}`}>
+                <div className="flex items-center justify-between px-5 py-2.5 bg-slate-50/50 rounded-t-2xl">
+                    <div className="flex items-center gap-2">
+                        <span className="font-black text-xs tracking-[0.1em] flex items-center gap-2 text-slate-900 group cursor-default">
+                            <Box className="w-5 h-5 text-indigo-600 transition-transform group-hover:scale-110" /> 
+                            CF/D·OS
+                        </span>
+                        <span className="text-slate-300 mx-2 text-sm font-light">|</span>
+                        <span className="font-black text-[11px] uppercase tracking-[0.15em] text-slate-700">
+                            {companyName || "Casio and Sons Construction"}
+                        </span>
+                        {isCompanyDemo && (
+                            <span className="px-2 py-0.5 ml-2 text-[8px] rounded border border-amber-200 bg-amber-50 text-amber-700 font-black uppercase tracking-[0.1em]">
+                                Demo
+                            </span>
+                        )}
+                        {/* {isStale && <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse ml-1" title="Bank data is stale" />} */}
+                    </div>
+                    <div className="flex items-center gap-2.5 relative z-20">
+                        {onDrillIn && healthStatus !== "STABLE" && (
+                            <button
+                                onClick={onDrillIn}
+                                className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded transition-colors group/drill"
+                            >
+                                Review Gap
+                                <ArrowRight className="w-3 h-3 group-hover/drill:translate-x-0.5 transition-transform" />
+                            </button>
+                        )}
+                        <button onClick={onUpdateBalanceClick} className="btn-pill !py-1 px-3 text-[10px] uppercase font-bold tracking-widest !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-7 flex items-center">
+                            <RotateCw className="w-3 h-3 mr-1.5" /> Reconcile
                         </button>
-                    )}
-                    <button onClick={onUpdateBalanceClick} className="btn-pill !py-1 px-3 text-[10px] uppercase font-bold tracking-widest !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-7 flex items-center">
-                        <RotateCw className="w-3 h-3 mr-1.5" /> Reconcile
-                    </button>
-                    <button onClick={() => setSearchOpen(true)} className="h-7 px-3 rounded text-[10px] font-bold uppercase tracking-widest bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-center text-slate-600" title="Search (Cmd+K)">
-                        <Search className="w-3 h-3 mr-1.5" /> Search
-                    </button>
+                        <button onClick={() => setSearchOpen(true)} className="h-7 px-3 rounded text-[10px] font-bold uppercase tracking-widest bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-center text-slate-600" title="Search (Cmd+K)">
+                            <Search className="w-3 h-3 mr-1.5" /> Search
+                        </button>
+                    </div>
                 </div>
             </div>
 
             {/* Bottom Row: Pulse Metrics */}
-            <div className="flex flex-wrap lg:flex-nowrap items-center divide-y lg:divide-y-0 lg:divide-x divide-slate-100 relative z-10">
+            <div className={`flex flex-wrap lg:flex-nowrap items-center divide-y lg:divide-y-0 lg:divide-x divide-slate-100 relative z-10 transition-all duration-500 bg-white ${isCompact ? 'rounded-2xl lg:rounded-full px-2 py-1' : 'rounded-b-2xl'}`}>
                 
+                {/* Actions (Only visible in Compact View) */}
+                <div className={`hidden lg:flex items-center overflow-hidden transition-all duration-500 ease-in-out ${isCompact ? 'w-auto opacity-100 pr-4' : 'w-0 opacity-0 pointer-events-none'}`}>
+                    <div className="flex items-center gap-2 pl-3">
+                        <span className="font-black text-[10px] uppercase tracking-[0.1em] text-slate-800 whitespace-nowrap pr-2 flex items-center gap-2">
+                            <Box className="w-3 h-3 text-indigo-600" />
+                            {companyName}
+                        </span>
+
+                        <div className="flex gap-1.5 border-l border-slate-200 pl-4 py-1">
+                            <button onClick={onUpdateBalanceClick} className="btn-pill !py-0 px-2 text-[9px] uppercase font-bold tracking-widest !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-6 flex items-center shrink-0">
+                                <RotateCw className="w-2 h-2 mr-1" /> Reconcile
+                            </button>
+                            {onDrillIn && healthStatus !== "STABLE" && (
+                                <button onClick={onDrillIn} className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.15em] text-rose-600 hover:bg-rose-50 px-1.5 h-6 rounded transition-colors shrink-0">
+                                    Review Gap
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
                 {/* Cash */}
-                <div className="w-full lg:flex-1 px-5 py-3 flex items-center justify-between relative group/cash">
-                    <div className="flex items-baseline gap-3 w-full">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 w-16 shrink-0">Cash</span>
+                <div className={`w-full lg:flex-1 flex items-center justify-between relative group/cash transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
+                    <div className={`flex items-baseline w-full transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
+                        <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-10' : 'w-16'}`}>Cash</span>
                         <div className="flex flex-col items-start relative w-full">
                             <span 
                                 onClick={() => setEditBalanceOpen(!editBalanceOpen)} 
-                                className="text-xl sm:text-2xl font-black font-financial cursor-pointer hover:text-indigo-600 border-b border-dashed border-slate-300 transition-colors text-slate-900"
+                                className={`font-black font-financial cursor-pointer hover:text-indigo-600 border-b border-dashed border-slate-300 text-slate-900 transition-all duration-500 ${isCompact ? 'text-[15px]' : 'text-xl sm:text-2xl'}`}
                                 title="Click to edit balance and outstanding items"
                             >
                                 {fmt(adjustedCash)}
@@ -172,7 +206,7 @@ export function HeaderTruthBar({
                             
                             {/* Adjusted/Muted details below */}
                             {adjustmentsTotal !== 0 && (
-                                <button onClick={() => setShowAdj(!showAdj)} className="text-[9px] font-medium text-slate-400 hover:text-slate-600 absolute -bottom-3 flex items-center gap-1 opacity-80 group-hover/cash:opacity-100 transition-opacity">
+                                <button onClick={() => setShowAdj(!showAdj)} className={`font-medium text-slate-400 hover:text-slate-600 absolute flex items-center gap-1 opacity-80 group-hover/cash:opacity-100 transition-all duration-500 ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3'}`}>
                                     <ListFilter className="w-2.5 h-2.5" />
                                     Includes {fmt(adjustmentsTotal)} adj.
                                 </button>
@@ -303,12 +337,12 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Inflow */}
-                <div className="w-full lg:flex-1 px-5 py-3 flex items-center justify-between relative group/in">
-                    <div className="flex items-baseline gap-3 w-full">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 w-16 shrink-0">In (30d)</span>
+                <div className={`w-full lg:flex-1 flex items-center justify-between relative group/in transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
+                    <div className={`flex items-baseline w-full transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
+                        <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-12' : 'w-16'}`}>In (30d)</span>
                         <div className="flex flex-col items-start relative w-full">
-                            <span className="text-xl sm:text-2xl font-black font-financial text-emerald-700">{fmt(inflow30)}</span>
-                            <button onClick={() => setShowReasons(!showReasons)} className="text-[9px] font-medium text-slate-400 hover:text-emerald-700 absolute -bottom-3 flex items-center gap-1 opacity-80 group-hover/in:opacity-100 transition-opacity whitespace-nowrap">
+                            <span className={`font-black font-financial text-emerald-700 transition-all duration-500 ${isCompact ? 'text-[15px]' : 'text-xl sm:text-2xl'}`}>{fmt(inflow30)}</span>
+                            <button onClick={() => setShowReasons(!showReasons)} className={`font-medium text-slate-400 hover:text-emerald-700 absolute flex items-center gap-1 opacity-80 group-hover/in:opacity-100 transition-all duration-500 whitespace-nowrap ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3'}`}>
                                 <TrendingUp className="w-2.5 h-2.5" />
                                 {confidence.score}% Confidence
                             </button>
@@ -335,18 +369,18 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Outflow */}
-                <div className="w-full lg:flex-1 px-5 py-3 flex items-center justify-between relative group/out">
-                    <div className="flex items-baseline gap-3 w-full">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 w-16 shrink-0">Out (30d)</span>
+                <div className={`w-full lg:flex-1 flex items-center justify-between relative group/out transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
+                    <div className={`flex items-baseline w-full transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
+                        <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-14' : 'w-16'}`}>Out (30d)</span>
                         <div className="flex flex-col items-start relative w-full">
-                            <span className="text-xl sm:text-2xl font-black font-financial text-rose-600">{fmt(outflow30)}</span>
+                            <span className={`font-black font-financial text-rose-600 transition-all duration-500 ${isCompact ? 'text-[15px]' : 'text-xl sm:text-2xl'}`}>{fmt(outflow30)}</span>
                             {payroll ? (
-                                <span className="text-[9px] font-medium text-slate-400 absolute -bottom-3.5 whitespace-nowrap flex items-center gap-1 opacity-80 group-hover/out:opacity-100 transition-opacity">
+                                <span className={`font-medium text-slate-400 absolute whitespace-nowrap flex items-center gap-1 opacity-80 group-hover/out:opacity-100 transition-all duration-500 ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3.5'}`}>
                                     <TrendingDown className="w-2.5 h-2.5" />
                                     Payroll {new Date(payroll.nextDate!).toLocaleDateString(undefined, { month: 'short', day: 'numeric'})}
                                 </span>
                             ) : payrollPromptNeeded ? (
-                                <span className="text-[9px] font-medium text-amber-600 absolute -bottom-3.5 whitespace-nowrap flex items-center gap-1 opacity-80 group-hover/out:opacity-100 transition-opacity">
+                                <span className={`font-medium text-amber-600 absolute whitespace-nowrap flex items-center gap-1 opacity-80 group-hover/out:opacity-100 transition-all duration-500 ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3.5'}`}>
                                     <AlertTriangle className="w-2.5 h-2.5" /> Payroll Info Missing
                                 </span>
                             ) : null}
@@ -355,12 +389,12 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Health & Runway */}
-                <div className="w-full lg:flex-[1.5] px-5 py-3 flex items-center relative group/health min-w-[250px] overflow-hidden">
+                <div className={`w-full lg:flex-[1.5] flex items-center relative group/health overflow-hidden transition-all duration-500 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-5 py-3 lg:min-w-[250px]'}`}>
                     <div className="flex flex-col items-end justify-center w-full relative z-10 pt-2 lg:pt-0">
-                        <RunwayMetric expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} />
+                        <RunwayMetric expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} isCompact={isCompact} />
                         
                         {(lowestExpected !== undefined || lowestWorst !== undefined) && (
-                            <div className="flex items-center justify-end gap-2 text-[9px] font-bold uppercase tracking-widest mt-1.5 opacity-60 group-hover/health:opacity-100 transition-opacity">
+                            <div className={`flex items-center justify-end gap-2 font-bold uppercase tracking-widest opacity-60 group-hover/health:opacity-100 transition-all duration-500 ${isCompact ? 'text-[8px] mt-0.5' : 'text-[9px] mt-1.5'}`}>
                                 {lowestExpected !== undefined && (
                                     <span className="text-slate-500">Floor: <span className="font-financial font-bold text-slate-700">{fmt(lowestExpected)}</span></span>
                                 )}
@@ -374,13 +408,22 @@ export function HeaderTruthBar({
                     {/* Background glow color tint */}
                     {(() => {
                         const statusConfig = {
-                            STABLE: { glow: "bg-emerald-400/5 lg:rounded-br-2xl" },
-                            VULNERABLE: { glow: "bg-amber-400/10 lg:rounded-br-2xl" },
-                            CRITICAL: { glow: "bg-rose-400/10 lg:rounded-br-2xl" }
+                            STABLE: { glow: "bg-emerald-400/5 lg:rounded-r-2xl" },
+                            VULNERABLE: { glow: "bg-amber-400/10 lg:rounded-r-2xl" },
+                            CRITICAL: { glow: "bg-rose-400/10 lg:rounded-r-2xl" }
                         }[healthStatus];
-                        return <div className={`absolute inset-0 ${statusConfig.glow} pointer-events-none transition-colors duration-500`} />;
+                        return <div className={`absolute inset-0 ${statusConfig.glow} pointer-events-none transition-all duration-500 ${isCompact ? 'rounded-2xl lg:rounded-r-full' : ''}`} />;
                     })()}
                 </div>
+
+                {/* End of compact actions -> if we also had 'Search', we'll add it on the right edge here */}
+                {isCompact && (
+                    <div className="hidden lg:flex items-center overflow-hidden transition-all duration-500 ml-1 pr-3">
+                        <button onClick={() => setSearchOpen(true)} className="w-8 h-8 rounded-full border border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-center text-slate-600" title="Search (Cmd+K)">
+                            <Search className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                )}
 
             </div>
         </div>
