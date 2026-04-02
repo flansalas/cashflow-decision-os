@@ -398,14 +398,16 @@ export function HeaderTruthBar({
                         {(lowestExpected !== undefined || lowestWorst !== undefined) && (
                             <div className={`flex items-center justify-end gap-2 font-bold uppercase tracking-widest opacity-60 group-hover/health:opacity-100 transition-all duration-500 ${isCompact ? 'text-[8px] mt-0.5' : 'text-[9px] mt-1.5'}`}>
                                 {lowestExpected !== undefined && (
-                                    <span className="text-slate-500 cursor-help" title="Lowest forecasted cash point across the entire 13-week expected projection">
+                                    <span className="flex items-center gap-1 text-slate-500">
                                         Floor: <span className={`font-financial font-bold ${lowestExpected < 0 ? 'text-rose-600' : 'text-slate-700'}`}>{fmt(lowestExpected)}</span>
+                                        <HelpBubble position="bottom-left" width="w-64" text="Lowest forecasted cash point across the entire 13-week expected projection." />
                                     </span>
                                 )}
                                 {lowestExpected !== undefined && lowestWorst !== undefined && <span className="text-slate-300">|</span>}
                                 {lowestWorst !== undefined && (
-                                    <span className="text-slate-500 cursor-help" title="Lowest forecasted cash point if all identified worst-case risks materialize">
+                                    <span className="flex items-center gap-1 text-slate-500">
                                         Worst: <span className={`font-financial font-bold ${lowestWorst < 0 ? 'text-rose-600' : 'text-slate-700'}`}>{fmt(lowestWorst)}</span>
+                                        <HelpBubble position="bottom-left" width="w-64" text="Lowest forecasted cash point if all identified worst-case risks materialize." />
                                     </span>
                                 )}
                             </div>
