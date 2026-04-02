@@ -624,15 +624,15 @@ function CommitmentRow({ c, highlightId, editingId, editState, saving, setEditin
     );
 }
 
-function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss }: {
+function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss, showAddForm, setShowAddForm }: {
     commitments: Commitment[]; companyId: string; onChanged?: () => void; highlightId?: string | null; onDismiss?: (id: string) => void;
+    showAddForm: boolean; setShowAddForm: (show: boolean) => void;
 }) {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editState, setEditState] = useState<EditState>({ amount: "", nextDate: "", displayName: "" });
     const [saving, setSaving] = useState<string | null>(null);
     const [localCommitments, setLocalCommitments] = useState<Commitment[]>(commitments);
     const [error, setError] = useState<string | null>(null);
-    const [showAddForm, setShowAddForm] = useState(false);
     const [addState, setAddState] = useState<AddState>(EMPTY_ADD);
     const [addSaving, setAddSaving] = useState(false);
     const [addError, setAddError] = useState<string | null>(null);
@@ -718,29 +718,11 @@ function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss }
                 </div>
             )}
 
-            {sortedCommitments.length === 0 ? (
-                <p className="text-sm py-4" style={{ color: "var(--text-muted)" }}>No planned events yet.</p>
-            ) : (
-                sortedCommitments.map(c => (
-                    <CommitmentRow 
-                        key={c.id} 
-                        c={c} 
-                        highlightId={highlightId} 
-                        editingId={editingId}
-                        editState={editState}
-                        saving={saving}
-                        setEditingId={setEditingId}
-                        setEditState={setEditState}
-                        handleDelete={handleDelete}
-                        patch={patch}
-                        onDismiss={onDismiss}
-                    />
-                ))
-            )}
-
-            {showAddForm ? (
-                <div className="border-t pt-4 mt-2" style={{ borderColor: "var(--border-subtle)" }}>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>+ New Recurring Event</p>
+            {showAddForm && (
+                <div className="border-b pb-5 mb-3 mt-1" style={{ borderColor: "var(--border-subtle)" }}>
+                    <p className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: "var(--color-primary)" }}>
+                        <Plus className="w-4 h-4" /> New Recurring Event
+                    </p>
                     {addError && (
                         <div className="text-xs text-red-700 border border-red-200 rounded px-3 py-2 mb-3 font-medium" style={{ background: "rgba(220,38,38,0.03)" }}>{addError}</div>
                     )}
@@ -792,8 +774,33 @@ function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss }
                         </div>
                     </div>
                 </div>
+            )}
+
+            {sortedCommitments.length === 0 ? (
+                <p className="text-sm py-4" style={{ color: "var(--text-muted)" }}>No planned events yet.</p>
             ) : (
-                <button onClick={() => setShowAddForm(true)}
+                sortedCommitments.map(c => (
+                    <CommitmentRow 
+                        key={c.id} 
+                        c={c} 
+                        highlightId={highlightId} 
+                        editingId={editingId}
+                        editState={editState}
+                        saving={saving}
+                        setEditingId={setEditingId}
+                        setEditState={setEditState}
+                        handleDelete={handleDelete}
+                        patch={patch}
+                        onDismiss={onDismiss}
+                    />
+                ))
+            )}
+
+            {!showAddForm && (
+                <button onClick={() => {
+                    setShowAddForm(true);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
                     className="w-full mt-3 py-2.5 text-xs border border-dashed rounded-lg focus:outline-none transition-colors hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/50 flex items-center justify-center gap-1.5"
                     style={{ color: "var(--text-muted)", borderColor: "var(--border-default)" }}>
                     <Plus className="w-3.5 h-3.5" /> Add recurring event
@@ -815,6 +822,7 @@ function RecurringContent() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [tab, setTab] = useState<"schedule" | "manage">("schedule");
+    const [showAddForm, setShowAddForm] = useState(false);
     const [dismissedHighlights, setDismissedHighlights] = useState<Set<string>>(new Set());
 
     const handleDismiss = useCallback((id: string) => {
@@ -885,9 +893,22 @@ function RecurringContent() {
                         <span style={{ color: "var(--border-default)" }}>/</span>
                         <span style={{ color: "var(--color-primary)" }} className="font-bold text-sm flex items-center gap-1.5"><Calendar className="w-4 h-4" /> Recurring Commitments</span>
                     </div>
-                    <button onClick={fetchData} className="p-1.5 rounded-lg border text-sm" title="Refresh" style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)", color: "var(--text-muted)" }}>
-                        <RefreshCw className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => {
+                                setTab("manage");
+                                setShowAddForm(true);
+                                window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className="px-3 py-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider rounded-lg shadow-sm transition-all"
+                            style={{ background: "var(--color-primary)", color: "white" }}
+                        >
+                            <Plus className="w-3.5 h-3.5" /> Add Commitment
+                        </button>
+                        <button onClick={fetchData} className="p-1.5 rounded-lg border text-sm" title="Refresh" style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)", color: "var(--text-muted)" }}>
+                            <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -929,6 +950,8 @@ function RecurringContent() {
                             highlightId={dismissedHighlights.has(highlightId ?? "") ? null : highlightId}
                             onDismiss={handleDismiss}
                             onChanged={fetchData}
+                            showAddForm={showAddForm}
+                            setShowAddForm={setShowAddForm}
                         />
                     )}
                 </div>
