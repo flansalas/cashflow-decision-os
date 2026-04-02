@@ -148,13 +148,33 @@ export function HeaderTruthBar({
                         )}
                         {/* {isStale && <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse ml-1" title="Bank data is stale" />} */}
                     </div>
-                    <div className="flex items-center gap-3 relative z-20">
+                    {/* Global Search Bar (QBO Style) */}
+                    <div className="hidden md:flex flex-1 max-w-md mx-4">
+                        <button
+                            onClick={() => setSearchOpen(true)}
+                            className="w-full h-8 px-3 rounded-md bg-white border border-slate-200 hover:border-slate-300 transition-colors flex items-center justify-between text-slate-400 shadow-sm"
+                        >
+                            <div className="flex items-center">
+                                <Search className="w-3.5 h-3.5 mr-2 text-slate-400" />
+                                <span className="text-[11px] font-medium tracking-wide">Search transactions, invoices, or help...</span>
+                            </div>
+                            <kbd className="hidden sm:inline-block text-[9px] font-mono bg-slate-100 border border-slate-200 text-slate-400 px-1.5 py-0.5 rounded leading-none">
+                                ⌘K
+                            </kbd>
+                        </button>
+                    </div>
+
+                    <div className="flex items-center gap-3 relative z-20 shrink-0">
+                        {/* Mobile Search Icon (Shows only on small screens) */}
+                        <button 
+                            onClick={() => setSearchOpen(true)} 
+                            className="md:hidden w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 shadow-sm"
+                        >
+                            <Search className="w-3.5 h-3.5" />
+                        </button>
 
                         <button onClick={onUpdateBalanceClick} className="btn-pill !py-1 px-5 text-[11px] uppercase font-bold tracking-widest !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-8 shadow-sm flex items-center">
                             <RotateCw className="w-3 h-3 mr-1.5" /> Reconcile
-                        </button>
-                        <button onClick={() => setSearchOpen(true)} className="h-8 px-5 rounded-full text-[11px] font-bold uppercase tracking-widest bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-center text-slate-600 shadow-sm" title="Search (Cmd+K)">
-                            <Search className="w-3 h-3 mr-1.5" /> Search
                         </button>
                     </div>
                 </div>
