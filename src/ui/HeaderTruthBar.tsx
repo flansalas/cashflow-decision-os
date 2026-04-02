@@ -7,7 +7,8 @@ import { HelpBubble } from "./HelpBubble";
 import { GlobalSearch } from "./GlobalSearch";
 
 function fmt(n: number): string {
-    return "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const sign = n < 0 ? "-" : "";
+    return sign + "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 interface Props {
@@ -397,11 +398,15 @@ export function HeaderTruthBar({
                         {(lowestExpected !== undefined || lowestWorst !== undefined) && (
                             <div className={`flex items-center justify-end gap-2 font-bold uppercase tracking-widest opacity-60 group-hover/health:opacity-100 transition-all duration-500 ${isCompact ? 'text-[8px] mt-0.5' : 'text-[9px] mt-1.5'}`}>
                                 {lowestExpected !== undefined && (
-                                    <span className="text-slate-500">Floor: <span className="font-financial font-bold text-slate-700">{fmt(lowestExpected)}</span></span>
+                                    <span className="text-slate-500 cursor-help" title="Lowest forecasted cash point across the entire 13-week expected projection">
+                                        Floor: <span className={`font-financial font-bold ${lowestExpected < 0 ? 'text-rose-600' : 'text-slate-700'}`}>{fmt(lowestExpected)}</span>
+                                    </span>
                                 )}
                                 {lowestExpected !== undefined && lowestWorst !== undefined && <span className="text-slate-300">|</span>}
                                 {lowestWorst !== undefined && (
-                                    <span className="text-slate-500">Worst: <span className="font-financial font-bold text-slate-700">{fmt(lowestWorst)}</span></span>
+                                    <span className="text-slate-500 cursor-help" title="Lowest forecasted cash point if all identified worst-case risks materialize">
+                                        Worst: <span className={`font-financial font-bold ${lowestWorst < 0 ? 'text-rose-600' : 'text-slate-700'}`}>{fmt(lowestWorst)}</span>
+                                    </span>
                                 )}
                             </div>
                         )}
