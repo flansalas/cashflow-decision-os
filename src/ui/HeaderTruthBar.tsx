@@ -148,12 +148,12 @@ export function HeaderTruthBar({
                         )}
                         {/* {isStale && <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse ml-1" title="Bank data is stale" />} */}
                     </div>
-                    <div className="flex items-center gap-2.5 relative z-20">
+                    <div className="flex items-center gap-3 relative z-20">
 
-                        <button onClick={onUpdateBalanceClick} className="btn-pill !py-1 px-3 text-[10px] uppercase font-bold tracking-widest !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-7 flex items-center">
+                        <button onClick={onUpdateBalanceClick} className="btn-pill !py-1 px-5 text-[11px] uppercase font-bold tracking-widest !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-8 shadow-sm flex items-center">
                             <RotateCw className="w-3 h-3 mr-1.5" /> Reconcile
                         </button>
-                        <button onClick={() => setSearchOpen(true)} className="h-7 px-3 rounded text-[10px] font-bold uppercase tracking-widest bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-center text-slate-600" title="Search (Cmd+K)">
+                        <button onClick={() => setSearchOpen(true)} className="h-8 px-5 rounded-full text-[11px] font-bold uppercase tracking-widest bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-center text-slate-600 shadow-sm" title="Search (Cmd+K)">
                             <Search className="w-3 h-3 mr-1.5" /> Search
                         </button>
                     </div>
@@ -378,7 +378,7 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Health & Runway */}
-                <div className={`w-full lg:flex-[1.5] flex items-center justify-between relative group/health overflow-hidden transition-all duration-500 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-5 py-3 lg:min-w-[250px]'}`}>
+                <div className={`w-full lg:flex-[1.5] flex items-center justify-between relative group/health transition-all duration-500 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-5 py-3 lg:min-w-[250px]'}`}>
                     {/* Contextual Action */}
                     <div className="relative z-10 flex shrink-0 items-center justify-start h-full">
                         {onDrillIn && healthStatus !== "STABLE" && (
@@ -416,9 +416,9 @@ export function HeaderTruthBar({
                     {/* Background glow color tint */}
                     {(() => {
                         const statusConfig = {
-                            STABLE: { glow: "bg-emerald-400/5 lg:rounded-r-2xl" },
-                            VULNERABLE: { glow: "bg-amber-400/10 lg:rounded-r-2xl" },
-                            CRITICAL: { glow: "bg-rose-400/10 lg:rounded-r-2xl" }
+                            STABLE: { glow: "bg-emerald-400/5 lg:rounded-br-2xl" },
+                            VULNERABLE: { glow: "bg-amber-400/10 lg:rounded-br-2xl" },
+                            CRITICAL: { glow: "bg-rose-400/10 lg:rounded-br-2xl" }
                         }[healthStatus];
                         return <div className={`absolute inset-0 ${statusConfig.glow} pointer-events-none transition-all duration-500 ${isCompact ? 'rounded-2xl lg:rounded-r-full' : ''}`} />;
                     })()}
