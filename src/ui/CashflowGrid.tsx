@@ -681,7 +681,10 @@ export function CashflowGrid({
                 <div className="flex gap-3 items-start">
 
                     {/* Week columns */}
-                    <div className="flex-1 min-w-0 overflow-auto -mx-4 px-4 h-[calc(100vh-200px)]">
+                    <div
+                        className="flex-1 min-w-0 overflow-auto -mx-4 px-4 h-[calc(100vh-200px)] transition-opacity duration-200"
+                        style={{ opacity: sidebarOpen ? 0.45 : 1, pointerEvents: sidebarOpen ? "none" : "auto" }}
+                    >
                         <div className="flex gap-2.5 min-h-max pb-4 w-[max-content]" style={{ minWidth: `${14 * 190}px` }}>
                             
                             {/* ── Week 0: Backlog / Parking Lot ── */}
@@ -890,11 +893,15 @@ export function CashflowGrid({
                     {/* ── Right Sidebar (Detail ONLY) ──────────────────────────── */}
                     {sidebarMode === "detail" && selectedItem && (
                         <div
-                            className="flex-shrink-0 flex flex-col rounded-xl border h-[calc(100vh-200px)] overflow-hidden transition-all duration-200 shadow-xl"
+                            className="flex-shrink-0 flex flex-col rounded-2xl h-[calc(100vh-200px)] overflow-hidden transition-all duration-200"
                             style={{
-                                width: "240px",
-                                background: "var(--bg-surface)",
-                                borderColor: "var(--border-strong)",
+                                width: "264px",
+                                background: "#ffffff",
+                                border: `2px solid ${selectedItem.kind === "ar" ? "rgba(34,197,94,0.40)" : "rgba(220,38,38,0.35)"}`,
+                                boxShadow: "0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)",
+                                backgroundImage: selectedItem.kind === "ar"
+                                    ? "linear-gradient(to bottom, rgba(34,197,94,0.07) 0px, transparent 72px)"
+                                    : "linear-gradient(to bottom, rgba(220,38,38,0.07) 0px, transparent 72px)",
                             }}
                         >
                             <ItemDetailDrawer

@@ -165,12 +165,21 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
             className="flex flex-col h-full overflow-hidden"
             style={{ color: "var(--text-secondary)" }}
         >
+            {/* Color accent bar at top */}
+            <div
+                className="h-[4px] w-full shrink-0"
+                style={{
+                    background: isAR
+                        ? "linear-gradient(90deg, #22c55e, #4ade80)"
+                        : "linear-gradient(90deg, #dc2626, #f87171)",
+                }}
+            />
             {/* Header */}
             <div
                 className="px-4 py-3 border-b flex items-start justify-between shrink-0"
                 style={{
-                    borderColor: isAR ? "rgba(34,197,94,0.1)" : "rgba(220,38,38,0.1)",
-                    background: isAR ? "rgba(34,197,94,0.03)" : "rgba(220,38,38,0.03)",
+                    borderColor: isAR ? "rgba(34,197,94,0.15)" : "rgba(220,38,38,0.15)",
+                    background: "transparent",
                 }}
             >
                 <div className="min-w-0 flex-1 pr-2">
