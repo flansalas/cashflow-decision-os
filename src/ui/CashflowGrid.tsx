@@ -3,7 +3,7 @@
 
 import { useMemo, useState, useCallback, useEffect, useRef, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Package, Printer, Inbox, Search, X, CheckCircle, RotateCcw, Layers } from "lucide-react";
+import { Package, Printer, Inbox, Search, X, CheckCircle, RotateCcw } from "lucide-react";
 import { ARAPCard, type GridItem, type DragPayload } from "./ARAPCard";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
 import { ExecutionPlanModal } from "./ExecutionPlanModal";
@@ -221,9 +221,9 @@ export function CashflowGrid({
         return balances;
     }, [byWeek, openingCash, weeklyRecurringOutflows, weeklyRecurringInflows]);
 
-    // Backlog items
-    const beyondAR = useMemo(() => sortItems(filteredInvoices.filter(i => i.effectiveWeek === null)), [filteredInvoices, sortItems]);
-    const beyondAP = useMemo(() => sortItems(filteredBills.filter(b => b.effectiveWeek === null)), [filteredBills, sortItems]);
+    // Backlog items (use filtered sets so filter affects backlog too)
+    const beyondAR = sortItems(filteredInvoices.filter(i => i.effectiveWeek === null));
+    const beyondAP = sortItems(filteredBills.filter(b => b.effectiveWeek === null));
     const backlogCount = beyondAR.length + beyondAP.length;
 
     // Auto-select first item if needed? (optional, usually better to leave closed)
@@ -234,48 +234,25 @@ export function CashflowGrid({
     const overriddenCount = [...invoices, ...bills].filter(i => i.overrideDate).length;
 
     // Dollar totals for the current multi-selection
-    // Compute the visual order of items as seen on the screen (no duplicates)
-    const allVisualItems = useMemo(() => {
-        const list: GridItem[] = [];
-        // 1. Backlog (AR then AP)
-        list.push(...beyondAR);
-        list.push(...beyondAP);
-        // 2. Weekly Grid (W1 to W13, AR then AP)
-        for (let w = 1; w <= 13; w++) {
-            const wItems = byWeek.get(w);
-            if (wItems) {
-                // Ensure we sort these columns so the range matches visual sort order
-                list.push(...sortItems(wItems.ar));
-                list.push(...sortItems(wItems.ap));
-            }
-        }
-        return list;
-    }, [beyondAR, beyondAP, byWeek, sortItems]);
-
-    // Dollar totals for the current multi-selection
     const selectionTotals = useMemo(() => {
-        if (selectedItemIds.size === 0) return { ar: 0, ap: 0 };
+        if (selectedItemIds.size === 0) return null;
+        const allItems = [...invoices, ...bills];
         let ar = 0, ap = 0;
         for (const id of selectedItemIds) {
-            const it = allVisualItems.find(i => i.id === id);
+            const it = allItems.find(i => i.id === id);
             if (!it) continue;
             if (it.kind === "ar") ar += it.amountOpen;
             else ap += it.amountOpen;
         }
         return { ar, ap };
-    }, [selectedItemIds, allVisualItems]);
-
-    const handleClearSelection = useCallback(() => {
-        setSelectedItemIds(new Set());
-        setSelectedItem(null);
-        setSidebarMode(null);
-    }, []);
+    }, [selectedItemIds, invoices, bills]);
 
     // Card selection (single — opens detail drawer)
     const handleSelectCard = useCallback((item: GridItem) => {
-        // Plain click always clears bulk multi-selection
+        // Plain click clears bulk multi-selection but does NOT move the
+        // Shift+Click anchor — otherwise an accidental plain click would
+        // make the next Shift+Click select a huge unexpected range.
         setSelectedItemIds(new Set());
-        lastSelectedIdRef.current = item.id;
         if (selectedItem?.id === item.id && sidebarMode === "detail") {
             setSelectedItem(null);
             setSidebarMode(null);
@@ -287,26 +264,45 @@ export function CashflowGrid({
 
     // Multi-select handler: Cmd/Ctrl toggles individual, Shift extends range
     const handleMultiSelect = useCallback((item: GridItem, e: React.MouseEvent) => {
+        // Build a deduplicated flat list in the exact order items render:
+        // backlog (AR then AP) followed by week 1..13 (AR then AP per week).
+        // Using a Map keyed by id prevents duplicates that caused phantom selections.
+        const seen = new Map<string, GridItem>();
+        const add = (i: GridItem) => { if (!seen.has(i.id)) seen.set(i.id, i); };
+        // Backlog first
+        filteredInvoices.filter(i => i.effectiveWeek === null).forEach(add);
+        filteredBills.filter(b => b.effectiveWeek === null).forEach(add);
+        // Then weeks 1–13
+        for (let w = 1; w <= 13; w++) {
+            filteredInvoices.filter(i => i.effectiveWeek === w).forEach(add);
+            filteredBills.filter(b => b.effectiveWeek === w).forEach(add);
+        }
+        const allItems = Array.from(seen.values());
+
         setSelectedItemIds(prev => {
             const next = new Set(prev);
             if (e.shiftKey && lastSelectedIdRef.current) {
-                // Range: find indices in the actual visual order
-                const ids = allVisualItems.map(i => i.id);
+                // Range: find indices in the flat deterministic list
+                const ids = allItems.map(i => i.id);
                 const anchorIdx = ids.indexOf(lastSelectedIdRef.current);
                 const targetIdx = ids.indexOf(item.id);
                 if (anchorIdx !== -1 && targetIdx !== -1) {
                     const lo = Math.min(anchorIdx, targetIdx);
                     const hi = Math.max(anchorIdx, targetIdx);
                     for (let i = lo; i <= hi; i++) next.add(ids[i]);
+                    // Keep anchor fixed; update only on Cmd/Ctrl clicks
+                } else {
+                    next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                    lastSelectedIdRef.current = item.id;
                 }
             } else {
-                // Cmd/Ctrl toggle
+                // Cmd/Ctrl toggle — this click becomes the new anchor
                 next.has(item.id) ? next.delete(item.id) : next.add(item.id);
                 lastSelectedIdRef.current = item.id;
             }
             return next;
         });
-    }, [allVisualItems]);
+    }, [filteredInvoices, filteredBills]);
 
     // After a move, keep the drawer open but refresh the selected item data
     const handleMoved = useCallback(() => {
@@ -492,19 +488,30 @@ export function CashflowGrid({
                             <span className="text-[10px] font-bold text-violet-700">{backlogCount} in Backlog</span>
                         </div>
                     )}
-                    {/* Global Selection Status (Top Badge) */}
-                    {selectedItemIds.size > 0 && (
-                        <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-600 border border-indigo-500 rounded-full shadow-lg shadow-indigo-100 animate-in slide-in-from-top-2 duration-300">
-                            <Layers className="w-3.5 h-3.5 text-white" />
-                            <span className="text-[10px] font-black text-white uppercase tracking-wider leading-none">
-                                {selectedItemIds.size} Selected
+                    {selectedItemIds.size > 0 && selectionTotals && (
+                        <div className="flex items-center gap-2 px-2.5 py-0.5 rounded-full border border-indigo-200 bg-indigo-50">
+                            <span className="text-[10px] font-bold text-indigo-700">
+                                {selectedItemIds.size} selected
                             </span>
-                            <button 
-                                onClick={handleClearSelection}
-                                className="ml-1 p-0.5 hover:bg-white/20 rounded-full transition-colors group cursor-pointer"
-                                title="Clear Selection (Esc)"
+                            {selectionTotals.ar > 0 && (
+                                <span className="text-[10px] font-semibold" style={{ color: "#059669" }}>
+                                    +{fmt(selectionTotals.ar)}
+                                </span>
+                            )}
+                            {selectionTotals.ar > 0 && selectionTotals.ap > 0 && (
+                                <span className="text-[10px] text-indigo-200">/</span>
+                            )}
+                            {selectionTotals.ap > 0 && (
+                                <span className="text-[10px] font-semibold" style={{ color: "#e11d48" }}>
+                                    −{fmt(selectionTotals.ap)}
+                                </span>
+                            )}
+                            <button
+                                onClick={() => setSelectedItemIds(new Set())}
+                                className="text-indigo-400 hover:text-indigo-700 transition-colors ml-0.5"
+                                title="Clear selection (Esc)"
                             >
-                                <X className="w-2.5 h-2.5 text-indigo-100 group-hover:text-white" />
+                                <X className="w-3 h-3" />
                             </button>
                         </div>
                     )}
@@ -702,27 +709,14 @@ export function CashflowGrid({
                         </button>
                     </div>
                 )}
-                {/* Week columns wrapper: Ensures grid and sidebar are side-by-side */}
-                <div className="flex gap-4 items-start">
-                    {/* Week columns — spotlight focus pattern (dims grid when detail panel is open) */}
+                <div className="flex gap-3 items-start">
+
+                    {/* Week columns — opacity dims slightly when detail panel is open (decorative only, never blocks interaction) */}
                     <div
-                        className="flex-1 min-w-0 overflow-auto -mx-4 px-4 h-[calc(100vh-200px)] transition-all duration-500 relative"
-                        style={{ 
-                            opacity: sidebarOpen ? 0.30 : 1,
-                            filter: sidebarOpen ? "grayscale(70%) contrast(85%) brightness(0.9) blur(0.4px)" : "none",
-                            pointerEvents: "auto", 
-                        }}
+                        className="flex-1 min-w-0 overflow-auto -mx-4 px-4 h-[calc(100vh-200px)] transition-opacity duration-200"
+                        style={{ opacity: sidebarOpen ? 0.72 : 1 }}
                     >
-                        {/* Interactive overlay to catch clicks when spotlight is active */}
-                        {sidebarOpen && (
-                            <div 
-                                className="absolute inset-0 z-50 cursor-zoom-out"
-                                onClick={(e) => { 
-                                    if (e.target === e.currentTarget) handleClearSelection();
-                                }}
-                            />
-                        )}
-                        <div className="flex gap-2.5 min-h-max pb-32 w-[max-content]" style={{ minWidth: `${14 * 190}px` }}>
+                        <div className="flex gap-2.5 min-h-max pb-4 w-[max-content]" style={{ minWidth: `${14 * 190}px` }}>
                             
                             {/* ── Week 0: Backlog / Parking Lot ── */}
                             <div 
@@ -957,52 +951,6 @@ export function CashflowGrid({
                 </>
             )}
         </div>
-
-        {/* ── Bottom Selection Bar (Intuit Pattern) ────────────────────── */}
-        {selectedItemIds.size > 1 && (
-            <div 
-                className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-6 px-6 py-4 rounded-2xl shadow-2xl border animate-in slide-in-from-bottom-8 duration-500 ring-1 ring-white/20"
-                style={{
-                    background: "rgba(30,30,46,0.96)",
-                    borderColor: "rgba(99,102,241,0.35)",
-                    backdropFilter: "blur(12px)",
-                    boxShadow: "0 24px 64px -12px rgba(0,0,0,0.5), 0 0 40px rgba(99,102,241,0.15)",
-                }}
-            >
-                <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Master Selection</span>
-                    <div className="flex items-center gap-2">
-                        <span className="text-xl font-black text-white">{selectedItemIds.size}</span>
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Items in Batch</span>
-                    </div>
-                </div>
-
-                <div className="h-10 w-[1px] bg-slate-700/50" />
-
-                <div className="flex gap-8">
-                    {selectionTotals.ar > 0 && (
-                        <div className="flex flex-col">
-                            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Total Inflow</span>
-                            <span className="text-lg font-black text-emerald-50 text-shadow-sm">+{fmt(selectionTotals.ar)}</span>
-                        </div>
-                    )}
-                    {selectionTotals.ap > 0 && (
-                        <div className="flex flex-col">
-                            <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Total Outflow</span>
-                            <span className="text-lg font-black text-rose-50 text-shadow-sm">−{fmt(selectionTotals.ap)}</span>
-                        </div>
-                    )}
-                </div>
-
-                <button
-                    onClick={handleClearSelection}
-                    className="ml-4 flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-indigo-600/20"
-                >
-                    <X className="w-3.5 h-3.5" />
-                    Deselect All
-                </button>
-            </div>
-        )}
 
         {/* Execution Plan Modal */}
         {showPlan && (
