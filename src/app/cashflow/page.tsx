@@ -1,7 +1,7 @@
 // app/cashflow/page.tsx — AR/AP Weekly Cash Grid page
 "use client";
 
-import { useState, useEffect, Suspense, useCallback } from "react";
+import { useState, useEffect, Suspense, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { CashflowGrid } from "@/ui/CashflowGrid";
 import { ARAPUploadStep } from "@/ui/ARAPUploadStep";
@@ -84,6 +84,9 @@ function CashflowContent() {
     const [showUpload, setShowUpload] = useState(false);
     const [showBankUpload, setShowBankUpload] = useState(false);
     const [viewFilter, setViewFilter] = useState<"both" | "ar" | "ap">(mode ?? "both");
+    // After the first successful load we do silent background refreshes
+    // so the grid stays mounted and the user's scroll position is preserved.
+    const hasLoadedRef = useRef(false);
 
     useEffect(() => {
         if (mode) setViewFilter(mode);
@@ -93,15 +96,16 @@ function CashflowContent() {
 
     const fetchGrid = useCallback(() => {
         const url = companyId ? `/api/cashflow-grid?companyId=${companyId}` : "/api/cashflow-grid";
-        setLoading(true);
+        // Only show the full-screen spinner on the very first load
+        if (!hasLoadedRef.current) setLoading(true);
         fetch(url)
             .then(r => r.json())
             .then(d => {
                 if (d.error) { setError(d.error); }
-                else { setData(d); setError(null); }
+                else { setData(d); setError(null); hasLoadedRef.current = true; }
             })
             .catch(() => setError("Failed to load"))
-            .finally(() => setLoading(false));
+            .finally(() => { if (!hasLoadedRef.current) setLoading(false); else setLoading(false); });
     }, [companyId]);
 
     useEffect(() => { fetchGrid(); }, [fetchGrid]);

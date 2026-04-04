@@ -64,6 +64,21 @@ export function CashflowGrid({
     const [sidebarMode, setSidebarMode] = useState<"detail" | null>(null);
     const [selectedItem, setSelectedItem] = useState<GridItem | null>(null);
 
+    // Multi-selection state
+    const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+    const lastSelectedIdRef = useRef<string | null>(null);
+
+    // Batch-hint banner — shown until user dismisses (persisted in localStorage)
+    const [showBatchHint, setShowBatchHint] = useState(false);
+    useEffect(() => {
+        const dismissed = localStorage.getItem("cfdo_batch_hint_dismissed");
+        if (!dismissed) setShowBatchHint(true);
+    }, []);
+    const dismissBatchHint = () => {
+        localStorage.setItem("cfdo_batch_hint_dismissed", "1");
+        setShowBatchHint(false);
+    };
+
     // Filter items by query (name, number, or amount)
     const filterItems = useCallback((items: GridItem[]): GridItem[] => {
         const q = filterQuery.trim().toLowerCase();
@@ -149,7 +164,7 @@ export function CashflowGrid({
     const totalAP = bills.reduce((s, i) => s + i.amountOpen, 0);
     const overriddenCount = [...invoices, ...bills].filter(i => i.overrideDate).length;
 
-    // Card selection
+    // Card selection (single — opens detail drawer)
     const handleSelectCard = useCallback((item: GridItem) => {
         if (selectedItem?.id === item.id && sidebarMode === "detail") {
             // Deselect
@@ -159,7 +174,40 @@ export function CashflowGrid({
             setSelectedItem(item);
             setSidebarMode("detail");
         }
+        // Single click also toggles this item into the "primary" of multi-select
+        lastSelectedIdRef.current = item.id;
     }, [selectedItem, sidebarMode]);
+
+    // Multi-select handler: Cmd/Ctrl toggles individual, Shift extends range
+    const handleMultiSelect = useCallback((item: GridItem, e: React.MouseEvent) => {
+        const allItems = [
+            ...filteredInvoices,
+            ...filteredBills,
+            ...filteredInvoices.filter(i => i.effectiveWeek === null),
+            ...filteredBills.filter(b => b.effectiveWeek === null),
+        ];
+        setSelectedItemIds(prev => {
+            const next = new Set(prev);
+            if (e.shiftKey && lastSelectedIdRef.current) {
+                // Range: find indices in the flat list
+                const ids = allItems.map(i => i.id);
+                const anchorIdx = ids.indexOf(lastSelectedIdRef.current);
+                const targetIdx = ids.indexOf(item.id);
+                if (anchorIdx !== -1 && targetIdx !== -1) {
+                    const lo = Math.min(anchorIdx, targetIdx);
+                    const hi = Math.max(anchorIdx, targetIdx);
+                    for (let i = lo; i <= hi; i++) next.add(ids[i]);
+                } else {
+                    next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                }
+            } else {
+                // Cmd/Ctrl toggle
+                next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                lastSelectedIdRef.current = item.id;
+            }
+            return next;
+        });
+    }, [filteredInvoices, filteredBills]);
 
     // After a move, keep the drawer open but refresh the selected item data
     const handleMoved = useCallback(() => {
@@ -196,21 +244,26 @@ export function CashflowGrid({
         const friday = new Date(weekStart);
         friday.setDate(friday.getDate() + 4);
         const dateStr = friday.toISOString().slice(0, 10);
-        const overrideType = payload.kind === "ar" ? "set_expected_payment_date" : "set_bill_due_date";
-        const targetType = payload.kind === "ar" ? "invoice" : "bill";
+        const allItems = [...invoices, ...bills];
 
+        // Process each item in the batch
+        const ids = payload.itemIds?.length ? payload.itemIds : [payload.itemId];
         setDropping(true);
         try {
-            const allItems = [...invoices, ...bills];
-            const item = allItems.find(i => i.id === payload.itemId);
-            if (item?.overrideDate) {
-                await fetch(`/api/overrides?targetId=${payload.itemId}&type=${overrideType}`, { method: "DELETE" });
-            }
-            await fetch("/api/overrides", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ companyId, type: overrideType, targetType, targetId: payload.itemId, effectiveDate: dateStr }),
-            });
+            await Promise.all(ids.map(async (id) => {
+                const thisItem = allItems.find(i => i.id === id);
+                const overrideType = thisItem?.kind === "ar" ? "set_expected_payment_date" : "set_bill_due_date";
+                const targetType = thisItem?.kind === "ar" ? "invoice" : "bill";
+                if (thisItem?.overrideDate) {
+                    await fetch(`/api/overrides?targetId=${id}&type=${overrideType}`, { method: "DELETE" });
+                }
+                await fetch("/api/overrides", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ companyId, type: overrideType, targetType, targetId: id, effectiveDate: dateStr }),
+                });
+            }));
+            setSelectedItemIds(new Set()); // clear selection after batch move
             onRefresh();
         } catch { /* ignore */ }
         finally { setDropping(false); }
@@ -228,21 +281,25 @@ export function CashflowGrid({
         const farFuture = new Date();
         farFuture.setDate(farFuture.getDate() + 14 * 7);
         const dateStr = farFuture.toISOString().slice(0, 10);
-        const overrideType = payload.kind === "ar" ? "set_expected_payment_date" : "set_bill_due_date";
-        const targetType = payload.kind === "ar" ? "invoice" : "bill";
+        const allItems = [...invoices, ...bills];
 
+        const ids = payload.itemIds?.length ? payload.itemIds : [payload.itemId];
         setDropping(true);
         try {
-            const allItems = [...invoices, ...bills];
-            const item = allItems.find(i => i.id === payload.itemId);
-            if (item?.overrideDate) {
-                await fetch(`/api/overrides?targetId=${payload.itemId}&type=${overrideType}`, { method: "DELETE" });
-            }
-            await fetch("/api/overrides", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ companyId, type: overrideType, targetType, targetId: payload.itemId, effectiveDate: dateStr }),
-            });
+            await Promise.all(ids.map(async (id) => {
+                const thisItem = allItems.find(i => i.id === id);
+                const overrideType = thisItem?.kind === "ar" ? "set_expected_payment_date" : "set_bill_due_date";
+                const targetType = thisItem?.kind === "ar" ? "invoice" : "bill";
+                if (thisItem?.overrideDate) {
+                    await fetch(`/api/overrides?targetId=${id}&type=${overrideType}`, { method: "DELETE" });
+                }
+                await fetch("/api/overrides", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ companyId, type: overrideType, targetType, targetId: id, effectiveDate: dateStr }),
+                });
+            }));
+            setSelectedItemIds(new Set()); // clear selection after batch move
             onRefresh();
         } catch { /* ignore */ }
         finally { setDropping(false); }
@@ -284,7 +341,10 @@ export function CashflowGrid({
 
     return (
         <>
-        <div className="space-y-4">
+        <div className="space-y-4" onClick={(e) => {
+            // Clear multi-selection when clicking on the grid background (not a card)
+            if (e.target === e.currentTarget) setSelectedItemIds(new Set());
+        }}>
             {/* ── Top bar ──────────────────────────────────────────────────── */}
             <div className="flex flex-wrap gap-4 items-center justify-between">
                 <div className="flex flex-wrap gap-4 items-center">
@@ -312,6 +372,18 @@ export function CashflowGrid({
                         <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-violet-200 bg-violet-50">
                             <Package className="w-3 h-3 text-violet-600" />
                             <span className="text-[10px] font-bold text-violet-700">{backlogCount} in Backlog</span>
+                        </div>
+                    )}
+                    {selectedItemIds.size > 0 && (
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-indigo-200 bg-indigo-50">
+                            <span className="text-[10px] font-bold text-indigo-700">{selectedItemIds.size} selected</span>
+                            <button
+                                onClick={() => setSelectedItemIds(new Set())}
+                                className="text-indigo-400 hover:text-indigo-700 transition-colors"
+                                title="Clear selection"
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
                         </div>
                     )}
                     {dropping && <span className="text-xs animate-pulse" style={{ color: 'var(--text-muted)' }}>Saving…</span>}
@@ -454,6 +526,41 @@ export function CashflowGrid({
 
             {/* ── DETAIL GRID + SIDEBAR ─────────────────────────────────────── */}
             {!summaryView && (
+                <>
+                {/* Batch-select hint banner */}
+                {showBatchHint && (
+                    <div
+                        className="flex items-center gap-3 rounded-xl border px-4 py-2.5 mb-1"
+                        style={{
+                            background: "rgba(99,102,241,0.04)",
+                            borderColor: "rgba(99,102,241,0.20)",
+                        }}
+                    >
+                        <span style={{ fontSize: "1rem", lineHeight: 1 }}>💡</span>
+                        <p className="flex-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                            <strong style={{ color: "var(--text-primary)" }}>Pro tip — Batch move:</strong>{" "}
+                            Hold{" "}
+                            <kbd className="inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-mono font-bold mx-0.5"
+                                style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}>⌘</kbd>
+                            or{" "}
+                            <kbd className="inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-mono font-bold mx-0.5"
+                                style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}>Ctrl</kbd>
+                            {" + click multiple bills, then drag any one — they all move together. "}
+                            Use{" "}
+                            <kbd className="inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-mono font-bold mx-0.5"
+                                style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}>Shift</kbd>
+                            {" +click to select a range."}
+                        </p>
+                        <button
+                            onClick={dismissBatchHint}
+                            className="shrink-0 rounded-lg p-1 transition-colors hover:bg-indigo-100"
+                            title="Got it — dismiss"
+                            style={{ color: "var(--text-faint)" }}
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                )}
                 <div className="flex gap-3 items-start">
 
                     {/* Week columns */}
@@ -519,7 +626,7 @@ export function CashflowGrid({
                                         <div className="space-y-1.5">
                                             <p className="text-[9px] font-bold uppercase tracking-widest px-1 mb-1" style={{ color: "var(--text-faint)" }}>AR — {fmt(beyondAR.reduce((s,i)=>s+i.amountOpen,0))}</p>
                                             {beyondAR.map(inv => (
-                                                <ARAPCard key={inv.id} item={inv} weeks={weeks} companyId={companyId} onMoved={handleMoved} onSelect={handleSelectCard} isSelected={selectedItem?.id === inv.id} isBacklog highlightId={highlightId} />
+                                                <ARAPCard key={inv.id} item={inv} weeks={weeks} companyId={companyId} onMoved={handleMoved} onSelect={handleSelectCard} isSelected={selectedItem?.id === inv.id} isMultiSelected={selectedItemIds.has(inv.id)} selectedItemIds={selectedItemIds} onMultiSelect={handleMultiSelect} isBacklog highlightId={highlightId} />
                                             ))}
                                         </div>
                                     )}
@@ -527,7 +634,7 @@ export function CashflowGrid({
                                         <div className="space-y-1.5 pt-2">
                                             <p className="text-[9px] font-bold uppercase tracking-widest px-1 mb-1" style={{ color: "var(--text-faint)" }}>AP — {fmt(beyondAP.reduce((s,i)=>s+i.amountOpen,0))}</p>
                                             {beyondAP.map(bill => (
-                                                <ARAPCard key={bill.id} item={bill} weeks={weeks} companyId={companyId} onMoved={handleMoved} onSelect={handleSelectCard} isSelected={selectedItem?.id === bill.id} isBacklog highlightId={highlightId} />
+                                                <ARAPCard key={bill.id} item={bill} weeks={weeks} companyId={companyId} onMoved={handleMoved} onSelect={handleSelectCard} isSelected={selectedItem?.id === bill.id} isMultiSelected={selectedItemIds.has(bill.id)} selectedItemIds={selectedItemIds} onMultiSelect={handleMultiSelect} isBacklog highlightId={highlightId} />
                                             ))}
                                         </div>
                                     )}
@@ -605,7 +712,7 @@ export function CashflowGrid({
 
                                         {/* Cards */}
                                         <div className="flex-1 px-2 py-2 space-y-1.5 min-h-[120px]">
-                                            {sortItems(items.ar).map(inv => (
+                                             {sortItems(items.ar).map(inv => (
                                                 <ARAPCard
                                                     key={inv.id}
                                                     item={inv}
@@ -614,10 +721,13 @@ export function CashflowGrid({
                                                     onMoved={handleMoved}
                                                     onSelect={handleSelectCard}
                                                     isSelected={selectedItem?.id === inv.id}
+                                                    isMultiSelected={selectedItemIds.has(inv.id)}
+                                                    selectedItemIds={selectedItemIds}
+                                                    onMultiSelect={handleMultiSelect}
                                                     highlightId={highlightId}
                                                 />
                                             ))}
-                                            {sortItems(items.ap).map(bill => (
+                                             {sortItems(items.ap).map(bill => (
                                                 <ARAPCard
                                                     key={bill.id}
                                                     item={bill}
@@ -626,6 +736,9 @@ export function CashflowGrid({
                                                     onMoved={handleMoved}
                                                     onSelect={handleSelectCard}
                                                     isSelected={selectedItem?.id === bill.id}
+                                                    isMultiSelected={selectedItemIds.has(bill.id)}
+                                                    selectedItemIds={selectedItemIds}
+                                                    onMultiSelect={handleMultiSelect}
                                                     highlightId={highlightId}
                                                 />
                                             ))}
@@ -680,6 +793,7 @@ export function CashflowGrid({
                         </div>
                     )}
                 </div>
+                </>
             )}
         </div>
 

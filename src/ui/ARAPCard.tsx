@@ -31,6 +31,7 @@ export interface GridItem {
 /** Payload stored in dataTransfer during drag */
 export interface DragPayload {
     itemId: string;
+    itemIds: string[]; // batch: all selected IDs (includes itemId)
     kind: "ar" | "ap";
     sourceWeek: number | null;
 }
@@ -41,7 +42,10 @@ interface Props {
     companyId: string;
     onMoved: () => void;
     onSelect?: (item: GridItem) => void;
-    isSelected?: boolean;
+    isSelected?: boolean; // detail-drawer selection
+    isMultiSelected?: boolean; // bulk-selection highlight
+    selectedItemIds?: Set<string>; // all currently selected IDs (for batch drag)
+    onMultiSelect?: (item: GridItem, e: React.MouseEvent) => void;
     isBacklog?: boolean;
     highlightId?: string | null;
 }
@@ -91,7 +95,7 @@ function AgingBadge({ days }: { days: number | null | undefined }) {
     );
 }
 
-export function ARAPCard({ item, weeks, companyId, onMoved, onSelect, isSelected, isBacklog, highlightId }: Props) {
+export function ARAPCard({ item, weeks, companyId, onMoved, onSelect, isSelected, isMultiSelected, selectedItemIds, onMultiSelect, isBacklog, highlightId }: Props) {
     const [dragging, setDragging] = useState(false);
     // Guard: after a real drag, the browser fires a stray onClick — skip it
     const didDragRef = useRef(false);
@@ -116,8 +120,12 @@ export function ARAPCard({ item, weeks, companyId, onMoved, onSelect, isSelected
     // ── Drag handlers ─────────────────────────────────────────────────────
     const handleDragStart = (e: DragEvent<HTMLDivElement>) => {
         didDragRef.current = false; // reset on new drag start
+        // If this card is part of a multi-selection, bundle all selected IDs
+        const isBatch = isMultiSelected && selectedItemIds && selectedItemIds.size > 1;
+        const itemIds = isBatch ? Array.from(selectedItemIds!) : [item.id];
         const payload: DragPayload = {
             itemId: item.id,
+            itemIds,
             kind: item.kind,
             sourceWeek: item.effectiveWeek,
         };
@@ -136,9 +144,14 @@ export function ARAPCard({ item, weeks, companyId, onMoved, onSelect, isSelected
         setDragging(false);
     };
 
-    const handleClick = () => {
+    const handleClick = (e: React.MouseEvent) => {
         if (didDragRef.current) return; // suppress post-drag onClick
         setDismissed(true);
+        // Modifier-key clicks go to multi-select handler
+        if ((e.metaKey || e.ctrlKey || e.shiftKey) && onMultiSelect) {
+            onMultiSelect(item, e);
+            return;
+        }
         onSelect?.(item);
     };
 
@@ -154,13 +167,19 @@ export function ARAPCard({ item, weeks, companyId, onMoved, onSelect, isSelected
             } ${dragging ? "opacity-40 scale-95" : "transition-all hover:shadow-md hover:scale-[1.02]"} ${isHighlighted ? "persistent-focus-glow" : ""}`}
             style={{
                 zIndex: isHighlighted ? 100 : undefined,
-                background: "var(--bg-surface)",
-                borderColor: isSelected
-                    ? "var(--slate-900)"
-                    : "var(--border-subtle)",
-                boxShadow: isSelected
-                    ? "0 0 0 1px var(--slate-900), 0 4px 6px -1px rgb(0 0 0 / 0.1)"
-                    : "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+                background: isMultiSelected
+                    ? "rgba(99,102,241,0.06)"
+                    : "var(--bg-surface)",
+                borderColor: isMultiSelected
+                    ? "rgba(99,102,241,0.55)"
+                    : isSelected
+                        ? "var(--slate-900)"
+                        : "var(--border-subtle)",
+                boxShadow: isMultiSelected
+                    ? "0 0 0 2px rgba(99,102,241,0.30), 0 2px 8px rgba(99,102,241,0.12)"
+                    : isSelected
+                        ? "0 0 0 1px var(--slate-900), 0 4px 6px -1px rgb(0 0 0 / 0.1)"
+                        : "0 1px 2px 0 rgb(0 0 0 / 0.05)",
                 borderLeftWidth: "3px",
                 borderLeftColor: riskColors[item.risk] ?? "var(--text-muted)",
                 ...(isBacklog && {
