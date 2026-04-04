@@ -3,7 +3,7 @@
 
 import { useMemo, useState, useCallback, useEffect, useRef, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Package, Printer, Inbox, Search, X, CheckCircle, RotateCcw } from "lucide-react";
+import { Package, Printer, Inbox, Search, X, CheckCircle, RotateCcw, ChevronDown, LayoutList, Flame } from "lucide-react";
 import { ARAPCard, type GridItem, type DragPayload } from "./ARAPCard";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
 import { ExecutionPlanModal } from "./ExecutionPlanModal";
@@ -55,10 +55,12 @@ export function CashflowGrid({
     const [dropTargetDock, setDropTargetDock] = useState(false);
     const [dropping, setDropping] = useState(false);
     const [summaryView, setSummaryView] = useState(false);
-    const [sortMode, setSortMode] = useState<"az" | "amount" | "aging">("az");
+    const [sortMode, setSortMode] = useState<"az" | "amount" | "aging">("aging");
     const [showPlan, setShowPlan] = useState(false);
     const [filterQuery, setFilterQuery] = useState("");
     const filterInputRef = useRef<HTMLInputElement>(null);
+    const [showSortMenu, setShowSortMenu] = useState(false);
+    const sortMenuRef = useRef<HTMLDivElement>(null);
 
     // Sidebar state: null = closed, "detail" = item detail
     const [sidebarMode, setSidebarMode] = useState<"detail" | null>(null);
@@ -134,6 +136,18 @@ export function CashflowGrid({
         } catch { /* ignore */ }
         finally { setDropping(false); }
     }, [undoState, clearUndoToast, companyId, onRefresh]);
+
+    // Close sort dropdown on outside click
+    useEffect(() => {
+        if (!showSortMenu) return;
+        const handler = (e: MouseEvent) => {
+            if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
+                setShowSortMenu(false);
+            }
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, [showSortMenu]);
 
     // Escape key: clear multi-selection (and close drawer)
     useEffect(() => {
@@ -541,50 +555,89 @@ export function CashflowGrid({
                         )}
                     </div>
 
-                    {/* View mode toggle */}
-                    <div className="flex rounded-lg overflow-hidden border text-xs font-semibold uppercase tracking-wide" style={{ borderColor: "var(--border-default)" }}>
-                        <button onClick={() => setSummaryView(false)} className="px-3 py-1.5"
-                            style={!summaryView ? { background: "var(--bg-raised)", color: "var(--text-primary)" } : { background: "transparent", color: "var(--text-muted)" }}>
-                            Detail
+                    {/* Sort dropdown */}
+                    {(() => {
+                        const SORT_LABELS = { az: "A–Z", amount: "$ Amt", aging: "Aging" } as const;
+                        return (
+                            <div ref={sortMenuRef} className="relative">
+                                <button
+                                    onClick={() => setShowSortMenu(v => !v)}
+                                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors"
+                                    style={{
+                                        background: "var(--bg-raised)",
+                                        borderColor: "var(--border-default)",
+                                        color: "var(--text-secondary)"
+                                    }}
+                                >
+                                    <span style={{ color: "var(--text-faint)", fontWeight: 400 }}>Sort:</span>
+                                    {SORT_LABELS[sortMode]}
+                                    <ChevronDown className={`w-3 h-3 transition-transform ${showSortMenu ? "rotate-180" : ""}`} />
+                                </button>
+                                {showSortMenu && (
+                                    <div
+                                        className="absolute right-0 top-full mt-1.5 w-36 rounded-xl border shadow-lg z-50 overflow-hidden"
+                                        style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)", boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}
+                                    >
+                                        {(["az", "amount", "aging"] as const).map((key, i) => (
+                                            <button
+                                                key={key}
+                                                onClick={() => { setSortMode(key); setShowSortMenu(false); }}
+                                                className={`w-full px-3 py-2 text-xs text-left font-medium transition-colors ${
+                                                    i > 0 ? "border-t" : ""
+                                                } ${sortMode === key ? "font-bold" : ""}`}
+                                                style={{
+                                                    color: sortMode === key ? "var(--color-primary)" : "var(--text-primary)",
+                                                    background: sortMode === key ? "rgba(79,70,229,0.06)" : "transparent",
+                                                    borderColor: "var(--border-subtle)",
+                                                }}
+                                            >
+                                                {SORT_LABELS[key]}
+                                                {sortMode === key && <span className="ml-1.5 text-[10px]">✓</span>}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
+
+                    {/* View toggle — icon-only: Detail list vs Heat Map */}
+                    <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "var(--border-default)" }}>
+                        <button
+                            onClick={() => setSummaryView(false)}
+                            title="Detail view — drag & drop"
+                            className="px-2.5 py-1.5 flex items-center"
+                            style={!summaryView
+                                ? { background: "var(--bg-raised)", color: "var(--text-primary)" }
+                                : { background: "transparent", color: "var(--text-faint)" }}
+                        >
+                            <LayoutList className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => setSummaryView(true)} className="px-3 py-1.5 border-l"
+                        <button
+                            onClick={() => setSummaryView(true)}
+                            title="Heat Map — 13-week summary"
+                            className="px-2.5 py-1.5 flex items-center border-l"
                             style={summaryView
                                 ? { background: "var(--bg-raised)", color: "var(--text-primary)", borderColor: "var(--border-default)" }
-                                : { background: "transparent", color: "var(--text-muted)", borderColor: "var(--border-default)" }}>
-                            Heat Map
+                                : { background: "transparent", color: "var(--text-faint)", borderColor: "var(--border-default)" }}
+                        >
+                            <Flame className="w-3.5 h-3.5" />
                         </button>
                     </div>
 
-                    {/* Sort toggle */}
-                    <div className="flex rounded-lg overflow-hidden border text-xs font-semibold tracking-wide" style={{ borderColor: "var(--border-default)" }}>
-                        {([
-                            { key: "az",     label: "A–Z",    title: "Alphabetical" },
-                            { key: "amount", label: "$ Amt",  title: "Highest amount first" },
-                            { key: "aging",  label: "Aging",  title: "Most overdue first" },
-                        ] as const).map(({ key, label, title }, i) => (
-                            <button
-                                key={key}
-                                title={title}
-                                onClick={() => setSortMode(key)}
-                                className={`px-2.5 py-1.5 ${i > 0 ? "border-l" : ""}`}
-                                style={sortMode === key
-                                    ? { background: "rgba(59,130,246,0.08)", color: "var(--color-primary)", borderColor: "var(--border-default)" }
-                                    : { background: "transparent", color: "var(--text-muted)", borderColor: "var(--border-default)" }
-                                }
-                            >
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Execution Plan print button */}
+                    {/* Execution Plan — primary CTA */}
                     <button
                         onClick={() => setShowPlan(true)}
                         title="Generate Week 1 Action Plan for clerks"
-                        className="btn-outline"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:opacity-90 active:scale-95"
+                        style={{
+                            background: "var(--color-primary)",
+                            color: "#fff",
+                            boxShadow: "0 2px 8px rgba(79,70,229,0.35)"
+                        }}
                     >
                         <Printer className="w-3.5 h-3.5" />
-                        <span>Execution Plan</span>
+                        Execution Plan
                     </button>
                 </div>
             </div>
