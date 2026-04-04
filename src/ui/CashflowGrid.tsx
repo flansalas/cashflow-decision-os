@@ -3,7 +3,7 @@
 
 import { useMemo, useState, useCallback, useEffect, useRef, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Package, Printer, Inbox, Search, X } from "lucide-react";
+import { Package, Printer, Inbox, Search, X, CheckCircle, RotateCcw } from "lucide-react";
 import { ARAPCard, type GridItem, type DragPayload } from "./ARAPCard";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
 import { ExecutionPlanModal } from "./ExecutionPlanModal";
@@ -78,6 +78,75 @@ export function CashflowGrid({
         localStorage.setItem("cfdo_batch_hint_dismissed", "1");
         setShowBatchHint(false);
     };
+
+    // ── Undo toast ──────────────────────────────────────────────────────────
+    interface UndoState {
+        label: string; // e.g. "8 bills moved to Backlog"
+        items: { id: string; kind: "ar" | "ap"; prevOverrideDate: string | null; prevEffectiveDate: string | null }[];
+    }
+    const [undoState, setUndoState] = useState<UndoState | null>(null);
+    const [toastProgress, setToastProgress] = useState(100); // 100→0 over 8s
+    const toastTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const clearUndoToast = useCallback(() => {
+        if (toastTimerRef.current) clearInterval(toastTimerRef.current);
+        setUndoState(null);
+        setToastProgress(100);
+    }, []);
+
+    const showUndoToast = useCallback((label: string, items: UndoState["items"]) => {
+        if (toastTimerRef.current) clearInterval(toastTimerRef.current);
+        setUndoState({ label, items });
+        setToastProgress(100);
+        const start = Date.now();
+        const DURATION = 8000;
+        toastTimerRef.current = setInterval(() => {
+            const elapsed = Date.now() - start;
+            const pct = Math.max(0, 100 - (elapsed / DURATION) * 100);
+            setToastProgress(pct);
+            if (pct === 0) {
+                clearInterval(toastTimerRef.current!);
+                setUndoState(null);
+            }
+        }, 50);
+    }, []);
+
+    const handleUndo = useCallback(async () => {
+        if (!undoState) return;
+        clearUndoToast();
+        setDropping(true);
+        try {
+            await Promise.all(undoState.items.map(async ({ id, kind, prevOverrideDate, prevEffectiveDate }) => {
+                const overrideType = kind === "ar" ? "set_expected_payment_date" : "set_bill_due_date";
+                const targetType = kind === "ar" ? "invoice" : "bill";
+                // Always delete the override we just created
+                await fetch(`/api/overrides?targetId=${id}&type=${overrideType}`, { method: "DELETE" });
+                // If item had a prior override, restore it
+                if (prevOverrideDate) {
+                    await fetch("/api/overrides", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ companyId, type: overrideType, targetType, targetId: id, effectiveDate: prevOverrideDate }),
+                    });
+                }
+            }));
+            onRefresh();
+        } catch { /* ignore */ }
+        finally { setDropping(false); }
+    }, [undoState, clearUndoToast, companyId, onRefresh]);
+
+    // Escape key: clear multi-selection (and close drawer)
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                setSelectedItemIds(new Set());
+                setSelectedItem(null);
+                setSidebarMode(null);
+            }
+        };
+        document.addEventListener("keydown", handler);
+        return () => document.removeEventListener("keydown", handler);
+    }, []);
 
     // Filter items by query (name, number, or amount)
     const filterItems = useCallback((items: GridItem[]): GridItem[] => {
@@ -166,16 +235,16 @@ export function CashflowGrid({
 
     // Card selection (single — opens detail drawer)
     const handleSelectCard = useCallback((item: GridItem) => {
+        // Plain click always clears bulk multi-selection
+        setSelectedItemIds(new Set());
+        lastSelectedIdRef.current = item.id;
         if (selectedItem?.id === item.id && sidebarMode === "detail") {
-            // Deselect
             setSelectedItem(null);
             setSidebarMode(null);
         } else {
             setSelectedItem(item);
             setSidebarMode("detail");
         }
-        // Single click also toggles this item into the "primary" of multi-select
-        lastSelectedIdRef.current = item.id;
     }, [selectedItem, sidebarMode]);
 
     // Multi-select handler: Cmd/Ctrl toggles individual, Shift extends range
@@ -246,8 +315,14 @@ export function CashflowGrid({
         const dateStr = friday.toISOString().slice(0, 10);
         const allItems = [...invoices, ...bills];
 
-        // Process each item in the batch
         const ids = payload.itemIds?.length ? payload.itemIds : [payload.itemId];
+
+        // Capture before-state for undo
+        const preState = ids.map(id => {
+            const it = allItems.find(i => i.id === id);
+            return { id, kind: (it?.kind ?? "ap") as "ar" | "ap", prevOverrideDate: it?.overrideDate ?? null, prevEffectiveDate: it?.effectiveDate ?? null };
+        });
+
         setDropping(true);
         try {
             await Promise.all(ids.map(async (id) => {
@@ -263,11 +338,14 @@ export function CashflowGrid({
                     body: JSON.stringify({ companyId, type: overrideType, targetType, targetId: id, effectiveDate: dateStr }),
                 });
             }));
-            setSelectedItemIds(new Set()); // clear selection after batch move
+            setSelectedItemIds(new Set());
+            const noun = preState.every(p => p.kind === "ar") ? "invoice" : preState.every(p => p.kind === "ap") ? "bill" : "item";
+            const plural = ids.length === 1 ? noun : `${noun}s`;
+            showUndoToast(`${ids.length} ${plural} moved to Week ${weekNumber}`, preState);
             onRefresh();
         } catch { /* ignore */ }
         finally { setDropping(false); }
-    }, [weeks, invoices, bills, companyId, onRefresh]);
+    }, [weeks, invoices, bills, companyId, onRefresh, showUndoToast]);
 
     const handleDropToDock = useCallback(async (e: DragEvent<HTMLDivElement>) => {
         e.preventDefault();
@@ -284,6 +362,13 @@ export function CashflowGrid({
         const allItems = [...invoices, ...bills];
 
         const ids = payload.itemIds?.length ? payload.itemIds : [payload.itemId];
+
+        // Capture before-state for undo
+        const preState = ids.map(id => {
+            const it = allItems.find(i => i.id === id);
+            return { id, kind: (it?.kind ?? "ap") as "ar" | "ap", prevOverrideDate: it?.overrideDate ?? null, prevEffectiveDate: it?.effectiveDate ?? null };
+        });
+
         setDropping(true);
         try {
             await Promise.all(ids.map(async (id) => {
@@ -299,11 +384,14 @@ export function CashflowGrid({
                     body: JSON.stringify({ companyId, type: overrideType, targetType, targetId: id, effectiveDate: dateStr }),
                 });
             }));
-            setSelectedItemIds(new Set()); // clear selection after batch move
+            setSelectedItemIds(new Set());
+            const noun = preState.every(p => p.kind === "ar") ? "invoice" : preState.every(p => p.kind === "ap") ? "bill" : "item";
+            const plural = ids.length === 1 ? noun : `${noun}s`;
+            showUndoToast(`${ids.length} ${plural} moved to Backlog`, preState);
             onRefresh();
         } catch { /* ignore */ }
         finally { setDropping(false); }
-    }, [invoices, bills, companyId, onRefresh]);
+    }, [invoices, bills, companyId, onRefresh, showUndoToast]);
 
     // Zone color from running balance — light mode palette
     function zoneColor(balance: number): { bg: string; border: string; label: string } {
@@ -806,6 +894,55 @@ export function CashflowGrid({
                 openingCash={openingCash}
                 onClose={() => setShowPlan(false)}
             />
+        )}
+
+        {/* ── Undo Toast ─────────────────────────────────────────────────── */}
+        {undoState && (
+            <div
+                className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col overflow-hidden rounded-xl shadow-2xl"
+                style={{
+                    minWidth: "340px",
+                    maxWidth: "480px",
+                    background: "#1e1e2e",
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
+                }}
+            >
+                {/* Progress bar */}
+                <div
+                    className="h-[3px]"
+                    style={{
+                        width: `${toastProgress}%`,
+                        background: "linear-gradient(90deg, #4ade80, #22c55e)",
+                        transition: "width 50ms linear",
+                    }}
+                />
+                <div className="flex items-center gap-3 px-4 py-3">
+                    <CheckCircle className="w-4 h-4 shrink-0" style={{ color: "#4ade80" }} />
+                    <p className="flex-1 text-sm font-medium" style={{ color: "#f1f5f9" }}>
+                        {undoState.label}
+                    </p>
+                    <button
+                        onClick={handleUndo}
+                        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors"
+                        style={{ background: "rgba(99,102,241,0.25)", color: "#a5b4fc" }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "rgba(99,102,241,0.45)")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "rgba(99,102,241,0.25)")}
+                    >
+                        <RotateCcw className="w-3 h-3" />
+                        Undo
+                    </button>
+                    <button
+                        onClick={clearUndoToast}
+                        className="rounded-lg p-1 transition-colors"
+                        style={{ color: "rgba(255,255,255,0.35)" }}
+                        onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.75)")}
+                        onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.35)")}
+                    >
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            </div>
         )}
         </>
     );
