@@ -699,10 +699,10 @@ export function CashflowGrid({
                 )}
                 <div className="flex gap-3 items-start">
 
-                    {/* Week columns */}
+                    {/* Week columns — opacity dims slightly when detail panel is open (decorative only, never blocks interaction) */}
                     <div
                         className="flex-1 min-w-0 overflow-auto -mx-4 px-4 h-[calc(100vh-200px)] transition-opacity duration-200"
-                        style={{ opacity: sidebarOpen ? 0.45 : 1, pointerEvents: sidebarOpen ? "none" : "auto" }}
+                        style={{ opacity: sidebarOpen ? 0.72 : 1 }}
                     >
                         <div className="flex gap-2.5 min-h-max pb-4 w-[max-content]" style={{ minWidth: `${14 * 190}px` }}>
                             
