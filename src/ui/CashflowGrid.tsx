@@ -262,47 +262,23 @@ export function CashflowGrid({
         }
     }, [selectedItem, sidebarMode]);
 
-    // Multi-select handler: Cmd/Ctrl toggles individual, Shift extends range
+    // Multi-select handler: Cmd/Ctrl+Click OR Shift+Click → toggles the individual item.
+    // Range selection (Shift+Click selecting everything "between") is intentionally NOT
+    // supported in a grid layout — items between two positions live in different off-screen
+    // columns, making range selection confusing and error-prone.
     const handleMultiSelect = useCallback((item: GridItem, e: React.MouseEvent) => {
-        // Build a deduplicated flat list in the exact order items render:
-        // backlog (AR then AP) followed by week 1..13 (AR then AP per week).
-        // Using a Map keyed by id prevents duplicates that caused phantom selections.
-        const seen = new Map<string, GridItem>();
-        const add = (i: GridItem) => { if (!seen.has(i.id)) seen.set(i.id, i); };
-        // Backlog first
-        filteredInvoices.filter(i => i.effectiveWeek === null).forEach(add);
-        filteredBills.filter(b => b.effectiveWeek === null).forEach(add);
-        // Then weeks 1–13
-        for (let w = 1; w <= 13; w++) {
-            filteredInvoices.filter(i => i.effectiveWeek === w).forEach(add);
-            filteredBills.filter(b => b.effectiveWeek === w).forEach(add);
-        }
-        const allItems = Array.from(seen.values());
-
+        void e; // modifier key already checked in ARAPCard before calling this
         setSelectedItemIds(prev => {
             const next = new Set(prev);
-            if (e.shiftKey && lastSelectedIdRef.current) {
-                // Range: find indices in the flat deterministic list
-                const ids = allItems.map(i => i.id);
-                const anchorIdx = ids.indexOf(lastSelectedIdRef.current);
-                const targetIdx = ids.indexOf(item.id);
-                if (anchorIdx !== -1 && targetIdx !== -1) {
-                    const lo = Math.min(anchorIdx, targetIdx);
-                    const hi = Math.max(anchorIdx, targetIdx);
-                    for (let i = lo; i <= hi; i++) next.add(ids[i]);
-                    // Keep anchor fixed; update only on Cmd/Ctrl clicks
-                } else {
-                    next.has(item.id) ? next.delete(item.id) : next.add(item.id);
-                    lastSelectedIdRef.current = item.id;
-                }
+            if (next.has(item.id)) {
+                next.delete(item.id);
             } else {
-                // Cmd/Ctrl toggle — this click becomes the new anchor
-                next.has(item.id) ? next.delete(item.id) : next.add(item.id);
-                lastSelectedIdRef.current = item.id;
+                next.add(item.id);
             }
+            lastSelectedIdRef.current = item.id;
             return next;
         });
-    }, [filteredInvoices, filteredBills]);
+    }, []);
 
     // After a move, keep the drawer open but refresh the selected item data
     const handleMoved = useCallback(() => {
@@ -693,11 +669,7 @@ export function CashflowGrid({
                             or{" "}
                             <kbd className="inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-mono font-bold mx-0.5"
                                 style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}>Ctrl</kbd>
-                            {" + click multiple bills, then drag any one — they all move together. "}
-                            Use{" "}
-                            <kbd className="inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-mono font-bold mx-0.5"
-                                style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}>Shift</kbd>
-                            {" +click to select a range."}
+                            {" and click each bill or invoice you want — then drag any one and they all move together."}
                         </p>
                         <button
                             onClick={dismissBatchHint}
