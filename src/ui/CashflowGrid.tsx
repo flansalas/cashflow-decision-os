@@ -233,6 +233,20 @@ export function CashflowGrid({
     const totalAP = bills.reduce((s, i) => s + i.amountOpen, 0);
     const overriddenCount = [...invoices, ...bills].filter(i => i.overrideDate).length;
 
+    // Dollar totals for the current multi-selection
+    const selectionTotals = useMemo(() => {
+        if (selectedItemIds.size === 0) return null;
+        const allItems = [...invoices, ...bills];
+        let ar = 0, ap = 0;
+        for (const id of selectedItemIds) {
+            const it = allItems.find(i => i.id === id);
+            if (!it) continue;
+            if (it.kind === "ar") ar += it.amountOpen;
+            else ap += it.amountOpen;
+        }
+        return { ar, ap };
+    }, [selectedItemIds, invoices, bills]);
+
     // Card selection (single — opens detail drawer)
     const handleSelectCard = useCallback((item: GridItem) => {
         // Plain click always clears bulk multi-selection
@@ -462,13 +476,28 @@ export function CashflowGrid({
                             <span className="text-[10px] font-bold text-violet-700">{backlogCount} in Backlog</span>
                         </div>
                     )}
-                    {selectedItemIds.size > 0 && (
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-indigo-200 bg-indigo-50">
-                            <span className="text-[10px] font-bold text-indigo-700">{selectedItemIds.size} selected</span>
+                    {selectedItemIds.size > 0 && selectionTotals && (
+                        <div className="flex items-center gap-2 px-2.5 py-0.5 rounded-full border border-indigo-200 bg-indigo-50">
+                            <span className="text-[10px] font-bold text-indigo-700">
+                                {selectedItemIds.size} selected
+                            </span>
+                            {selectionTotals.ar > 0 && (
+                                <span className="text-[10px] font-semibold" style={{ color: "#059669" }}>
+                                    +{fmt(selectionTotals.ar)}
+                                </span>
+                            )}
+                            {selectionTotals.ar > 0 && selectionTotals.ap > 0 && (
+                                <span className="text-[10px] text-indigo-200">/</span>
+                            )}
+                            {selectionTotals.ap > 0 && (
+                                <span className="text-[10px] font-semibold" style={{ color: "#e11d48" }}>
+                                    −{fmt(selectionTotals.ap)}
+                                </span>
+                            )}
                             <button
                                 onClick={() => setSelectedItemIds(new Set())}
-                                className="text-indigo-400 hover:text-indigo-700 transition-colors"
-                                title="Clear selection"
+                                className="text-indigo-400 hover:text-indigo-700 transition-colors ml-0.5"
+                                title="Clear selection (Esc)"
                             >
                                 <X className="w-3 h-3" />
                             </button>
