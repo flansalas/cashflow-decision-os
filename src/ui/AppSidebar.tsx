@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import {
-    Box, BarChart3, ListFilter, RefreshCw, Layers, Settings2,
-    ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft
+    Box, BarChart3, ListFilter, Repeat2, Layers, Settings2,
+    ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft, Database
 } from "lucide-react";
 
 interface NavItem {
@@ -64,6 +64,14 @@ export function AppSidebar() {
         }
     };
 
+    const handleOpenData = () => {
+        if (pathname === "/cashflow" || pathname.startsWith("/cashflow")) {
+            window.dispatchEvent(new CustomEvent('open-data-sources'));
+        } else {
+            window.location.href = '/cashflow?open=data';
+        }
+    };
+
     const navItems: NavItem[] = [
         {
             icon: <BarChart3 className="w-[18px] h-[18px]" />,
@@ -78,7 +86,13 @@ export function AppSidebar() {
             section: "workspace",
         },
         {
-            icon: <RefreshCw className="w-[18px] h-[18px]" />,
+            icon: <Database className="w-[18px] h-[18px]" />,
+            label: "Data Sources",
+            onClick: handleOpenData,
+            section: "workspace",
+        },
+        {
+            icon: <Repeat2 className="w-[18px] h-[18px]" />,
             label: "Commitments",
             href: "/recurring",
             section: "workspace",

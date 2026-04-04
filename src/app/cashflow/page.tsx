@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { CashflowGrid } from "@/ui/CashflowGrid";
 import { ARAPUploadStep } from "@/ui/ARAPUploadStep";
 import { BankUploadStep } from "@/ui/BankUploadStep";
-import { ArrowLeft, Upload, Landmark, RefreshCw, X, AlertTriangle, Box, ChevronDown, Database } from "lucide-react";
+import { ArrowLeft, Upload, Landmark, X, AlertTriangle, Box } from "lucide-react";
 import type { GridItem } from "@/ui/ARAPCard";
 
 interface WeekMeta {
@@ -83,8 +83,7 @@ function CashflowContent() {
     const [error, setError] = useState<string | null>(null);
     const [showUpload, setShowUpload] = useState(false);
     const [showBankUpload, setShowBankUpload] = useState(false);
-    const [showDataMenu, setShowDataMenu] = useState(false);
-    const dataMenuRef = useRef<HTMLDivElement>(null);
+    const [showDataPicker, setShowDataPicker] = useState(false);
     const [viewFilter, setViewFilter] = useState<"both" | "ar" | "ap">(mode ?? "both");
     // After the first successful load we do silent background refreshes
     // so the grid stays mounted and the user's scroll position is preserved.
@@ -94,17 +93,22 @@ function CashflowContent() {
         if (mode) setViewFilter(mode);
     }, [mode]);
 
-    // Close the data menu when clicking outside
+    // Open data-sources picker from sidebar event or ?open=data URL param
     useEffect(() => {
-        if (!showDataMenu) return;
-        const handler = (e: MouseEvent) => {
-            if (dataMenuRef.current && !dataMenuRef.current.contains(e.target as Node)) {
-                setShowDataMenu(false);
-            }
-        };
-        document.addEventListener("mousedown", handler);
-        return () => document.removeEventListener("mousedown", handler);
-    }, [showDataMenu]);
+        const handler = () => setShowDataPicker(true);
+        window.addEventListener('open-data-sources', handler);
+        return () => window.removeEventListener('open-data-sources', handler);
+    }, []);
+
+    useEffect(() => {
+        if (searchParams.get('open') === 'data') {
+            setShowDataPicker(true);
+            // Strip the param so bookmark/share URLs don't re-trigger
+            const params = new URLSearchParams(searchParams.toString());
+            params.delete('open');
+            router.replace(`/cashflow${params.size > 0 ? `?${params}` : ''}`, { scroll: false });
+        }
+    }, [searchParams, router]);
 
     const companyId = urlCompanyId ?? (typeof window !== "undefined" ? localStorage.getItem("cfdo_company_id") : null);
 
@@ -225,62 +229,6 @@ function CashflowContent() {
                                     : { background: "var(--bg-raised)", color: "var(--text-muted)", borderColor: "var(--border-default)" }}
                             >AP</button>
                         </div>
-
-                        {/* Data Sources dropdown — Upload AR/AP report + Bank statement */}
-                        <div ref={dataMenuRef} className="relative">
-                            <button
-                                onClick={() => setShowDataMenu(v => !v)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors"
-                                style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)", color: "var(--text-muted)" }}
-                                title="Upload AR/AP Report or Bank Statement"
-                            >
-                                <Database className="w-3.5 h-3.5" />
-                                Data
-                                <ChevronDown className={`w-3 h-3 transition-transform ${showDataMenu ? "rotate-180" : ""}`} />
-                            </button>
-                            {showDataMenu && (
-                                <div
-                                    className="absolute right-0 top-full mt-1.5 w-52 rounded-xl border shadow-lg z-50 overflow-hidden"
-                                    style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)", boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}
-                                >
-                                    <div className="px-3 py-2 border-b" style={{ borderColor: "var(--border-subtle)" }}>
-                                        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-faint)" }}>Data Sources</p>
-                                    </div>
-                                    <button
-                                        onClick={() => { setShowUpload(true); setShowDataMenu(false); }}
-                                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium text-left transition-colors hover:bg-indigo-50"
-                                        style={{ color: "var(--text-primary)" }}
-                                    >
-                                        <Upload className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--color-primary)" }} />
-                                        <div>
-                                            <p className="font-semibold">Update AR/AP Report</p>
-                                            <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>QuickBooks AR/AP detail export</p>
-                                        </div>
-                                    </button>
-                                    <button
-                                        onClick={() => { setShowBankUpload(true); setShowDataMenu(false); }}
-                                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium text-left transition-colors hover:bg-emerald-50 border-t"
-                                        style={{ color: "var(--text-primary)", borderColor: "var(--border-subtle)" }}
-                                    >
-                                        <Landmark className="w-3.5 h-3.5 shrink-0" style={{ color: "#059669" }} />
-                                        <div>
-                                            <p className="font-semibold">Upload Bank Statement</p>
-                                            <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Sync current cash balance</p>
-                                        </div>
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Refresh */}
-                        <button
-                            onClick={fetchGrid}
-                            className="p-1.5 rounded-lg border text-sm"
-                            title="Refresh grid"
-                            style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)", color: "var(--text-muted)" }}
-                        >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                        </button>
                     </div>
                 </div>
             </header>
@@ -300,6 +248,51 @@ function CashflowContent() {
                     onClearHighlight={clearHighlight}
                 />
             </main>
+
+            {/* Data Sources Picker — shown when user clicks sidebar item */}
+            {showDataPicker && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}>
+                    <div className="border rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden" style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)" }}>
+                        <div className="px-5 py-4 border-b flex justify-between items-center" style={{ borderColor: "var(--border-subtle)" }}>
+                            <div>
+                                <h2 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>Data Sources</h2>
+                                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>What would you like to update?</p>
+                            </div>
+                            <button onClick={() => setShowDataPicker(false)} className="w-7 h-7 flex items-center justify-center rounded-lg border" style={{ color: "var(--text-muted)", borderColor: "var(--border-default)", background: "var(--bg-raised)" }}>
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                        <div className="p-3 flex flex-col gap-2">
+                            <button
+                                onClick={() => { setShowDataPicker(false); setShowUpload(true); }}
+                                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border text-left transition-all hover:shadow-sm"
+                                style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)" }}
+                            >
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: "rgba(79,70,229,0.1)" }}>
+                                    <Upload className="w-4 h-4" style={{ color: "var(--color-primary)" }} />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>Update AR/AP Report</p>
+                                    <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>QuickBooks AR/AP detail export</p>
+                                </div>
+                            </button>
+                            <button
+                                onClick={() => { setShowDataPicker(false); setShowBankUpload(true); }}
+                                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border text-left transition-all hover:shadow-sm"
+                                style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)" }}
+                            >
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: "rgba(5,150,105,0.1)" }}>
+                                    <Landmark className="w-4 h-4" style={{ color: "#059669" }} />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>Upload Bank Statement</p>
+                                    <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>Sync current cash balance</p>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Upload Modal */}
             {showUpload && (
