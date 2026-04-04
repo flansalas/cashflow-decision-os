@@ -504,12 +504,31 @@ export function CashflowGrid({
                         </div>
                     )}
                     {dropping && <span className="text-xs animate-pulse" style={{ color: 'var(--text-muted)' }}>Saving…</span>}
-                    {filterQuery && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-600">
-                            {filteredInvoices.length + filteredBills.length} match
-                            {filteredInvoices.length + filteredBills.length !== 1 ? "es" : ""}
-                        </span>
-                    )}
+                    {filterQuery && (() => {
+                        const matchCount = filteredInvoices.length + filteredBills.length;
+                        const arTotal = filteredInvoices.reduce((s, i) => s + i.amountOpen, 0);
+                        const apTotal = filteredBills.reduce((s, b) => s + b.amountOpen, 0);
+                        return (
+                            <div className="flex items-center gap-2 px-2.5 py-0.5 rounded-full border border-indigo-200 bg-indigo-50">
+                                <span className="text-[10px] font-bold text-indigo-600">
+                                    {matchCount} match{matchCount !== 1 ? "es" : ""}
+                                </span>
+                                {arTotal > 0 && (
+                                    <span className="text-[10px] font-semibold" style={{ color: "#059669" }}>
+                                        +{fmt(arTotal)}
+                                    </span>
+                                )}
+                                {arTotal > 0 && apTotal > 0 && (
+                                    <span className="text-[10px] text-indigo-200">/</span>
+                                )}
+                                {apTotal > 0 && (
+                                    <span className="text-[10px] font-semibold" style={{ color: "#e11d48" }}>
+                                        −{fmt(apTotal)}
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    })()}
                 </div>
 
                 <div className="flex items-center gap-2">
