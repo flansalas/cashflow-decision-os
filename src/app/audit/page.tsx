@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { History, ArrowLeft, RefreshCw, Layers, AlertCircle, FileJson } from "lucide-react";
+import { History, ArrowLeft, RefreshCw, Layers, AlertCircle, FileJson, RotateCcw } from "lucide-react";
 
 interface ChangeLog {
     id: string;
@@ -20,6 +20,7 @@ function AuditLogContent() {
     const [logs, setLogs] = useState<ChangeLog[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [undoingId, setUndoingId] = useState<string | null>(null);
 
     const fetchData = async () => {
         setLoading(true);
@@ -33,6 +34,25 @@ function AuditLogContent() {
             setError(e.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleUndo = async (changeLogId: string) => {
+        if (!confirm("Are you sure you want to revert this action?")) return;
+        setUndoingId(changeLogId);
+        try {
+            const res = await fetch(`/api/audit/undo`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ changeLogId })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to undo");
+            await fetchData();
+        } catch (e: any) {
+            alert(e.message);
+        } finally {
+            setUndoingId(null);
         }
     };
 
@@ -131,6 +151,7 @@ function AuditLogContent() {
                          logs.map((log, index) => {
                              const diffData = parseDiff(log.diffJson);
                              const isSystem = log.source === 'system';
+                             const isUndoable = log.action === 'FORECAST_OVERRIDE' || log.action === 'REMOVE_OVERRIDE';
                              
                              return (
                                  <div key={log.id} className="relative pl-8">
@@ -157,11 +178,23 @@ function AuditLogContent() {
                                                          {isSystem ? 'Auto-Sync' : (log.source === 'user_ui' ? 'User Edit' : (log.source || 'User Action'))}
                                                      </span>
                                                  </div>
-                                                 <div className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                                                     {new Date(log.timestamp).toLocaleString(undefined, {
-                                                         month: 'short', day: 'numeric', year: 'numeric',
-                                                         hour: 'numeric', minute: '2-digit'
-                                                     })}
+                                                 <div className="flex items-center gap-3">
+                                                     <div className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                                                         {new Date(log.timestamp).toLocaleString(undefined, {
+                                                             month: 'short', day: 'numeric', year: 'numeric',
+                                                             hour: 'numeric', minute: '2-digit'
+                                                         })}
+                                                     </div>
+                                                     {isUndoable && (
+                                                         <button 
+                                                             onClick={() => handleUndo(log.id)}
+                                                             disabled={undoingId === log.id}
+                                                             className="px-2 py-1 flex items-center gap-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 text-red-600 hover:bg-red-50 hover:border-red-200 border border-transparent"
+                                                         >
+                                                             <RotateCcw className="w-3.5 h-3.5" />
+                                                             {undoingId === log.id ? 'Undoing...' : 'Undo'}
+                                                         </button>
+                                                     )}
                                                  </div>
                                              </div>
 
