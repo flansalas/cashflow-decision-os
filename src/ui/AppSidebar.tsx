@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import {
     Box, BarChart3, ListFilter, Repeat2, Layers, Settings2,
-    ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft, Database
+    ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft, Database, History
 } from "lucide-react";
 
 interface NavItem {
@@ -116,6 +116,13 @@ export function AppSidebar() {
             section: "admin",
         });
     }
+
+    navItems.push({
+        icon: <History className="w-[18px] h-[18px]" />,
+        label: "Audit Log",
+        href: "/audit",
+        section: "admin",
+    });
 
     const workspaceItems = navItems.filter(i => i.section === "workspace");
     const adminItems = navItems.filter(i => i.section === "admin");
