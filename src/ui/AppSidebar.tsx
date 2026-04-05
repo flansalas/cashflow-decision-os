@@ -86,12 +86,6 @@ export function AppSidebar() {
             section: "workspace",
         },
         {
-            icon: <Database className="w-[18px] h-[18px]" />,
-            label: "Data Sources",
-            onClick: handleOpenData,
-            section: "workspace",
-        },
-        {
             icon: <Repeat2 className="w-[18px] h-[18px]" />,
             label: "Commitments",
             href: "/recurring",
@@ -105,11 +99,19 @@ export function AppSidebar() {
         },
     ];
 
+    // Admin items
+    navItems.push({
+        icon: <Database className="w-[18px] h-[18px]" />,
+        label: "Data Sources",
+        onClick: handleOpenData,
+        section: "admin",
+    });
+
     // Only show setup for non-demo
     if (!isDemo) {
         navItems.push({
             icon: <Settings2 className="w-[18px] h-[18px]" />,
-            label: "Platform Setup",
+            label: "Setup",
             onClick: handleOpenSetup,
             section: "admin",
         });
@@ -126,6 +128,32 @@ export function AppSidebar() {
 
     const renderItem = (item: NavItem, idx: number) => {
         const active = isActive(item.href);
+
+        // When collapsed: the whole sidebar expands on click — nav items must
+        // stop propagation so they don't also navigate / fire their own handler.
+        if (collapsed) {
+            return (
+                <div
+                    key={idx}
+                    title={item.label}
+                    className={`
+                        sidebar-nav-item group relative flex items-center justify-center rounded-xl transition-all duration-200
+                        w-10 h-10 mx-auto
+                        ${active
+                            ? "bg-indigo-50 text-indigo-700"
+                            : "text-slate-400"
+                        }
+                    `}
+                >
+                    {active && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-indigo-600" />
+                    )}
+                    <span className="shrink-0">{item.icon}</span>
+                </div>
+            );
+        }
+
+        // Expanded: normal interactive item
         const Component = item.href ? "a" : "button";
         const props = item.href ? { href: item.href } : { onClick: item.onClick, type: "button" as const };
 
@@ -133,28 +161,24 @@ export function AppSidebar() {
             <Component
                 key={idx}
                 {...(props as any)}
-                title={collapsed ? item.label : undefined}
                 className={`
                     sidebar-nav-item group relative flex items-center gap-3 rounded-xl transition-all duration-200 cursor-pointer
-                    ${collapsed ? "justify-center w-10 h-10 mx-auto" : "px-3 py-2.5 w-full"}
+                    px-3 py-2.5 w-full
                     ${active
                         ? "bg-indigo-50 text-indigo-700 font-bold shadow-sm"
                         : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
                     }
                 `}
             >
-                {/* Active indicator bar */}
                 {active && (
-                    <span className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full bg-indigo-600 transition-all ${collapsed ? "h-5" : "h-6"}`} />
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full bg-indigo-600" />
                 )}
                 <span className={`shrink-0 transition-transform duration-200 ${active ? "scale-110" : "group-hover:scale-105"}`}>
                     {item.icon}
                 </span>
-                {!collapsed && (
-                    <span className="text-[13px] font-semibold tracking-tight truncate whitespace-nowrap">
-                        {item.label}
-                    </span>
-                )}
+                <span className="text-[13px] font-semibold tracking-tight truncate whitespace-nowrap">
+                    {item.label}
+                </span>
             </Component>
         );
     };
@@ -166,7 +190,10 @@ export function AppSidebar() {
                 width: collapsed ? "64px" : "220px",
                 transition: "width 250ms cubic-bezier(0.4, 0, 0.2, 1)",
                 borderColor: "var(--border-subtle)",
+                cursor: collapsed ? "pointer" : "default",
             }}
+            onClick={collapsed ? toggle : undefined}
+            title={collapsed ? "Expand sidebar" : undefined}
         >
             {/* Logo area */}
             <div className={`flex items-center border-b shrink-0 ${collapsed ? "justify-center h-14" : "px-4 h-14 gap-3"}`} style={{ borderColor: "var(--border-subtle)" }}>
@@ -205,7 +232,10 @@ export function AppSidebar() {
             {/* Collapse toggle */}
             <div className={`border-t shrink-0 ${collapsed ? "flex justify-center py-3" : "px-3 py-3"}`} style={{ borderColor: "var(--border-subtle)" }}>
                 <button
-                    onClick={toggle}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        toggle();
+                    }}
                     className={`group flex items-center gap-2 rounded-lg transition-all text-slate-400 hover:text-slate-700 hover:bg-slate-50 ${collapsed ? "w-8 h-8 justify-center" : "w-full px-3 py-1.5"}`}
                     title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                 >
