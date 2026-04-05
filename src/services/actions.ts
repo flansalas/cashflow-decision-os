@@ -68,7 +68,7 @@ export function generateActions(input: ActionInput): GeneratedAction[] {
         });
     }
 
-    // ── Collect AR actions (certainty-first) ──────────────────────────
+    // ── Collect AR actions (certainty-first & discount strategies) ────
     const openInvoices = invoices
         .filter(i => i.status === "open" && !i.markedPaid && i.amountOpen > 0)
         .filter(i => {
@@ -99,11 +99,19 @@ export function generateActions(input: ActionInput): GeneratedAction[] {
         });
 
     for (const { inv, certainty } of openInvoices.slice(0, 5)) {
+        // High-certainty current invoices are ideal candidates for an early payment discount
+        const isCurrent = (inv.daysPastDue ?? 0) <= 0;
+        const offerDiscount = isCurrent && certainty === "high" && gapExpected > 0;
+        
         actions.push({
             type: "collect_ar",
             priority: certainty === "high" ? "p1" : certainty === "med" ? "p2" : "p3",
-            title: `Collect $${inv.amountOpen.toLocaleString()} from ${inv.customerName}`,
-            description: `Invoice ${inv.invoiceNo} — ${(inv.daysPastDue ?? 0) > 0 ? `${inv.daysPastDue} days overdue` : "current"}. ${constraintWeek ? `Closes ~$${inv.amountOpen.toLocaleString()} of gap in Week ${constraintWeek}.` : ""}`,
+            title: offerDiscount 
+                ? `Offer 2% discount to ${inv.customerName}`
+                : `Collect $${inv.amountOpen.toLocaleString()} from ${inv.customerName}`,
+            description: offerDiscount
+                ? `Offer a discount on invoice ${inv.invoiceNo} for immediate payment. Pulls forward ~$${inv.amountOpen.toLocaleString()} into Week 1.`
+                : `Invoice ${inv.invoiceNo} — ${(inv.daysPastDue ?? 0) > 0 ? `${inv.daysPastDue} days overdue` : "current"}. ${constraintWeek ? `Closes ~$${inv.amountOpen.toLocaleString()} of gap in Week ${constraintWeek}.` : ""}`,
             amountImpact: inv.amountOpen,
             impactCertainty: certainty,
             constraintWeekStart: constraintWeekStr,
@@ -116,23 +124,32 @@ export function generateActions(input: ActionInput): GeneratedAction[] {
                 selectedTargets: [inv.id],
                 impactAmount: inv.amountOpen,
                 impactCertainty: certainty,
+                strategy: offerDiscount ? "early_payment_discount" : "standard_collection",
             }),
         });
     }
 
-    // ── Delay AP actions ──────────────────────────────────────────────
+    // ── Delay AP actions (partial payments & distribution) ────────────
     const delayableBills = bills
         .filter(b => b.status === "open" && !b.markedPaid && b.amountOpen > 0)
         .filter(b => b.criticality !== "critical")
         .sort((a, b) => b.amountOpen - a.amountOpen);
 
     for (const bill of delayableBills.slice(0, 3)) {
+        // Suggest partial payment for larger bills to preserve relationship
+        const suggestPartial = bill.amountOpen > 5000;
+        const impact = suggestPartial ? bill.amountOpen * 0.5 : bill.amountOpen;
+        
         actions.push({
             type: "delay_ap",
             priority: "p2",
-            title: `Delay $${bill.amountOpen.toLocaleString()} to ${bill.vendorName}`,
-            description: `Bill ${bill.billNo}. Non-critical vendor — delaying 2 weeks frees cash.`,
-            amountImpact: bill.amountOpen,
+            title: suggestPartial 
+                ? `Delay 50% of $${bill.amountOpen.toLocaleString()} to ${bill.vendorName}`
+                : `Delay $${bill.amountOpen.toLocaleString()} to ${bill.vendorName}`,
+            description: suggestPartial
+                ? `Bill ${bill.billNo}. Non-critical vendor — pay half now, negotiate net-15 on remainder to free $${impact.toLocaleString()}.`
+                : `Bill ${bill.billNo}. Non-critical vendor — delaying 2 weeks frees cash.`,
+            amountImpact: impact,
             impactCertainty: "high",
             constraintWeekStart: constraintWeekStr,
             targetType: "bill",
@@ -142,8 +159,9 @@ export function generateActions(input: ActionInput): GeneratedAction[] {
                 gapAmountExpected: gapExpected,
                 gapAmountWorst: gapWorst,
                 selectedTargets: [bill.id],
-                impactAmount: bill.amountOpen,
+                impactAmount: impact,
                 impactCertainty: "high",
+                strategy: suggestPartial ? "partial_payment_stretch" : "standard_delay"
             }),
         });
     }

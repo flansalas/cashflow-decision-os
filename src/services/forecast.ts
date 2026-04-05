@@ -688,16 +688,24 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         }
 
         // ── Baseline Gap-Filling Fade logic ──
-        // Fade the base historical average depending on the distance in the future
-        let temporalFade = 1.0;
-        if (w >= 4 && w <= 7) temporalFade = 0.85; // Weeks 5-8
-        else if (w >= 8) temporalFade = 0.70;      // Weeks 9-13
+        // Asymmetric fading: We aggressively fade *uncertain future revenue* downwards over time,
+        // but we hold *variable spend* flat (or inflate it) to remain conservative in later weeks.
+        let revenueFade = 1.0;
+        let spendFade = 1.0;
+        
+        if (w >= 4 && w <= 7) {
+            revenueFade = 0.85; // Weeks 5-8
+            spendFade = 1.0;    // Expected spend persists
+        } else if (w >= 8) {
+            revenueFade = 0.70; // Weeks 9-13
+            spendFade = 1.05;   // Expected spend slightly inflates due to uncertainty
+        }
         
         const safetyMargin = input.assumptions.projectionSafetyMargin ?? 1.0;
-        const inflowMultiplier = temporalFade * safetyMargin;
+        const inflowMultiplier = revenueFade * safetyMargin;
         // Inverse for outflows: when margin is low (conservative), outflow should be high.
         // We use (2 - safetyMargin) to keep the 0.5-1.5 range symmetric around 1.0.
-        const outflowMultiplier = temporalFade * (2 - safetyMargin);
+        const outflowMultiplier = spendFade * (2 - safetyMargin);
 
         // Baseline inflow bucket — "Gap-Filling" logic:
         // Instead of showing bank history ONLY when there are zero AR invoices, we now show 

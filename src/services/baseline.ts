@@ -82,12 +82,11 @@ export function computeBaseline(
         );
     }
 
-    // Compute weighted average using chronological buckets
-    // i=0 is oldest (12 weeks ago), i=11 is newest (1 week ago)
-    let weightedInflowSum = 0;
-    let weightedOutflowSum = 0;
-    let totalWeight = 0;
+    const inflowValues: number[] = [];
+    const outflowValues: number[] = [];
+    const weights: number[] = [];
 
+    // Compute weights and build arrays for robust statistics
     for (let i = 0; i < WEEKS_TO_ANALYZE; i++) {
         const b = weekBuckets[i];
         if (b.inflow === 0 && b.outflow === 0) continue; // Skip inactive weeks
@@ -99,19 +98,22 @@ export function computeBaseline(
         else if (ageWeeks <= 7) weight = 0.9;    // Weeks 5-8
         else weight = 0.6;                       // Weeks 9-12
         
-        weightedInflowSum += b.inflow * weight;
-        weightedOutflowSum += b.outflow * weight;
-        totalWeight += weight;
+        inflowValues.push(b.inflow);
+        outflowValues.push(b.outflow);
+        weights.push(weight);
     }
 
-    const variableInflowWeekly = totalWeight > 0 ? weightedInflowSum / totalWeight : 0;
-    const variableOutflowWeekly = totalWeight > 0 ? weightedOutflowSum / totalWeight : 0;
+    // Apply basic outlier shielding (cap at 2.5x median)
+    const cappedInflows = clipOutliers(inflowValues);
+    const cappedOutflows = clipOutliers(outflowValues);
 
-    // Use unweighted values for stddev and band calculations for simplicity
-    const inflowValues = activeWeeks.map(b => b.inflow);
-    const outflowValues = activeWeeks.map(b => b.outflow);
-    const inflowStdDev = stddev(inflowValues);
-    const outflowStdDev = stddev(outflowValues);
+    const calcStat = computeWeightedMeanAndStdDev(cappedInflows, weights);
+    const variableInflowWeekly = calcStat.mean;
+    const inflowStdDev = calcStat.stddev;
+
+    const calcOutStat = computeWeightedMeanAndStdDev(cappedOutflows, weights);
+    const variableOutflowWeekly = calcOutStat.mean;
+    const outflowStdDev = calcOutStat.stddev;
 
     const variableInflowBand = variableInflowWeekly > 0
         ? Math.min(0.6, inflowStdDev / variableInflowWeekly)
@@ -179,4 +181,35 @@ function stddev(values: number[]): number {
     const m = mean(values);
     const variance = values.reduce((s, v) => s + (v - m) ** 2, 0) / (values.length - 1);
     return Math.sqrt(variance);
+}
+
+function median(values: number[]): number {
+    if (values.length === 0) return 0;
+    const sorted = [...values].sort((a,b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function clipOutliers(values: number[]): number[] {
+    if (values.length === 0) return [];
+    const med = median(values);
+    if (med === 0) return values;
+    const cap = med * 2.5; 
+    return values.map(v => v > cap ? cap : v);
+}
+
+function computeWeightedMeanAndStdDev(values: number[], weights: number[]): { mean: number, stddev: number } {
+    const sumW = weights.reduce((a,b) => a+b, 0);
+    if (sumW === 0) return { mean: 0, stddev: 0 };
+    let mean = 0;
+    for(let i=0; i<values.length; i++) mean += values[i]*weights[i];
+    mean /= sumW;
+    
+    let variance = 0;
+    for(let i=0; i<values.length; i++) variance += weights[i]*Math.pow(values[i] - mean, 2);
+    // using basic weighted variance
+    variance /= sumW; 
+    
+    // Fallback: if capped values still yield extremely high standard deviation, cap variance logically.
+    return { mean, stddev: Math.sqrt(variance) };
 }
