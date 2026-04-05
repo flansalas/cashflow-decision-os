@@ -49,13 +49,38 @@ export async function POST(req: NextRequest) {
         },
     });
 
+    let targetName = targetType.replace(/_/g, " "); // fallback
+    if (targetId) {
+        if (targetType === "receivable_invoice") {
+            const inv = await prisma.receivableInvoice.findUnique({ where: { id: targetId } });
+            if (inv) targetName = `Invoice #${inv.invoiceNo} (${inv.customerName})`;
+        } else if (targetType === "payable_bill") {
+            const bill = await prisma.payableBill.findUnique({ where: { id: targetId } });
+            if (bill) targetName = `Bill #${bill.billNo} (${bill.vendorName})`;
+        } else if (targetType === "recurring_pattern") {
+            const rp = await prisma.recurringPattern.findUnique({ where: { id: targetId } });
+            if (rp) targetName = `Recurring Item "${rp.displayName}"`;
+        }
+    }
+
+    let actionDesc = type.replace(/_/g, ' ');
+    if (type === "set_expected_payment_date" && effectiveDate) {
+        actionDesc = `Changed expected payment date to ${new Date(effectiveDate).toLocaleDateString()}`;
+    } else if (type === "set_bill_due_date" && effectiveDate) {
+        actionDesc = `Changed bill due date to ${new Date(effectiveDate).toLocaleDateString()}`;
+    } else if (type === "adjust_amount" && amount !== undefined) {
+        actionDesc = `Adjusted amount to $${amount.toLocaleString()}`;
+    } else if (type === "delay_due_date") {
+        actionDesc = `Delayed payment due date`;
+    }
+
     await prisma.changeLog.create({
         data: {
             companyId,
             action: "FORECAST_OVERRIDE",
             source: "user_ui",
-            inputText: `Created ${type.replace(/_/g, ' ')} for ${targetType}`,
-            diffJson: JSON.stringify({ type, targetType, amount, targetId }),
+            inputText: `${actionDesc} for ${targetName}`,
+            diffJson: JSON.stringify({ type, targetName, amount, effectiveDate }),
             forecastVersionHashAfter: "pending",
         }
     });
@@ -90,13 +115,27 @@ export async function DELETE(req: NextRequest) {
     });
 
     if (existing) {
+        let targetName = existing.targetType.replace(/_/g, " "); // fallback
+        if (targetId) {
+            if (existing.targetType === "receivable_invoice") {
+                const inv = await prisma.receivableInvoice.findUnique({ where: { id: targetId } });
+                if (inv) targetName = `Invoice #${inv.invoiceNo} (${inv.customerName})`;
+            } else if (existing.targetType === "payable_bill") {
+                const bill = await prisma.payableBill.findUnique({ where: { id: targetId } });
+                if (bill) targetName = `Bill #${bill.billNo} (${bill.vendorName})`;
+            } else if (existing.targetType === "recurring_pattern") {
+                const rp = await prisma.recurringPattern.findUnique({ where: { id: targetId } });
+                if (rp) targetName = `Recurring Item "${rp.displayName}"`;
+            }
+        }
+
         await prisma.changeLog.create({
             data: {
                 companyId: existing.companyId,
                 action: "REMOVE_OVERRIDE",
                 source: "user_ui",
-                inputText: `Removed ${existing.type.replace(/_/g, ' ')}`,
-                diffJson: JSON.stringify({ targetId, type: existing.type }),
+                inputText: `Removed ${existing.type.replace(/_/g, ' ')} for ${targetName}`,
+                diffJson: JSON.stringify({ targetName, type: existing.type }),
                 forecastVersionHashAfter: "pending",
             }
         });
