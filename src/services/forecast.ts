@@ -694,7 +694,10 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         else if (w >= 8) temporalFade = 0.70;      // Weeks 9-13
         
         const safetyMargin = input.assumptions.projectionSafetyMargin ?? 1.0;
-        const effectiveMultiplier = temporalFade * safetyMargin;
+        const inflowMultiplier = temporalFade * safetyMargin;
+        // Inverse for outflows: when margin is low (conservative), outflow should be high.
+        // We use (2 - safetyMargin) to keep the 0.5-1.5 range symmetric around 1.0.
+        const outflowMultiplier = temporalFade * (2 - safetyMargin);
 
         // Baseline inflow bucket — "Gap-Filling" logic:
         // Instead of showing bank history ONLY when there are zero AR invoices, we now show 
@@ -702,7 +705,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         // This creates a smoother 13-week runway by assuming that if you have weak AR 
         // scheduled for a future week, more is coming to meet your average.
         const scheduledInflowSum = inflowBreakdown.reduce((s, i) => s + i.amount, 0);
-        const baselineInflowWeekly = (input.baselineInflowWeekly || 0) * effectiveMultiplier;
+        const baselineInflowWeekly = (input.baselineInflowWeekly || 0) * inflowMultiplier;
         const inflowGap = Math.max(0, baselineInflowWeekly - scheduledInflowSum);
 
         if (input.hasBankBaseline && inflowGap > 0) {
@@ -805,7 +808,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         // We now fill the "Gap" between your real bills and the expected variable spend 
         // that typically accompanies your historical inflow average.
         const scheduledOutflowAllSum = outflowBreakdown.reduce((s, i) => s + i.amount, 0);
-        const baselineVarOutWeekly = (input.variableOutflowWeekly || 0) * effectiveMultiplier;
+        const baselineVarOutWeekly = (input.variableOutflowWeekly || 0) * outflowMultiplier;
         
         // Only top-up variable spend if we added an inflow baseline (meaning we are in 'projection' mode)
         // and we haven't already exceeded the historical spend average with real bills.
