@@ -117,6 +117,17 @@ export async function POST(req: NextRequest) {
                 data: { weekNumber: { decrement: 1 } }
             });
 
+            await tx.changeLog.create({
+                data: {
+                    companyId,
+                    action: "UPDATE_BALANCE",
+                    source: "user_ui",
+                    inputText: `Updated bank balance to $${bankBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                    diffJson: JSON.stringify({ bankBalance, asOfDate: snapshotDate.toISOString(), adjustmentsCount: adjustments.length }),
+                    forecastVersionHashAfter: "pending", 
+                }
+            });
+
             return snapshot;
         });
 

@@ -49,6 +49,17 @@ export async function POST(req: NextRequest) {
         },
     });
 
+    await prisma.changeLog.create({
+        data: {
+            companyId,
+            action: "FORECAST_OVERRIDE",
+            source: "user_ui",
+            inputText: `Created ${type.replace(/_/g, ' ')} for ${targetType}`,
+            diffJson: JSON.stringify({ type, targetType, amount, targetId }),
+            forecastVersionHashAfter: "pending",
+        }
+    });
+
     return NextResponse.json({ id: created.id, ok: true });
 }
 
@@ -65,6 +76,10 @@ export async function DELETE(req: NextRequest) {
     if (rawType === "delay_due_date") types.push("set_bill_due_date");
     if (rawType === "set_bill_due_date") types.push("delay_due_date");
 
+    const existing = await prisma.override.findFirst({
+        where: { targetId, type: { in: types }, status: "active" }
+    });
+
     await prisma.override.updateMany({
         where: { 
             targetId, 
@@ -73,6 +88,19 @@ export async function DELETE(req: NextRequest) {
         },
         data: { status: "archived" },
     });
+
+    if (existing) {
+        await prisma.changeLog.create({
+            data: {
+                companyId: existing.companyId,
+                action: "REMOVE_OVERRIDE",
+                source: "user_ui",
+                inputText: `Removed ${existing.type.replace(/_/g, ' ')}`,
+                diffJson: JSON.stringify({ targetId, type: existing.type }),
+                forecastVersionHashAfter: "pending",
+            }
+        });
+    }
 
     return NextResponse.json({ ok: true });
 }

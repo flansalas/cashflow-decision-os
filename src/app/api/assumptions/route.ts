@@ -27,6 +27,17 @@ export async function POST(req: NextRequest) {
             });
         }
 
+        await prisma.changeLog.create({
+            data: {
+                companyId,
+                action: "UPDATE_ASSUMPTIONS",
+                source: "user_ui",
+                inputText: `Updated financial assumptions and baseline targets`,
+                diffJson: JSON.stringify(dataToUpdate),
+                forecastVersionHashAfter: "pending",
+            }
+        });
+
         // Also trigger a re-run of the forecast by ensuring cash snapshot timestamp is updated
         // Actually, we don't strictly need to do this, Dashboard re-fetches and re-computes on the fly.
         // But if there are saved actions/scenarios we might just need to reload.
