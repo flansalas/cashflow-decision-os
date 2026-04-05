@@ -149,12 +149,12 @@ function AuditLogContent() {
                                                      <div className="text-base font-semibold tracking-tight text-slate-900">
                                                          {formatAction(log.action)}
                                                      </div>
-                                                     <span className={`px-2 py-0.5 rounded-md text-[11px] font-medium uppercase tracking-wider ${
+                                                     <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider ${
                                                          isSystem 
                                                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' 
                                                              : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                                                      }`}>
-                                                         {log.source || 'user'}
+                                                         {isSystem ? 'Auto-Sync' : (log.source === 'user_ui' ? 'User Edit' : (log.source || 'User Action'))}
                                                      </span>
                                                  </div>
                                                  <div className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
@@ -167,24 +167,43 @@ function AuditLogContent() {
 
                                              {log.inputText && (
                                                  <div className="mb-4">
-                                                     <div className="text-sm border-l-[3px] pl-3 py-1 italic font-medium" style={{ borderColor: "var(--color-primary)", color: "var(--text-secondary)", backgroundColor: "var(--bg-raised)" }}>
-                                                         "{log.inputText}"
+                                                     <div className="text-[13px] border-l-[3px] pl-3 py-1 font-medium" style={{ borderColor: "var(--color-primary)", color: "var(--text-secondary)" }}>
+                                                         {log.inputText}
                                                      </div>
                                                  </div>
                                              )}
 
-                                             {diffData && (
-                                                 <div className="mt-4">
-                                                     <div className="flex items-center gap-1.5 mb-2 px-1">
-                                                         <FileJson className="w-3.5 h-3.5 text-slate-400" />
-                                                         <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Changeset Details</span>
+                                             {diffData && typeof diffData === 'object' && (
+                                                 <div className="mt-4 pt-4 border-t border-slate-100">
+                                                     <div className="flex items-center gap-1.5 mb-3 px-1">
+                                                         <Layers className="w-3.5 h-3.5 text-slate-400" />
+                                                         <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Adjustment Details</span>
                                                      </div>
-                                                     <div className="bg-slate-50 p-4 rounded-lg border overflow-x-auto" style={{ borderColor: "var(--border-default)" }}>
-                                                         <pre className="text-[11px] leading-relaxed font-mono text-slate-600">
-                                                             {typeof diffData === 'object' 
-                                                                 ? JSON.stringify(diffData, null, 2)
-                                                                 : diffData}
-                                                         </pre>
+                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                         {Object.entries(diffData).map(([key, val]) => {
+                                                             if (key === 'targetId' || val === null || val === undefined) return null;
+                                                             
+                                                             let displayVal = String(val);
+                                                             if (typeof val === 'number') {
+                                                                 if (key.toLowerCase().includes('balance') || key.toLowerCase().includes('amount')) {
+                                                                     displayVal = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(val);
+                                                                 } else {
+                                                                     displayVal = val.toLocaleString();
+                                                                 }
+                                                             } else if (typeof val === 'string' && val.includes('T00:00:00')) {
+                                                                 // crude date check
+                                                                 try { displayVal = new Date(val).toLocaleDateString(); } catch {}
+                                                             }
+                                                             
+                                                             const displayKey = key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
+
+                                                             return (
+                                                                 <div key={key} className="bg-slate-50 p-3 rounded-lg border border-slate-100 flex flex-col justify-center">
+                                                                     <span className="block text-[10px] uppercase text-slate-400 font-bold tracking-wider mb-1 capitalize">{displayKey}</span>
+                                                                     <span className="text-sm font-semibold text-slate-800 capitalize">{displayVal.replace(/_/g, ' ')}</span>
+                                                                 </div>
+                                                             );
+                                                         })}
                                                      </div>
                                                  </div>
                                              )}
