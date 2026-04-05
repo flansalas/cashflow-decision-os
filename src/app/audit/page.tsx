@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { History, ArrowLeft, RefreshCw, Layers, AlertCircle, FileJson, RotateCcw } from "lucide-react";
+import { History, ArrowLeft, RefreshCw, Layers, AlertCircle, FileJson } from "lucide-react";
 
 interface ChangeLog {
     id: string;
@@ -20,7 +20,6 @@ function AuditLogContent() {
     const [logs, setLogs] = useState<ChangeLog[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [undoingId, setUndoingId] = useState<string | null>(null);
 
     const fetchData = async () => {
         setLoading(true);
@@ -34,25 +33,6 @@ function AuditLogContent() {
             setError(e.message);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const handleUndo = async (changeLogId: string) => {
-        if (!confirm("Are you sure you want to revert this action?")) return;
-        setUndoingId(changeLogId);
-        try {
-            const res = await fetch(`/api/audit/undo`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ changeLogId })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Failed to undo");
-            await fetchData();
-        } catch (e: any) {
-            alert(e.message);
-        } finally {
-            setUndoingId(null);
         }
     };
 
@@ -74,6 +54,39 @@ function AuditLogContent() {
         } catch {
             return json;
         }
+    };
+
+    const downloadCsv = () => {
+        if (logs.length === 0) return;
+        
+        const headers = ["Timestamp", "Action", "Source", "Context", "Details"];
+        const rows = logs.map(log => {
+            const diff = parseDiff(log.diffJson);
+            let details = "";
+            if (diff && typeof diff === 'object') {
+                details = Object.entries(diff)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(' | ');
+            }
+            return [
+                new Date(log.timestamp).toISOString(),
+                log.action,
+                log.source,
+                log.inputText || "",
+                details
+            ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(",");
+        });
+
+        const csvContent = [headers.join(","), ...rows].join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `audit-log-${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = "hidden";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     if (loading) {
@@ -117,14 +130,25 @@ function AuditLogContent() {
                             <span className="font-semibold text-lg tracking-tight">Audit Log</span>
                         </div>
                     </div>
-                    <button
-                        onClick={fetchData}
-                        className="p-2 rounded-lg border text-sm hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm"
-                        style={{ background: "white", borderColor: "var(--border-default)" }}
-                    >
-                        <RefreshCw className="w-4 h-4 text-slate-500" />
-                        <span className="font-medium text-slate-700 hidden sm:inline">Refresh</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={downloadCsv}
+                            disabled={logs.length === 0}
+                            className="p-2 rounded-lg border text-sm hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            style={{ background: "white", borderColor: "var(--border-default)" }}
+                        >
+                            <FileJson className="w-4 h-4 text-slate-500" />
+                            <span className="font-medium text-slate-700 hidden sm:inline">Export CSV</span>
+                        </button>
+                        <button
+                            onClick={fetchData}
+                            className="p-2 rounded-lg border text-sm hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm"
+                            style={{ background: "white", borderColor: "var(--border-default)" }}
+                        >
+                            <RefreshCw className="w-4 h-4 text-slate-500" />
+                            <span className="font-medium text-slate-700 hidden sm:inline">Refresh</span>
+                        </button>
+                    </div>
                 </div>
             </header>
             
@@ -151,7 +175,6 @@ function AuditLogContent() {
                          logs.map((log, index) => {
                              const diffData = parseDiff(log.diffJson);
                              const isSystem = log.source === 'system';
-                             const isUndoable = log.action === 'FORECAST_OVERRIDE' || log.action === 'REMOVE_OVERRIDE';
                              
                              return (
                                  <div key={log.id} className="relative pl-8">
@@ -178,23 +201,11 @@ function AuditLogContent() {
                                                          {isSystem ? 'Auto-Sync' : (log.source === 'user_ui' ? 'User Edit' : (log.source || 'User Action'))}
                                                      </span>
                                                  </div>
-                                                 <div className="flex items-center gap-3">
-                                                     <div className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                                                         {new Date(log.timestamp).toLocaleString(undefined, {
-                                                             month: 'short', day: 'numeric', year: 'numeric',
-                                                             hour: 'numeric', minute: '2-digit'
-                                                         })}
-                                                     </div>
-                                                     {isUndoable && (
-                                                         <button 
-                                                             onClick={() => handleUndo(log.id)}
-                                                             disabled={undoingId === log.id}
-                                                             className="px-2 py-1 flex items-center gap-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 text-red-600 hover:bg-red-50 hover:border-red-200 border border-transparent"
-                                                         >
-                                                             <RotateCcw className="w-3.5 h-3.5" />
-                                                             {undoingId === log.id ? 'Undoing...' : 'Undo'}
-                                                         </button>
-                                                     )}
+                                                 <div className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                                                     {new Date(log.timestamp).toLocaleString(undefined, {
+                                                         month: 'short', day: 'numeric', year: 'numeric',
+                                                         hour: 'numeric', minute: '2-digit'
+                                                     })}
                                                  </div>
                                              </div>
 
