@@ -203,7 +203,7 @@ export function AppSidebar() {
             title={collapsed ? "Expand sidebar" : undefined}
         >
             {/* Sidebar Header (QBO Style) */}
-            <div className={`flex items-center border-b shrink-0 h-14 ${collapsed ? "justify-center" : "px-4 justify-between gap-2"}`} style={{ borderColor: "var(--border-subtle)" }}>
+            <div className={`flex items-center shrink-0 h-14 relative ${collapsed ? "justify-center border-b" : "px-4 border-b"}`} style={{ borderColor: "var(--border-subtle)" }}>
                 
                 {/* Logo and Name */}
                 {!collapsed && (
@@ -218,28 +218,30 @@ export function AppSidebar() {
                     </div>
                 )}
 
-                {/* Toggle Button */}
+                {/* Toggle Button Tab */}
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
                         toggle();
                     }}
                     className={`
-                        flex items-center justify-center rounded-lg transition-all shrink-0
-                        text-slate-400 hover:text-indigo-600 hover:bg-slate-50
-                        ${collapsed ? "w-10 h-10" : "w-8 h-8 -mr-1"}
+                        absolute top-1/2 -mt-3 -right-3 z-10
+                        flex items-center justify-center 
+                        border border-slate-200 bg-white rounded-full
+                        transition-all duration-200 hover:scale-110 shadow-sm
+                        w-6 h-6 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 hover:shadow-md
                     `}
                     title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                 >
                     {collapsed ? (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="4" y1="7" x2="18" y2="7" />
                             <line x1="4" y1="12" x2="11" y2="12" />
                             <line x1="4" y1="17" x2="18" y2="17" />
                             <polygon points="14,10 17,12 14,14" fill="currentColor" stroke="none" />
                         </svg>
                     ) : (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="4" y1="7" x2="18" y2="7" />
                             <line x1="4" y1="12" x2="11" y2="12" />
                             <line x1="4" y1="17" x2="18" y2="17" />

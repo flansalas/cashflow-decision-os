@@ -400,7 +400,7 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Health & Runway */}
-                <div className={`w-full lg:flex-[1.5] min-w-0 flex items-center justify-between relative group/health transition-all duration-500 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-3 py-3 xl:px-5'}`}>
+                <div className={`w-full lg:flex-[1.8] min-w-0 flex items-center justify-between relative group/health transition-all duration-500 gap-2 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-3 py-3 xl:px-5'}`}>
                     {/* Contextual Action - Visible Only When Expanded */}
                     {!isCompact && (
                         <div className="relative z-10 flex shrink-0 items-center justify-start h-full">
@@ -416,7 +416,7 @@ export function HeaderTruthBar({
                         </div>
                     )}
 
-                    <div className={`flex flex-col items-end justify-center w-full relative z-10 ${isCompact ? '' : 'pt-2 lg:pt-0'}`}>
+                    <div className={`flex flex-col items-end justify-center flex-1 min-w-0 relative z-10 ${isCompact ? '' : 'pt-2 lg:pt-0'}`}>
                         {isCompact ? (
                             <div className="flex items-baseline w-full gap-2">
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 w-12">Health</span>
