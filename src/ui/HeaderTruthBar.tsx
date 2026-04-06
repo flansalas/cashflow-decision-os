@@ -206,10 +206,10 @@ export function HeaderTruthBar({
                 <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/cash transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
                     <div className={`flex items-baseline w-full transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
                         <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-10' : 'w-16'}`}>Cash</span>
-                        <div className="flex flex-col items-start relative w-full">
+                        <div className="flex flex-col items-start relative w-full min-w-0">
                             <span 
                                 onClick={() => setEditBalanceOpen(!editBalanceOpen)} 
-                                className={`font-black font-financial cursor-pointer hover:text-indigo-600 border-b border-dashed border-slate-300 text-slate-900 transition-all duration-500 ${isCompact ? 'text-[15px]' : 'text-xl sm:text-2xl'}`}
+                                className={`font-black font-financial cursor-pointer hover:text-indigo-600 border-b border-dashed border-slate-300 text-slate-900 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-xl sm:text-2xl'}`}
                                 title="Click to edit balance and outstanding items"
                             >
                                 {fmt(adjustedCash)}
@@ -351,8 +351,8 @@ export function HeaderTruthBar({
                 <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/in transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
                     <div className={`flex items-baseline w-full transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
                         <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-12' : 'w-16'}`}>In (30d)</span>
-                        <div className="flex flex-col items-start relative w-full">
-                            <span className={`font-black font-financial text-emerald-700 transition-all duration-500 ${isCompact ? 'text-[15px]' : 'text-xl sm:text-2xl'}`}>{fmt(inflow30)}</span>
+                        <div className="flex flex-col items-start relative w-full min-w-0">
+                            <span className={`font-black font-financial text-emerald-700 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-xl sm:text-2xl'}`}>{fmt(inflow30)}</span>
                             <button onClick={() => setShowReasons(!showReasons)} className={`font-medium text-slate-400 hover:text-emerald-700 absolute flex items-center gap-1 opacity-80 group-hover/in:opacity-100 transition-all duration-500 whitespace-nowrap ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3'}`}>
                                 <TrendingUp className="w-2.5 h-2.5" />
                                 {confidence.score}% Confidence
@@ -383,8 +383,8 @@ export function HeaderTruthBar({
                 <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/out transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
                     <div className={`flex items-baseline w-full transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
                         <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-14' : 'w-16'}`}>Out (30d)</span>
-                        <div className="flex flex-col items-start relative w-full">
-                            <span className={`font-black font-financial text-rose-600 transition-all duration-500 ${isCompact ? 'text-[15px]' : 'text-xl sm:text-2xl'}`}>{fmt(outflow30)}</span>
+                        <div className="flex flex-col items-start relative w-full min-w-0">
+                            <span className={`font-black font-financial text-rose-600 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-xl sm:text-2xl'}`}>{fmt(outflow30)}</span>
                             {payroll ? (
                                 <span className={`font-medium text-slate-400 absolute whitespace-nowrap flex items-center gap-1 opacity-80 group-hover/out:opacity-100 transition-all duration-500 ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3.5'}`}>
                                     <TrendingDown className="w-2.5 h-2.5" />
@@ -420,7 +420,7 @@ export function HeaderTruthBar({
                         {isCompact ? (
                             <div className="flex items-baseline w-full gap-2">
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 w-12">Health</span>
-                                <div className="flex-1 flex justify-end gap-3 items-center">
+                                <div className="flex-1 flex justify-end gap-3 items-center min-w-0">
                                     <RunwayMetric expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} isCompact={isCompact} />
                                     {onDrillIn && healthStatus !== "STABLE" && (
                                         <button onClick={onDrillIn} className="flex items-center gap-1 border border-rose-200 text-rose-500 hover:bg-rose-50 px-2 py-0.5 rounded text-[8px] uppercase font-black whitespace-nowrap bg-white/50 shadow-sm shrink-0 transition-colors">
