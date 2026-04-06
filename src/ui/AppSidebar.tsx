@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import {
     Box, BarChart3, ListFilter, Repeat2, Layers, Settings2,
-    ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft, Database, History
+    ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft, Database, History,
+    Menu
 } from "lucide-react";
 
 interface NavItem {
@@ -202,15 +203,33 @@ export function AppSidebar() {
             onClick={collapsed ? toggle : undefined}
             title={collapsed ? "Expand sidebar" : undefined}
         >
-            {/* Logo area */}
-            <div className={`flex items-center border-b shrink-0 ${collapsed ? "justify-center h-14" : "px-4 h-14 gap-3"}`} style={{ borderColor: "var(--border-subtle)" }}>
-                <Box className={`text-indigo-600 shrink-0 transition-transform ${collapsed ? "w-5 h-5" : "w-5 h-5"}`} />
+            {/* Sidebar Header (QBO Style) */}
+            <div className={`flex items-center border-b shrink-0 h-14 ${collapsed ? "justify-center" : "px-4 gap-3"}`} style={{ borderColor: "var(--border-subtle)" }}>
+                {/* Toggle Button */}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        toggle();
+                    }}
+                    className={`
+                        flex items-center justify-center rounded-lg transition-all 
+                        text-slate-400 hover:text-slate-700 hover:bg-slate-50
+                        ${collapsed ? "w-10 h-10" : "w-8 h-8"}
+                    `}
+                    title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                >
+                    <Menu className="w-5 h-5" />
+                </button>
+
                 {!collapsed && (
-                    <div className="flex flex-col min-w-0">
-                        <span className="text-[10px] font-black tracking-[0.2em] text-slate-900 leading-none">CF/D·OS</span>
-                        {companyName && (
-                            <span className="text-[10px] text-slate-400 font-medium truncate leading-tight mt-0.5">{companyName}</span>
-                        )}
+                    <div className="flex items-center gap-2 overflow-hidden">
+                        <Box className="w-5 h-5 text-indigo-600 shrink-0" />
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-[10px] font-black tracking-[0.2em] text-slate-900 leading-none">CF/D·OS</span>
+                            {companyName && (
+                                <span className="text-[10px] text-slate-400 font-medium truncate leading-tight mt-0.5">{companyName}</span>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>
@@ -236,27 +255,7 @@ export function AppSidebar() {
                 )}
             </nav>
 
-            {/* Collapse toggle */}
-            <div className={`border-t shrink-0 ${collapsed ? "flex justify-center py-3" : "px-3 py-3"}`} style={{ borderColor: "var(--border-subtle)" }}>
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        toggle();
-                    }}
-                    className={`group flex items-center gap-2 rounded-lg transition-all text-slate-400 hover:text-slate-700 hover:bg-slate-50 ${collapsed ? "w-8 h-8 justify-center" : "w-full px-3 py-1.5"}`}
-                    title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                >
-                    {collapsed
-                        ? <PanelLeft className="w-4 h-4" />
-                        : (
-                            <>
-                                <PanelLeftClose className="w-4 h-4" />
-                                <span className="text-[11px] font-semibold">Collapse</span>
-                            </>
-                        )
-                    }
-                </button>
-            </div>
+
         </aside>
     );
 }
