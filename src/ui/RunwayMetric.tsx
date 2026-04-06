@@ -60,7 +60,7 @@ export function RunwayMetric({ expectedWeek, worstWeek, isCompact }: { expectedW
                 </span>
             </div>
             <div className="flex flex-col items-end transition-all duration-500 w-full gap-1">
-                <p className="font-bold font-financial leading-none tracking-tight transition-all duration-500 text-3xl sm:text-4xl" style={{ color: labelColor }}>
+                <p className="font-bold font-financial leading-none tracking-tight transition-all duration-500 text-xl sm:text-2xl whitespace-nowrap" style={{ color: labelColor }}>
                     {runwayText}
                 </p>
                 <p className="text-[10px] uppercase font-bold opacity-40 mb-2 tracking-widest text-slate-500">Survival Range</p>
