@@ -203,13 +203,13 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Cash */}
-                <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/cash transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
-                    <div className={`flex items-baseline w-full transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
+                <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/cash transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-4 xl:px-5 py-3'}`}>
+                    <div className={`flex items-baseline w-full min-w-0 transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
                         <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-10' : 'w-16'}`}>Cash</span>
                         <div className="flex flex-col items-start relative w-full min-w-0">
                             <span 
                                 onClick={() => setEditBalanceOpen(!editBalanceOpen)} 
-                                className={`font-black font-financial cursor-pointer hover:text-indigo-600 border-b border-dashed border-slate-300 text-slate-900 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-xl sm:text-2xl'}`}
+                                className={`font-black font-financial cursor-pointer hover:text-indigo-600 border-b border-dashed border-slate-300 text-slate-900 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-lg xl:text-xl 2xl:text-2xl'}`}
                                 title="Click to edit balance and outstanding items"
                             >
                                 {fmt(adjustedCash)}
@@ -348,11 +348,11 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Inflow */}
-                <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/in transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
-                    <div className={`flex items-baseline w-full transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
+                <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/in transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-4 xl:px-5 py-3'}`}>
+                    <div className={`flex items-baseline w-full min-w-0 transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
                         <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-12' : 'w-16'}`}>In (30d)</span>
                         <div className="flex flex-col items-start relative w-full min-w-0">
-                            <span className={`font-black font-financial text-emerald-700 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-xl sm:text-2xl'}`}>{fmt(inflow30)}</span>
+                            <span className={`font-black font-financial text-emerald-700 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-lg xl:text-xl 2xl:text-2xl'}`}>{fmt(inflow30)}</span>
                             <button onClick={() => setShowReasons(!showReasons)} className={`font-medium text-slate-400 hover:text-emerald-700 absolute flex items-center gap-1 opacity-80 group-hover/in:opacity-100 transition-all duration-500 whitespace-nowrap ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3'}`}>
                                 <TrendingUp className="w-2.5 h-2.5" />
                                 {confidence.score}% Confidence
@@ -380,11 +380,11 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Outflow */}
-                <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/out transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
-                    <div className={`flex items-baseline w-full transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
+                <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/out transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-4 xl:px-5 py-3'}`}>
+                    <div className={`flex items-baseline w-full min-w-0 transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
                         <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-14' : 'w-16'}`}>Out (30d)</span>
                         <div className="flex flex-col items-start relative w-full min-w-0">
-                            <span className={`font-black font-financial text-rose-600 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-xl sm:text-2xl'}`}>{fmt(outflow30)}</span>
+                            <span className={`font-black font-financial text-rose-600 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-lg xl:text-xl 2xl:text-2xl'}`}>{fmt(outflow30)}</span>
                             {payroll ? (
                                 <span className={`font-medium text-slate-400 absolute whitespace-nowrap flex items-center gap-1 opacity-80 group-hover/out:opacity-100 transition-all duration-500 ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3.5'}`}>
                                     <TrendingDown className="w-2.5 h-2.5" />
@@ -400,7 +400,7 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Health & Runway */}
-                <div className={`w-full lg:flex-[1.8] min-w-0 flex items-center justify-between relative group/health transition-all duration-500 gap-2 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-3 py-3 xl:px-5'}`}>
+                <div className={`w-full lg:flex-[1.5] min-w-0 flex items-center justify-between relative group/health transition-all duration-500 gap-2 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-4 py-3 xl:px-5'}`}>
                     {/* Contextual Action - Visible Only When Expanded */}
                     {!isCompact && (
                         <div className="relative z-10 flex shrink-0 items-center justify-start h-full">

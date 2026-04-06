@@ -225,29 +225,25 @@ export function AppSidebar() {
                         toggle();
                     }}
                     className={`
-                        absolute top-1/2 -mt-3.5 -right-3.5 z-10
+                        absolute top-4 -right-4 z-10
                         flex items-center justify-center 
-                        border border-slate-200 bg-white rounded-full
-                        transition-all duration-200 hover:scale-110 shadow-sm
-                        w-7 h-7 text-slate-500 hover:text-indigo-600 hover:border-indigo-300 hover:shadow-md
+                        border-t border-r border-b border-slate-200 bg-white rounded-r-lg
+                        transition-all duration-200 hover:bg-slate-50 shadow-sm
+                        w-4 h-11 text-slate-400 hover:text-indigo-600
                     `}
                     title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                 >
-                    {collapsed ? (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="4" y1="7" x2="16" y2="7" />
-                            <line x1="4" y1="12" x2="10" y2="12" />
-                            <line x1="4" y1="17" x2="16" y2="17" />
-                            <polygon points="12,10 16,12 12,14" fill="currentColor" stroke="none" />
-                        </svg>
-                    ) : (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="8" y1="7" x2="20" y2="7" />
-                            <line x1="14" y1="12" x2="20" y2="12" />
-                            <line x1="8" y1="17" x2="20" y2="17" />
-                            <polygon points="16,10 12,12 16,14" fill="currentColor" stroke="none" />
-                        </svg>
-                    )}
+                    <div className="w-full h-full flex items-center justify-center">
+                        {collapsed ? (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="translate-x-[0.5px]">
+                                <polyline points="9 18 15 12 9 6" />
+                            </svg>
+                        ) : (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="-translate-x-[0.5px]">
+                                <polyline points="15 18 9 12 15 6" />
+                            </svg>
+                        )}
+                    </div>
                 </button>
             </div>
 
