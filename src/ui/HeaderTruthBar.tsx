@@ -203,7 +203,7 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Cash */}
-                <div className={`w-full lg:flex-1 flex items-center justify-between relative group/cash transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
+                <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/cash transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
                     <div className={`flex items-baseline w-full transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
                         <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-10' : 'w-16'}`}>Cash</span>
                         <div className="flex flex-col items-start relative w-full">
@@ -348,7 +348,7 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Inflow */}
-                <div className={`w-full lg:flex-1 flex items-center justify-between relative group/in transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
+                <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/in transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
                     <div className={`flex items-baseline w-full transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
                         <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-12' : 'w-16'}`}>In (30d)</span>
                         <div className="flex flex-col items-start relative w-full">
@@ -380,7 +380,7 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Outflow */}
-                <div className={`w-full lg:flex-1 flex items-center justify-between relative group/out transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
+                <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/out transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-5 py-3'}`}>
                     <div className={`flex items-baseline w-full transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
                         <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-14' : 'w-16'}`}>Out (30d)</span>
                         <div className="flex flex-col items-start relative w-full">
@@ -400,7 +400,7 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Health & Runway */}
-                <div className={`w-full lg:flex-[1.5] flex items-center justify-between relative group/health transition-all duration-500 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-5 py-3 lg:min-w-[250px]'}`}>
+                <div className={`w-full lg:flex-[1.5] min-w-0 flex items-center justify-between relative group/health transition-all duration-500 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-3 py-3 xl:px-5'}`}>
                     {/* Contextual Action - Visible Only When Expanded */}
                     {!isCompact && (
                         <div className="relative z-10 flex shrink-0 items-center justify-start h-full">

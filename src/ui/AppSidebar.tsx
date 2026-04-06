@@ -4,8 +4,7 @@ import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import {
     Box, BarChart3, ListFilter, Repeat2, Layers, Settings2,
-    ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft, Database, History,
-    Menu
+    ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft, Database, History
 } from "lucide-react";
 
 interface NavItem {
@@ -204,7 +203,21 @@ export function AppSidebar() {
             title={collapsed ? "Expand sidebar" : undefined}
         >
             {/* Sidebar Header (QBO Style) */}
-            <div className={`flex items-center border-b shrink-0 h-14 ${collapsed ? "justify-center" : "px-4 gap-3"}`} style={{ borderColor: "var(--border-subtle)" }}>
+            <div className={`flex items-center border-b shrink-0 h-14 ${collapsed ? "justify-center" : "px-4 justify-between gap-2"}`} style={{ borderColor: "var(--border-subtle)" }}>
+                
+                {/* Logo and Name */}
+                {!collapsed && (
+                    <div className="flex items-center gap-2 overflow-hidden flex-1">
+                        <Box className="w-5 h-5 text-indigo-600 shrink-0" />
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-[10px] font-black tracking-[0.2em] text-slate-900 leading-none truncate">CF/D·OS</span>
+                            {companyName && (
+                                <span className="text-[10px] text-slate-400 font-medium truncate leading-tight mt-0.5">{companyName}</span>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {/* Toggle Button */}
                 <button
                     onClick={(e) => {
@@ -212,26 +225,28 @@ export function AppSidebar() {
                         toggle();
                     }}
                     className={`
-                        flex items-center justify-center rounded-lg transition-all 
-                        text-slate-400 hover:text-slate-700 hover:bg-slate-50
-                        ${collapsed ? "w-10 h-10" : "w-8 h-8"}
+                        flex items-center justify-center rounded-lg transition-all shrink-0
+                        text-slate-400 hover:text-indigo-600 hover:bg-slate-50
+                        ${collapsed ? "w-10 h-10" : "w-8 h-8 -mr-1"}
                     `}
                     title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                 >
-                    <Menu className="w-5 h-5" />
+                    {collapsed ? (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="4" y1="7" x2="18" y2="7" />
+                            <line x1="4" y1="12" x2="11" y2="12" />
+                            <line x1="4" y1="17" x2="18" y2="17" />
+                            <polygon points="14,10 17,12 14,14" fill="currentColor" stroke="none" />
+                        </svg>
+                    ) : (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="4" y1="7" x2="18" y2="7" />
+                            <line x1="4" y1="12" x2="11" y2="12" />
+                            <line x1="4" y1="17" x2="18" y2="17" />
+                            <polygon points="17,10 14,12 17,14" fill="currentColor" stroke="none" />
+                        </svg>
+                    )}
                 </button>
-
-                {!collapsed && (
-                    <div className="flex items-center gap-2 overflow-hidden">
-                        <Box className="w-5 h-5 text-indigo-600 shrink-0" />
-                        <div className="flex flex-col min-w-0">
-                            <span className="text-[10px] font-black tracking-[0.2em] text-slate-900 leading-none">CF/D·OS</span>
-                            {companyName && (
-                                <span className="text-[10px] text-slate-400 font-medium truncate leading-tight mt-0.5">{companyName}</span>
-                            )}
-                        </div>
-                    </div>
-                )}
             </div>
 
             {/* Workspace nav */}
