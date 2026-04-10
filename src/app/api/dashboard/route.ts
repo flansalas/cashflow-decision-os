@@ -8,17 +8,15 @@ import { detectAnomalies, computeConfidence, type QAInput } from "@/services/qa"
 import { generateActions } from "@/services/actions";
 import { computeBaseline, type BankTxForBaseline, type RecurringPatternForBaseline } from "@/services/baseline";
 import { computeExpectedPaymentDate, parsePaymentCurve, getMonday, addDays } from "@/services/forecast";
+import { resolveTenant } from "@/lib/tenant";
 
 export async function GET(req: NextRequest) {
-    const companyId = req.nextUrl.searchParams.get("companyId");
-
     try {
-        // If no companyId, try demo company
-        let company;
-        if (companyId) {
-            company = await prisma.company.findUnique({ where: { id: companyId } });
-        } else {
-            company = await prisma.company.findFirst({ where: { isDemo: true } });
+        const tenantId = await resolveTenant(req);
+        let company = null;
+        
+        if (tenantId) {
+            company = await prisma.company.findUnique({ where: { id: tenantId } });
         }
 
         if (!company) {

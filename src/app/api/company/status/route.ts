@@ -3,19 +3,15 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
+import { resolveTenant } from "@/lib/tenant";
 
 export async function GET(req: NextRequest) {
-    const companyId = req.nextUrl.searchParams.get("companyId");
-
     try {
-        let company;
-        if (companyId) {
-            company = await prisma.company.findUnique({ where: { id: companyId } });
-        } else {
-            company = await prisma.company.findFirst({
-                where: { isDemo: false },
-                orderBy: { createdAt: "desc" },
-            });
+        const tenantId = await resolveTenant(req);
+        
+        let company = null;
+        if (tenantId) {
+            company = await prisma.company.findUnique({ where: { id: tenantId } });
         }
 
         if (!company) {

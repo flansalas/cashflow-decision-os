@@ -16,31 +16,32 @@ datasource db {
 model Company {
   id                  String   @id @default(uuid())
   name                String
+  clerkOrgId          String?  @unique
   isDemo              Boolean  @default(false)
   onboardingCompleted Boolean  @default(false)
   onboardingStep      Int      @default(0)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  notes               CompanyNote[]
-  cashSnapshots        CashSnapshot[]
-  cashAdjustments      CashAdjustment[]
-  customerProfiles     CustomerProfile[]
-  vendorProfiles       VendorProfile[]
-  receivableInvoices   ReceivableInvoice[]
-  payableBills         PayableBill[]
-  assumptions          Assumption[]
-  bankAccounts         BankAccount[]
-  bankTransactions     BankTransaction[]
-  recurringPatterns    RecurringPattern[]
-  mappingProfiles      MappingProfile[]
-  overrides            Override[]
-  changeLogs           ChangeLog[]
-  forecastWeeks        ForecastWeek[]
-  actionItems          ActionItem[]
-  scenarioItems        ScenarioItem[]
-  cashFlowCategories   CashFlowCategory[]
-  cashFlowEntries      CashFlowEntry[]
+  notes              CompanyNote[]
+  cashSnapshots      CashSnapshot[]
+  cashAdjustments    CashAdjustment[]
+  customerProfiles   CustomerProfile[]
+  vendorProfiles     VendorProfile[]
+  receivableInvoices ReceivableInvoice[]
+  payableBills       PayableBill[]
+  assumptions        Assumption[]
+  bankAccounts       BankAccount[]
+  bankTransactions   BankTransaction[]
+  recurringPatterns  RecurringPattern[]
+  mappingProfiles    MappingProfile[]
+  overrides          Override[]
+  changeLogs         ChangeLog[]
+  forecastWeeks      ForecastWeek[]
+  actionItems        ActionItem[]
+  scenarioItems      ScenarioItem[]
+  cashFlowCategories CashFlowCategory[]
+  cashFlowEntries    CashFlowEntry[]
 }
 
 model CompanyNote {
@@ -86,14 +87,14 @@ model CashAdjustment {
 
 // riskTag: low | med | high
 model CustomerProfile {
-  id                  String   @id @default(uuid())
-  companyId           String
-  customerName        String
-  typicalDelayWeeks   Int?
-  riskTag             String   @default("low")
-  notes               String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                String   @id @default(uuid())
+  companyId         String
+  customerName      String
+  typicalDelayWeeks Int?
+  riskTag           String   @default("low")
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
@@ -117,18 +118,18 @@ model VendorProfile {
 
 // status: open | paid | void
 model ReceivableInvoice {
-  id             String    @id @default(uuid())
-  companyId      String
-  customerName   String
-  invoiceNo      String
-  invoiceDate    DateTime?
-  dueDate        DateTime?
-  amountOpen     Float
-  daysPastDue    Int?
-  status         String    @default("open")
-  metaJson       String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id           String    @id @default(uuid())
+  companyId    String
+  customerName String
+  invoiceNo    String
+  invoiceDate  DateTime?
+  dueDate      DateTime?
+  amountOpen   Float
+  daysPastDue  Int?
+  status       String    @default("open")
+  metaJson     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
@@ -157,20 +158,20 @@ model PayableBill {
 
 // payrollCadence: weekly | biweekly
 model Assumption {
-  id                    String   @id @default(uuid())
-  companyId             String
-  bufferMin             Float    @default(10000)
-  fixedWeeklyOutflow    Float    @default(0)
-  payrollCadence        String   @default("biweekly")
-  payrollAllInAmount    Float?
-  payrollNextDate       DateTime?
-  rentMonthlyAmount     Float?
-  rentDayOfMonth        Int?
-  paymentCurveJson      String   @default("{\"current\":0,\"1-14\":1,\"15-30\":2,\"31-60\":3,\"61+\":4}")
-  highRiskAgingDays     Int      @default(61)
-  projectionSafetyMargin Float   @default(1.0)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                     String    @id @default(uuid())
+  companyId              String
+  bufferMin              Float     @default(10000)
+  fixedWeeklyOutflow     Float     @default(0)
+  payrollCadence         String    @default("biweekly")
+  payrollAllInAmount     Float?
+  payrollNextDate        DateTime?
+  rentMonthlyAmount      Float?
+  rentDayOfMonth         Int?
+  paymentCurveJson       String    @default("{\"current\":0,\"1-14\":1,\"15-30\":2,\"31-60\":3,\"61+\":4}")
+  highRiskAgingDays      Int       @default(61)
+  projectionSafetyMargin Float     @default(1.0)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
@@ -202,7 +203,7 @@ model BankTransaction {
   createdAt   DateTime @default(now())
 
   company Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  account BankAccount?  @relation(fields: [accountId], references: [id])
+  account BankAccount? @relation(fields: [accountId], references: [id])
 
   @@unique([companyId, txHash])
 }
@@ -216,21 +217,21 @@ model BankTransaction {
 // confidence: high | med | low
 // category: payroll | rent | loan | subscription | utilities | fuel | materials | taxes | card_payment | other
 model RecurringPattern {
-  id                String    @id @default(uuid())
-  companyId         String
-  direction         String
-  merchantKey       String
-  displayName       String
-  typicalAmount     Float
-  amountStdDev      Float     @default(0)
-  cadence           String
-  nextExpectedDate  DateTime?
-  confidence        String    @default("med")
-  category          String    @default("other")
-  isIncluded        Boolean   @default(true)
-  isCritical        Boolean   @default(false)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id               String    @id @default(uuid())
+  companyId        String
+  direction        String
+  merchantKey      String
+  displayName      String
+  typicalAmount    Float
+  amountStdDev     Float     @default(0)
+  cadence          String
+  nextExpectedDate DateTime?
+  confidence       String    @default("med")
+  category         String    @default("other")
+  isIncluded       Boolean   @default(true)
+  isCritical       Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
@@ -282,13 +283,13 @@ model Override {
 
 // source: user_ui | command_box | system
 model ChangeLog {
-  id                      String   @id @default(uuid())
-  companyId               String
-  timestamp               DateTime @default(now())
-  source                  String
-  action                  String
-  inputText               String?
-  diffJson                String
+  id                       String   @id @default(uuid())
+  companyId                String
+  timestamp                DateTime @default(now())
+  source                   String
+  action                   String
+  inputText                String?
+  diffJson                 String
   forecastVersionHashAfter String
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -300,24 +301,24 @@ model ChangeLog {
 
 // zone: committed | pattern | uncertain
 model ForecastWeek {
-  id                String   @id @default(uuid())
-  companyId         String
-  weekStart         DateTime
-  weekEnd           DateTime
-  startCash         Float
-  inflowsExpected   Float
-  outflowsExpected  Float
-  endCashExpected   Float
-  inflowsBest       Float
-  outflowsBest      Float
-  endCashBest       Float
-  inflowsWorst      Float
-  outflowsWorst     Float
-  endCashWorst      Float
-  zone              String
-  confidenceScore   Int      @default(100)
-  breakdownJson     String?
-  computedAt        DateTime @default(now())
+  id                  String   @id @default(uuid())
+  companyId           String
+  weekStart           DateTime
+  weekEnd             DateTime
+  startCash           Float
+  inflowsExpected     Float
+  outflowsExpected    Float
+  endCashExpected     Float
+  inflowsBest         Float
+  outflowsBest        Float
+  endCashBest         Float
+  inflowsWorst        Float
+  outflowsWorst       Float
+  endCashWorst        Float
+  zone                String
+  confidenceScore     Int      @default(100)
+  breakdownJson       String?
+  computedAt          DateTime @default(now())
   forecastVersionHash String
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -334,36 +335,37 @@ model ForecastWeek {
 // impactCertainty: high | med | low
 // targetType: invoice | bill | assumption | cash | customer | vendor | recurring
 model ActionItem {
-  id                String   @id @default(uuid())
-  companyId         String
-  type              String
-  priority          String
-  title             String
-  description       String
-  amountImpact      Float
-  impactCertainty   String
+  id                  String    @id @default(uuid())
+  companyId           String
+  type                String
+  priority            String
+  title               String
+  description         String
+  amountImpact        Float
+  impactCertainty     String
   constraintWeekStart DateTime?
-  targetType        String
-  targetId          String?
-  reasoningJson     String
-  createdAt         DateTime @default(now())
+  targetType          String
+  targetId            String?
+  reasoningJson       String
+  createdAt           DateTime  @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
+
 // ────────────────────────────────────────────────
 // SCENARIO / WHAT-IF
 // ────────────────────────────────────────────────
 
 // direction: in | out
 model ScenarioItem {
-  id          String   @id @default(uuid())
-  companyId   String
-  label       String
-  direction   String   // "in" | "out"
-  weekNumber  Int
-  amount      Float
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(uuid())
+  companyId  String
+  label      String
+  direction  String // "in" | "out"
+  weekNumber Int
+  amount     Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
@@ -374,30 +376,30 @@ model ScenarioItem {
 
 // direction: inflow | outflow
 model CashFlowCategory {
-  id          String   @id @default(uuid())
-  companyId   String
-  name        String
-  direction   String
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  companyId String
+  name      String
+  direction String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  company Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   entries CashFlowEntry[]
 
   @@unique([companyId, name, direction])
 }
 
 model CashFlowEntry {
-  id           String    @id @default(uuid())
-  companyId    String
-  categoryId   String
-  label        String
-  amount       Float
-  weekNumber   Int
-  note         String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id         String   @id @default(uuid())
+  companyId  String
+  categoryId String
+  label      String
+  amount     Float
+  weekNumber Int
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   category CashFlowCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)

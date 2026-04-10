@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ClientShell } from "@/ui/ClientShell";
+import { ClerkProvider } from '@clerk/nextjs';
 
 const inter = Inter({
   variable: "--font-inter",
@@ -25,13 +26,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${inter.variable} ${geistMono.variable} antialiased paper-texture`}
-        suppressHydrationWarning
-      >
-        <ClientShell>{children}</ClientShell>
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en">
+        <body
+          className={`${inter.variable} ${geistMono.variable} antialiased paper-texture`}
+          suppressHydrationWarning
+        >
+          <ClientShell>{children}</ClientShell>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
