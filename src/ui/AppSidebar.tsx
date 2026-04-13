@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { UserButton, OrganizationSwitcher, useOrganizationList, useOrganization } from "@clerk/nextjs";
 import {
     Box, BarChart3, ListFilter, Repeat2, Layers, Settings2,
     ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft, Database, History
@@ -22,6 +23,18 @@ export function AppSidebar() {
     const [collapsed, setCollapsed] = useState(true);
     const [companyName, setCompanyName] = useState<string | null>(null);
     const [isDemo, setIsDemo] = useState(false);
+
+    // Clerk Org Auto-Selection
+    const { organization } = useOrganization();
+    const { isLoaded, setActive, userMemberships } = useOrganizationList({
+        userMemberships: { infinite: true },
+    });
+
+    useEffect(() => {
+        if (isLoaded && !organization && userMemberships.data?.length === 1 && setActive) {
+            setActive({ organization: userMemberships.data[0].organization.id });
+        }
+    }, [isLoaded, organization, userMemberships.data, setActive]);
 
     // Hydrate from localStorage
     useEffect(() => {
@@ -268,6 +281,13 @@ export function AppSidebar() {
                 )}
             </nav>
 
+            {/* User & Org Switcher (Clerk) */}
+            <div className={`p-3 border-t shrink-0 flex flex-col gap-3 transition-opacity duration-200 ${collapsed ? "items-center" : "items-start"}`} style={{ borderColor: "var(--border-subtle)" }}>
+                <div className={`flex items-center gap-3 w-full ${collapsed ? "justify-center" : "justify-between"}`}>
+                    <UserButton afterSignOutUrl="/sign-in" appearance={{ elements: { avatarBox: "w-8 h-8" } }} />
+                    {!collapsed && <OrganizationSwitcher appearance={{ elements: { rootBox: "flex-1" } }} hidePersonal />}
+                </div>
+            </div>
 
         </aside>
     );
