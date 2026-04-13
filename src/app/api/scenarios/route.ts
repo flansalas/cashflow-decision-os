@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
 import { v4 as uuidv4 } from "uuid";
 
+import { resolveTenant } from "@/lib/tenant";
+
 export async function GET(req: NextRequest) {
-    const companyId = req.nextUrl.searchParams.get("companyId");
+    const companyId = await resolveTenant(req);
     if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
 
     const items = await prisma.scenarioItem.findMany({

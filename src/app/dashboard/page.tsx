@@ -4,6 +4,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { useOrganization } from "@clerk/nextjs";
 import { HeaderTruthBar } from "@/ui/HeaderTruthBar";
 import { ForecastChart } from "@/ui/ForecastChart";
 import { ForecastRunwayView } from "@/ui/ForecastRunwayView";
@@ -166,6 +167,16 @@ function DashboardContent() {
         }
     }, [urlCompanyId]);
 
+    const { organization } = useOrganization();
+    
+    // When Clerk active org changes, forcefully unset the legacy local companyId
+    // to strictly allow the backend `resolveTenant` to serve the active org data.
+    useEffect(() => {
+        if (organization) {
+            setCompanyId(null); // Bypass local fallback so backend prioritizes orgId
+        }
+    }, [organization?.id]);
+
     const fetchDashboard = (cid?: string | null) => {
         const id = cid ?? companyId;
         const url = id ? `/api/dashboard?companyId=${id}` : "/api/dashboard";
@@ -217,9 +228,14 @@ function DashboardContent() {
     };
 
     useEffect(() => {
-        if (companyId !== null) fetchDashboard(companyId);
+        // If organization is loaded and selected, fetch without explicit companyId so backend uses orgId
+        if (organization) {
+            fetchDashboard(null);
+        } else if (companyId !== null) {
+            fetchDashboard(companyId);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [companyId]);
+    }, [companyId, organization?.id]);
 
     // Setup Wizard Listener
     useEffect(() => {

@@ -6,16 +6,16 @@ import {
     computeExpectedPaymentDate, parsePaymentCurve,
     type ForecastInvoice, type ForecastBill,
 } from "@/services/forecast";
+import { resolveTenant } from "@/lib/tenant";
 
 export async function GET(req: NextRequest) {
-    const companyId = req.nextUrl.searchParams.get("companyId");
+    const companyId = await resolveTenant(req);
 
     let company;
     if (companyId) {
         company = await prisma.company.findUnique({ where: { id: companyId } });
-    } else {
-        company = await prisma.company.findFirst({ where: { isDemo: true } });
     }
+
     if (!company) return NextResponse.json({ error: "Company not found" }, { status: 404 });
 
     const cid = company.id;
