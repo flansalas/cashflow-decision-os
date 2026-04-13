@@ -284,7 +284,7 @@ export function AppSidebar() {
             {/* User & Org Switcher (Clerk) */}
             <div className={`p-3 border-t shrink-0 flex flex-col gap-3 transition-opacity duration-200 ${collapsed ? "items-center" : "items-start"}`} style={{ borderColor: "var(--border-subtle)" }}>
                 <div className={`flex items-center gap-3 w-full ${collapsed ? "justify-center" : "justify-between"}`}>
-                    <UserButton afterSignOutUrl="/sign-in" appearance={{ elements: { avatarBox: "w-8 h-8" } }} />
+                    <UserButton appearance={{ elements: { avatarBox: "w-8 h-8" } }} />
                     {!collapsed && <OrganizationSwitcher appearance={{ elements: { rootBox: "flex-1" } }} hidePersonal />}
                 </div>
             </div>
