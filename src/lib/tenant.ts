@@ -14,29 +14,42 @@ export async function resolveTenant(req?: NextRequest): Promise<string | null> {
     try {
         // 1. Clerk SaaS Pilot Mode
         const { orgId, userId } = await auth();
-        console.log(`[resolveTenant] auth() call complete. userId: ${userId}, orgId: ${orgId}`);
+        console.log(`[resolveTenant] auth() call. userId: ${userId}, orgId: ${orgId}`);
+        
+        // If there IS an active Clerk org, we must strictly use it and never fall back.
         if (orgId) {
             const company = await prisma.company.findUnique({
                 where: { clerkOrgId: orgId },
                 select: { id: true, name: true }
             });
+            
             if (company) {
-                console.log(`[resolveTenant] Match found passing Cascio: DB ID = ${company.id}, Name = ${company.name}`);
+                console.log(`[resolveTenant] Match SUCCESS. Active Org: ${orgId} -> Company: ${company.name}`);
+                
+                // If a URL param was passed but an Active Org exists, we loudly ignore the URL param.
+                if (req?.nextUrl.searchParams.has("companyId")) {
+                    console.log(`[resolveTenant] IGNORING URL param ${req.nextUrl.searchParams.get("companyId")} because Clerk org is active.`);
+                }
+                
                 return company.id;
             } else {
-                console.log(`[resolveTenant] orgId ${orgId} found in Clerk session, but NO mapping found in Prisma database.`);
+                console.warn(`[resolveTenant] WARNING: Active orgId ${orgId} found, but NO mapping found in database! Blocking fallback to avoid data leaks.`);
+                // Return null to force a 404/Empty State rather than leaking another tenant's data via URL fallback.
+                return null;
             }
         }
     } catch (e) {
-        // auth() might throw if used improperly or outside of Next headers context, we catch to safely fallback
-        console.warn("[resolveTenant] Clerk auth() check failed, falling back to legacy manual tenant resolution.", e);
+        // auth() might throw if outside of headers context
+        console.warn("[resolveTenant] Clerk auth() check failed entirely.", e);
     }
 
-    // 2. Current Live Tester Mode (unauthenticated, trusting query params for now)
+    // 2. Current Live Tester Mode (NO active Clerk org, trusting query params for now)
     if (req) {
         const paramId = req.nextUrl.searchParams.get("companyId");
-        console.log(`[resolveTenant] Falling back to URL param companyId: ${paramId}`);
-        if (paramId) return paramId;
+        if (paramId) {
+            console.log(`[resolveTenant] NO active Clerk org. Honoring URL param companyId: ${paramId}`);
+            return paramId;
+        }
     }
 
     // 3. Fallback to the latest active company (as it worked previously)

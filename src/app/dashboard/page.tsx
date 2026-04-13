@@ -153,11 +153,17 @@ function DashboardContent() {
         return () => window.removeEventListener("scroll", handleScroll);
     }, [isScrolled]);
 
+    const { organization } = useOrganization();
+    
     // The effective companyId to pass to sub-components (resolved eagerly for the wizard guard)
-    const effectiveCompanyId = companyId ?? urlCompanyId ?? (typeof window !== "undefined" ? localStorage.getItem("cfdo_company_id") : null);
+    // If we have an active Organization, we NEVER pass the stale URL param or local state.
+    const effectiveCompanyId = organization 
+        ? data?.company.id ?? null 
+        : (companyId ?? urlCompanyId ?? (typeof window !== "undefined" ? localStorage.getItem("cfdo_company_id") : null));
 
     // Resolve companyId: URL param > localStorage > default (demo)
     useEffect(() => {
+        if (organization) return; // Ignore if clerk is active
         if (urlCompanyId) {
             localStorage.setItem("cfdo_company_id", urlCompanyId);
             setCompanyId(urlCompanyId);
@@ -165,15 +171,20 @@ function DashboardContent() {
             const saved = localStorage.getItem("cfdo_company_id");
             setCompanyId(saved ?? null);
         }
-    }, [urlCompanyId]);
+    }, [urlCompanyId, organization]);
 
-    const { organization } = useOrganization();
-    
     // When Clerk active org changes, forcefully unset the legacy local companyId
     // to strictly allow the backend `resolveTenant` to serve the active org data.
     useEffect(() => {
         if (organization) {
             setCompanyId(null); // Bypass local fallback so backend prioritizes orgId
+            
+            // Clean up the URL if there's a stale companyId
+            if (window.location.search.includes('companyId=')) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('companyId');
+                window.history.replaceState({}, '', url.toString());
+            }
         }
     }, [organization?.id]);
 
