@@ -1,18 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/db/prisma";
+import { resolveTenant } from "@/lib/tenant";
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q")?.trim() || "";
-    // Note: in a real app, companyId should come from the session or request. 
-    // We'll use the one from query param or fallback to the first active one, just like other APIs here.
-    let companyId = searchParams.get("companyId");
 
-    if (!companyId) {
-        const firstCo = await prisma.company.findFirst({ select: { id: true } });
-        if (!firstCo) return NextResponse.json({ results: [] });
-        companyId = firstCo.id;
-    }
+    const companyId = await resolveTenant(req);
+    if (!companyId) return NextResponse.json({ results: [] });
 
     if (!q || q.length < 2) {
         return NextResponse.json({ results: [] });

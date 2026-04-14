@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
+import { resolveTenant } from "@/lib/tenant";
 import {
     computeExpectedPaymentDate,
     parsePaymentCurve,
@@ -14,8 +15,8 @@ import {
 } from "@/services/forecast";
 
 export async function GET(req: NextRequest) {
-    const companyId = req.nextUrl.searchParams.get("companyId");
-    if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    const companyId = await resolveTenant(req);
+    if (!companyId) return NextResponse.json({ error: "Company not found" }, { status: 404 });
 
     const today = new Date();
 

@@ -3,13 +3,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
+import { resolveTenant } from "@/lib/tenant";
 
 export async function GET(req: NextRequest) {
-    const companyId = req.nextUrl.searchParams.get("companyId");
-    const type = req.nextUrl.searchParams.get("type")?.toLowerCase(); // "ar" or "ap"
+    const companyId = await resolveTenant(req);
+    const type = req.nextUrl.searchParams.get("type")?.toLowerCase();
 
     if (!companyId || !type) {
-        return NextResponse.json({ error: "Missing companyId or type" }, { status: 400 });
+        return NextResponse.json({ error: "Missing tenant or type" }, { status: 400 });
     }
     if (type !== "ar" && type !== "ap") {
         return NextResponse.json({ error: 'type must be "ar" or "ap"' }, { status: 400 });
