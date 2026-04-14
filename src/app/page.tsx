@@ -48,11 +48,8 @@ function AuthenticatedHomepage() {
   useEffect(() => {
     if (!isOrgLoaded) return;
     if (organization) {
-      console.log(`[LandingPage][auth] Active org: "${organization.name}" (${organization.id}). Redirecting to /dashboard (no companyId).`);
       localStorage.removeItem("cfdo_company_id");
       router.replace("/dashboard");
-    } else {
-      console.log("[LandingPage][auth] Signed in but no active org yet. Waiting for org selection.");
     }
   }, [isOrgLoaded, organization, router]);
 
@@ -87,7 +84,6 @@ function AuthenticatedHomepage() {
         </div>
         <button
           onClick={() => {
-            console.log("[LandingPage][auth] No-org user manually navigating to /dashboard.");
             router.push("/dashboard");
           }}
           className="w-full py-3.5 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-[8px] transition-colors border border-emerald-500 text-base flex items-center justify-center gap-2"
@@ -113,7 +109,6 @@ function AnonymousHomepage() {
       ? `/api/company/status?companyId=${savedId}`
       : `/api/company/status`;
 
-    console.log(`[LandingPage][anon] Loading company status. savedId=${savedId}`);
     fetch(url)
       .then(r => r.json())
       .then((s: CompanyStatus) => {
@@ -157,7 +152,6 @@ function AnonymousHomepage() {
         {isCompleted ? (
           <button
             onClick={() => {
-              console.log(`[LandingPage][anon] Go to Dashboard clicked. companyId=${status!.companyId}`);
               router.push(`/dashboard?companyId=${status!.companyId}`);
             }}
             className="w-full py-3.5 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-[8px] transition-colors border border-emerald-500 text-base flex flex-col items-center justify-center gap-1"
@@ -226,7 +220,6 @@ export default function LandingPage() {
 
   // While Clerk is initializing, show nothing (avoids flash of anonymous UI for signed-in users)
   if (!isAuthLoaded) {
-    console.log("[LandingPage] Clerk not yet loaded. Holding render.");
     return (
       <PageShell>
         <div className="flex justify-center">
@@ -236,7 +229,6 @@ export default function LandingPage() {
     );
   }
 
-  console.log(`[LandingPage] Clerk loaded. isSignedIn=${isSignedIn}. Choosing mode.`);
 
   // Hard split: never allow authenticated state to bleed into anonymous mode or vice versa
   if (isSignedIn) {

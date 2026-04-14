@@ -239,26 +239,17 @@ function DashboardContent() {
     };
 
     useEffect(() => {
-        // Guard: Wait for Clerk to be fully loaded
+        // Guard: Wait for Clerk to be fully loaded before any fetch
         if (!isAuthLoaded || !isOrgLoaded) return;
 
         if (isSignedIn) {
             if (organization) {
-                console.log(`[Dashboard][client] CASE-C: isSignedIn=true, org="${organization.name}" (${organization.id}). Fetching /api/dashboard with no companyId.`);
-                fetchDashboard(null);
-            } else {
-                // Signed in but org not active yet — AppSidebar will call setActive shortly
-                console.log(`[Dashboard][client] CASE-B: isSignedIn=true, org=null. Waiting for org activation. Dashboard will NOT fetch yet.`);
+                fetchDashboard(null); // Org is active — backend uses Clerk orgId
             }
+            // Signed in but org not active yet — AppSidebar setActive will re-trigger this effect
         } else {
             // Unauthenticated / ghost layer
-            if (companyId !== null) {
-                console.log(`[Dashboard][client] CASE-A: isSignedIn=false. Fetching with legacy companyId=${companyId}.`);
-                fetchDashboard(companyId);
-            } else {
-                console.log(`[Dashboard][client] CASE-A: isSignedIn=false, no companyId. Fetching /api/dashboard with no params (will hit fallback).`);
-                fetchDashboard(null);
-            }
+            fetchDashboard(companyId !== null ? companyId : null);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAuthLoaded, isOrgLoaded, isSignedIn, companyId, organization?.id]);
