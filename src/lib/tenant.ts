@@ -36,6 +36,19 @@ export async function resolveTenant(req?: NextRequest): Promise<string | null> {
 
     // ── CASE C: org present — strict lookup, never fall back ──────────────────
     if (orgId) {
+        // Print the EXACT raw orgId so we can spot any hidden character issues
+        console.log(`[resolveTenant][${path}] CASE-C RAW orgId="${orgId}" len=${orgId.length} hex=${Buffer.from(orgId).toString('hex').slice(0,20)}`);
+
+        // Also dump all clerkOrgIds currently in the DB for comparison
+        const allCompanies = await prisma.company.findMany({
+            select: { id: true, name: true, clerkOrgId: true }
+        });
+        for (const c of allCompanies) {
+            const stored = c.clerkOrgId ?? "(null)";
+            const match = stored === orgId;
+            console.log(`[resolveTenant][${path}] DB row: "${c.name}" clerkOrgId="${stored}" len=${stored.length} match=${match}`);
+        }
+
         const company = await prisma.company.findUnique({
             where: { clerkOrgId: orgId },
             select: { id: true, name: true }
