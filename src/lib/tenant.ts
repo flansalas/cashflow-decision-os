@@ -36,45 +36,54 @@ export async function resolveTenant(req?: NextRequest): Promise<string | null> {
 
     // ── CASE C: org present — strict lookup, never fall back ──────────────────
     if (orgId) {
-        // Print the EXACT raw orgId so we can spot any hidden character issues
-        console.log(`[resolveTenant][${path}] CASE-C RAW orgId="${orgId}" len=${orgId.length} hex=${Buffer.from(orgId).toString('hex').slice(0,20)}`);
+        // Log the DB host so we can confirm which database is being hit
+        const dbUrl = process.env.DATABASE_URL ?? "";
+        const dbHost = dbUrl.match(/@([^/?]+)/)?.[1] ?? "(unknown)";
+        console.log(`SERVER_ORG_ID=${orgId}`);
+        console.log(`SERVER_ORG_ID_LEN=${orgId.length}`);
+        console.log(`DB_HOST=${dbHost}`);
 
-        // Also dump all clerkOrgIds currently in the DB for comparison
+        // Dump all non-null clerkOrgIds from the DB as individual log lines
         const allCompanies = await prisma.company.findMany({
+            where: { clerkOrgId: { not: null } },
             select: { id: true, name: true, clerkOrgId: true }
         });
+        console.log(`DB_COMPANY_COUNT_WITH_ORG=${allCompanies.length}`);
         for (const c of allCompanies) {
-            const stored = c.clerkOrgId ?? "(null)";
-            const match = stored === orgId;
-            console.log(`[resolveTenant][${path}] DB row: "${c.name}" clerkOrgId="${stored}" len=${stored.length} match=${match}`);
+            const stored = c.clerkOrgId ?? "";
+            console.log(`DB_COMPANY_NAME=${c.name}`);
+            console.log(`DB_CLERK_ORG_ID=${stored}`);
+            console.log(`DB_COMPANY_ID=${c.id}`);
+            console.log(`MATCH_EXACT=${stored === orgId}`);
+            console.log(`MATCH_TRIMMED=${stored.trim() === orgId.trim()}`);
         }
 
-        // Primary: findUnique (requires @unique index on the field)
+        // Primary lookup
         const byUnique = await prisma.company.findUnique({
             where: { clerkOrgId: orgId },
             select: { id: true, name: true }
         });
-        console.log(`[resolveTenant][${path}] findUnique result: ${byUnique ? `"${byUnique.name}" id=${byUnique.id}` : "null"}`);
+        console.log(`FIND_UNIQUE_RESULT=${byUnique ? byUnique.name : "null"}`);
 
         if (byUnique) {
-            console.log(`[resolveTenant][${path}] CASE-C SUCCESS via findUnique -> "${byUnique.name}"`);
+            console.log(`[resolveTenant] CASE-C SUCCESS via findUnique -> ${byUnique.name}`);
             return byUnique.id;
         }
 
-        // Fallback: findFirst — tests whether the query method itself is the issue
+        // Fallback lookup
         const byFirst = await prisma.company.findFirst({
             where: { clerkOrgId: orgId },
             select: { id: true, name: true }
         });
-        console.log(`[resolveTenant][${path}] findFirst result: ${byFirst ? `"${byFirst.name}" id=${byFirst.id}` : "null"}`);
+        console.log(`FIND_FIRST_RESULT=${byFirst ? byFirst.name : "null"}`);
 
         if (byFirst) {
-            console.log(`[resolveTenant][${path}] CASE-C SUCCESS via findFirst (findUnique returned null — likely Prisma adapter/cache issue)`);
+            console.log(`[resolveTenant] CASE-C SUCCESS via findFirst -> ${byFirst.name}`);
             return byFirst.id;
         }
 
-        console.error(`[resolveTenant][${path}] CASE-C FAIL: BOTH findUnique and findFirst returned null for orgId=${orgId}. Returning null.`);
-        return null; // Hard stop — never leak another tenant's data
+        console.log(`CASE_C_FINAL=FAIL_BOTH_NULL`);
+        return null;
     }
 
     // ── CASE A/B fallback: no org on session — use URL param if present ───────
