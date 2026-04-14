@@ -49,17 +49,32 @@ export async function resolveTenant(req?: NextRequest): Promise<string | null> {
             console.log(`[resolveTenant][${path}] DB row: "${c.name}" clerkOrgId="${stored}" len=${stored.length} match=${match}`);
         }
 
-        const company = await prisma.company.findUnique({
+        // Primary: findUnique (requires @unique index on the field)
+        const byUnique = await prisma.company.findUnique({
             where: { clerkOrgId: orgId },
             select: { id: true, name: true }
         });
-        if (company) {
-            console.log(`[resolveTenant][${path}] CASE-C SUCCESS: orgId=${orgId} -> "${company.name}" (id=${company.id})`);
-            return company.id;
-        } else {
-            console.error(`[resolveTenant][${path}] CASE-C FAIL: orgId=${orgId} found in session, NO company row with that clerkOrgId. Returning null (no data leak).`);
-            return null; // Hard stop — never leak another tenant's data
+        console.log(`[resolveTenant][${path}] findUnique result: ${byUnique ? `"${byUnique.name}" id=${byUnique.id}` : "null"}`);
+
+        if (byUnique) {
+            console.log(`[resolveTenant][${path}] CASE-C SUCCESS via findUnique -> "${byUnique.name}"`);
+            return byUnique.id;
         }
+
+        // Fallback: findFirst — tests whether the query method itself is the issue
+        const byFirst = await prisma.company.findFirst({
+            where: { clerkOrgId: orgId },
+            select: { id: true, name: true }
+        });
+        console.log(`[resolveTenant][${path}] findFirst result: ${byFirst ? `"${byFirst.name}" id=${byFirst.id}` : "null"}`);
+
+        if (byFirst) {
+            console.log(`[resolveTenant][${path}] CASE-C SUCCESS via findFirst (findUnique returned null — likely Prisma adapter/cache issue)`);
+            return byFirst.id;
+        }
+
+        console.error(`[resolveTenant][${path}] CASE-C FAIL: BOTH findUnique and findFirst returned null for orgId=${orgId}. Returning null.`);
+        return null; // Hard stop — never leak another tenant's data
     }
 
     // ── CASE A/B fallback: no org on session — use URL param if present ───────
