@@ -506,6 +506,7 @@ function CashAdjustmentsContent() {
     const [categories, setCategories] = useState<CashFlowCategory[]>([]);
     const [weeks, setWeeks] = useState<ForecastWeek[]>([]);
     const [bufferMin, setBufferMin] = useState(10000);
+    const [resolvedCompanyId, setResolvedCompanyId] = useState<string>("");
     const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -527,7 +528,12 @@ function CashAdjustmentsContent() {
             ]);
             const cats = await catRes.json();
             const dash = await dashRes.json();
-            if (Array.isArray(cats)) setCategories(cats);
+            if (Array.isArray(cats)) {
+                setCategories(cats);
+                // Capture the resolved company ID from any returned category (or from legacy param)
+                if (cats.length > 0) setResolvedCompanyId(cats[0].companyId);
+                else if (legacyCompanyId) setResolvedCompanyId(legacyCompanyId);
+            }
             if (dash.forecast?.weeks) setWeeks(dash.forecast.weeks);
             if (dash.assumptions?.bufferMin) setBufferMin(dash.assumptions.bufferMin);
             setError(null);
@@ -631,7 +637,7 @@ function CashAdjustmentsContent() {
                             <CategoryCard
                                 key={cat.id}
                                 category={cat}
-                                companyId={companyId ?? ""}
+                                companyId={resolvedCompanyId}
                                 weeks={weeks}
                                 isHighlighted={highlightCategory === cat.id}
                                 highlightWeek={highlightCategory === cat.id ? highlightWeek : null}
@@ -643,7 +649,7 @@ function CashAdjustmentsContent() {
  
                     <AddCategoryForm
                         direction={activeDirection}
-                        companyId={companyId ?? ""}
+                        companyId={resolvedCompanyId}
                         onCreated={(id) => {
                             setLastCreatedId(id);
                             fetchData();
