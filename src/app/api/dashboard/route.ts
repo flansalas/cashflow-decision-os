@@ -9,9 +9,25 @@ import { generateActions } from "@/services/actions";
 import { computeBaseline, type BankTxForBaseline, type RecurringPatternForBaseline } from "@/services/baseline";
 import { computeExpectedPaymentDate, parsePaymentCurve, getMonday, addDays } from "@/services/forecast";
 import { resolveTenant } from "@/lib/tenant";
+import { auth } from "@clerk/nextjs/server";
 
 export async function GET(req: NextRequest) {
     try {
+        // ── Direct auth log — independent of resolveTenant ─────────────────────
+        // This fires before any fallback logic so we get the raw server-side view.
+        try {
+            const { userId, orgId } = await auth();
+            if (!userId && !orgId) {
+                console.log(`[api/dashboard] CASE-A: Server sees userId=null orgId=null (unauthenticated request)`);
+            } else if (userId && !orgId) {
+                console.log(`[api/dashboard] CASE-B: Server sees userId=${userId} orgId=null (signed in, JWT has no org yet)`);
+            } else {
+                console.log(`[api/dashboard] CASE-C: Server sees userId=${userId} orgId=${orgId}`);
+            }
+        } catch {
+            console.log(`[api/dashboard] CASE-A: auth() threw on this request`);
+        }
+
         const tenantId = await resolveTenant(req);
         let company = null;
         
@@ -20,6 +36,7 @@ export async function GET(req: NextRequest) {
         }
 
         if (!company) {
+            console.log(`[api/dashboard] Company not found. tenantId=${tenantId}`);
             return NextResponse.json({ error: "Company not found" }, { status: 404 });
         }
 
