@@ -1,16 +1,17 @@
-// API: GET /api/cash-categories?companyId=xxx  — List all categories
-// API: POST /api/cash-categories                — Create a new category
+// API: GET /api/cash-categories  — List all categories for the active tenant
+// API: POST /api/cash-categories  — Create a new category
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
+import { resolveTenant } from "@/lib/tenant";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(req: NextRequest) {
-    const companyId = req.nextUrl.searchParams.get("companyId");
-    if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Company not found" }, { status: 404 });
 
     const categories = await prisma.cashFlowCategory.findMany({
-        where: { companyId },
+        where: { companyId: tenantId },
         include: { entries: true },
         orderBy: [{ direction: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
     });

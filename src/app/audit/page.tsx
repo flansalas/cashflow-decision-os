@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { useAuth, useOrganization } from "@clerk/nextjs";
 import { History, ArrowLeft, RefreshCw, Layers, AlertCircle, FileJson } from "lucide-react";
 
 interface ChangeLog {
@@ -15,7 +16,10 @@ interface ChangeLog {
 
 function AuditLogContent() {
     const searchParams = useSearchParams();
-    const companyId = searchParams.get("companyId") ?? (typeof window !== "undefined" ? localStorage.getItem("cfdo_company_id") : null);
+    const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
+    const { isLoaded: isOrgLoaded, organization } = useOrganization();
+    // Only fall back to URL param for unauthenticated (legacy) mode
+    const legacyCompanyId = (!isSignedIn && searchParams.get("companyId")) || null;
 
     const [logs, setLogs] = useState<ChangeLog[]>([]);
     const [loading, setLoading] = useState(true);
@@ -24,22 +28,29 @@ function AuditLogContent() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/audit${companyId ? `?companyId=${companyId}` : ""}`);
+            // Authenticated: no companyId param — resolveTenant uses Clerk orgId
+            // Unauthenticated: pass legacyCompanyId if available
+            const url = (isSignedIn && organization)
+                ? "/api/audit"
+                : `/api/audit${legacyCompanyId ? `?companyId=${legacyCompanyId}` : ""}`;
+            const res = await fetch(url);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Failed to load");
             setLogs(data);
             setError(null);
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : "Failed to load");
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
+        if (!isAuthLoaded || !isOrgLoaded) return;
+        if (isSignedIn && !organization) return; // wait for org activation
         fetchData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [companyId]);
+    }, [isAuthLoaded, isOrgLoaded, isSignedIn, organization?.id, legacyCompanyId]);
 
     const formatAction = (action: string) => {
         if (!action) return 'Unknown Action';

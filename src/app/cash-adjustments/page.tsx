@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { useAuth, useOrganization } from "@clerk/nextjs";
 import {
     ArrowLeft, Plus, Pencil, Trash2, X, AlertTriangle, RefreshCw,
     TrendingUp, TrendingDown, BarChart3, ChevronDown, ChevronRight,
@@ -496,7 +497,11 @@ function CashAdjustmentsContent() {
     const directionParam = searchParams.get("direction") as "in" | "out" | null;
     const highlightWeek = searchParams.get("highlightWeek") ? Number(searchParams.get("highlightWeek")) : null;
     const highlightCategory = searchParams.get("highlightCategory");
-    const companyId = searchParams.get("companyId") ?? (typeof window !== "undefined" ? localStorage.getItem("cfdo_company_id") : null);
+
+    const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
+    const { isLoaded: isOrgLoaded, organization } = useOrganization();
+    // Only use legacy companyId for unauthenticated mode
+    const legacyCompanyId = (!isSignedIn && (searchParams.get("companyId") ?? (typeof window !== "undefined" ? localStorage.getItem("cfdo_company_id") : null))) || null;
 
     const [categories, setCategories] = useState<CashFlowCategory[]>([]);
     const [weeks, setWeeks] = useState<ForecastWeek[]>([]);
@@ -509,12 +514,16 @@ function CashAdjustmentsContent() {
     );
 
     const fetchData = useCallback(async () => {
-        if (!companyId) return;
         setLoading(true);
         try {
+            // Authenticated with active org: no companyId — backend uses Clerk orgId
+            // Legacy/unauthenticated: pass legacyCompanyId
+            const q = (isSignedIn && organization) ? "" : (legacyCompanyId ? `?companyId=${legacyCompanyId}` : "");
+            if (!isSignedIn && !legacyCompanyId) { setLoading(false); return; }
+
             const [catRes, dashRes] = await Promise.all([
-                fetch(`/api/cash-categories?companyId=${companyId}`),
-                fetch(`/api/dashboard?companyId=${companyId}`),
+                fetch(`/api/cash-categories${q}`),
+                fetch(`/api/dashboard${q}`),
             ]);
             const cats = await catRes.json();
             const dash = await dashRes.json();
@@ -524,9 +533,13 @@ function CashAdjustmentsContent() {
             setError(null);
         } catch { setError("Failed to load data"); }
         finally { setLoading(false); }
-    }, [companyId]);
+    }, [isSignedIn, organization, legacyCompanyId]);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => {
+        if (!isAuthLoaded || !isOrgLoaded) return;
+        if (isSignedIn && !organization) return; // wait for org activation
+        fetchData();
+    }, [isAuthLoaded, isOrgLoaded, isSignedIn, organization?.id, fetchData]);
 
     if (loading) {
         return (

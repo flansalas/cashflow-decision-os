@@ -1,25 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
+import { resolveTenant } from "@/lib/tenant";
 
 export async function GET(req: NextRequest) {
-    const companyId = req.nextUrl.searchParams.get("companyId");
-
     try {
-        let company;
-        if (companyId) {
-            company = await prisma.company.findUnique({ where: { id: companyId } });
-        } else {
-            company = await prisma.company.findFirst({ where: { isDemo: true } });
-        }
-
-        if (!company) {
+        const tenantId = await resolveTenant(req);
+        if (!tenantId) {
             return NextResponse.json({ error: "Company not found" }, { status: 404 });
         }
 
         const logs = await prisma.changeLog.findMany({
-            where: { companyId: company.id },
+            where: { companyId: tenantId },
             orderBy: { timestamp: "desc" },
-            take: 100, // Limit to recent 100 for performance
+            take: 100,
         });
 
         return NextResponse.json(logs);
