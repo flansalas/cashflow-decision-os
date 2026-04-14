@@ -11,52 +11,58 @@ import prisma from "@/db/prisma";
  * 3. Falls back to the most recent non-demo company (Ultimate Fallback)
  */
 export async function resolveTenant(req?: NextRequest): Promise<string | null> {
+    const path = req?.nextUrl.pathname ?? "(no-req)";
+
+    let userId: string | null = null;
+    let orgId: string | null = null;
+
     try {
-        // 1. Clerk SaaS Pilot Mode
-        const { orgId, userId } = await auth();
-        console.log(`[resolveTenant] auth() call. userId: ${userId}, orgId: ${orgId}`);
-        
-        // If there IS an active Clerk org, we must strictly use it and never fall back.
-        if (orgId) {
-            const company = await prisma.company.findUnique({
-                where: { clerkOrgId: orgId },
-                select: { id: true, name: true }
-            });
-            
-            if (company) {
-                console.log(`[resolveTenant] Match SUCCESS. Active Org: ${orgId} -> Company: ${company.name}`);
-                
-                // If a URL param was passed but an Active Org exists, we loudly ignore the URL param.
-                if (req?.nextUrl.searchParams.has("companyId")) {
-                    console.log(`[resolveTenant] IGNORING URL param ${req.nextUrl.searchParams.get("companyId")} because Clerk org is active.`);
-                }
-                
-                return company.id;
-            } else {
-                console.warn(`[resolveTenant] WARNING: Active orgId ${orgId} found, but NO mapping found in database! Blocking fallback to avoid data leaks.`);
-                // Return null to force a 404/Empty State rather than leaking another tenant's data via URL fallback.
-                return null;
-            }
-        }
+        const auth_result = await auth();
+        userId = auth_result.userId;
+        orgId = auth_result.orgId;
     } catch (e) {
-        // auth() might throw if outside of headers context
-        console.warn("[resolveTenant] Clerk auth() check failed entirely.", e);
+        console.error(`[resolveTenant][${path}] CASE-A: auth() threw — session completely unreadable.`, e);
+        // Fall through to URL param / fallback
     }
 
-    // 2. Current Live Tester Mode (NO active Clerk org, trusting query params for now)
+    // ── Classify the request immediately ──────────────────────────────────────
+    if (!userId && !orgId) {
+        console.log(`[resolveTenant][${path}] CASE-A userId=null orgId=null — unauthenticated request`);
+    } else if (userId && !orgId) {
+        console.log(`[resolveTenant][${path}] CASE-B userId=${userId} orgId=null — signed in but NO active org on session token`);
+    } else if (userId && orgId) {
+        console.log(`[resolveTenant][${path}] CASE-C userId=${userId} orgId=${orgId} — fully authenticated with org`);
+    }
+
+    // ── CASE C: org present — strict lookup, never fall back ──────────────────
+    if (orgId) {
+        const company = await prisma.company.findUnique({
+            where: { clerkOrgId: orgId },
+            select: { id: true, name: true }
+        });
+        if (company) {
+            console.log(`[resolveTenant][${path}] CASE-C SUCCESS: orgId=${orgId} -> "${company.name}" (id=${company.id})`);
+            return company.id;
+        } else {
+            console.error(`[resolveTenant][${path}] CASE-C FAIL: orgId=${orgId} found in session, NO company row with that clerkOrgId. Returning null (no data leak).`);
+            return null; // Hard stop — never leak another tenant's data
+        }
+    }
+
+    // ── CASE A/B fallback: no org on session — use URL param if present ───────
     if (req) {
         const paramId = req.nextUrl.searchParams.get("companyId");
         if (paramId) {
-            console.log(`[resolveTenant] NO active Clerk org. Honoring URL param companyId: ${paramId}`);
+            console.log(`[resolveTenant][${path}] CASE-${userId ? "B" : "A"} FALLBACK: no org on session, using URL param companyId=${paramId}`);
             return paramId;
         }
     }
 
-    // 3. Fallback to the latest active company (as it worked previously)
+    // ── Ultimate fallback (no URL param either) ────────────────────────────────
     const fallbackCompany = await prisma.company.findFirst({
         where: { isDemo: false },
         orderBy: { createdAt: "desc" },
     });
-
+    console.log(`[resolveTenant][${path}] CASE-${userId ? "B" : "A"} ULTIMATE FALLBACK: returning company "${fallbackCompany?.name}" (id=${fallbackCompany?.id})`);
     return fallbackCompany?.id ?? null;
 }

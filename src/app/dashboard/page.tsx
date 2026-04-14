@@ -242,17 +242,22 @@ function DashboardContent() {
         // Guard: Wait for Clerk to be fully loaded
         if (!isAuthLoaded || !isOrgLoaded) return;
 
-        // If the user is signed in, ONLY fetch the dashboard once the organization is fully established.
-        // (AppSidebar will auto-select the organization if they have exactly one membership)
         if (isSignedIn) {
             if (organization) {
-                fetchDashboard(null); // Fetch securely without URL params
+                console.log(`[Dashboard][client] CASE-C: isSignedIn=true, org="${organization.name}" (${organization.id}). Fetching /api/dashboard with no companyId.`);
+                fetchDashboard(null);
+            } else {
+                // Signed in but org not active yet — AppSidebar will call setActive shortly
+                console.log(`[Dashboard][client] CASE-B: isSignedIn=true, org=null. Waiting for org activation. Dashboard will NOT fetch yet.`);
             }
-            // If they are signed in but haven't selected an org yet, we wait.
         } else {
-            // Unauthenticated user (ghost layer)
+            // Unauthenticated / ghost layer
             if (companyId !== null) {
+                console.log(`[Dashboard][client] CASE-A: isSignedIn=false. Fetching with legacy companyId=${companyId}.`);
                 fetchDashboard(companyId);
+            } else {
+                console.log(`[Dashboard][client] CASE-A: isSignedIn=false, no companyId. Fetching /api/dashboard with no params (will hit fallback).`);
+                fetchDashboard(null);
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
