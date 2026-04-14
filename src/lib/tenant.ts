@@ -18,8 +18,8 @@ export async function resolveTenant(req?: NextRequest): Promise<string | null> {
 
     try {
         const auth_result = await auth();
-        userId = auth_result.userId;
-        orgId = auth_result.orgId;
+        userId = auth_result.userId ?? null;
+        orgId = auth_result.orgId ?? null;
     } catch (e) {
         console.error(`[resolveTenant][${path}] CASE-A: auth() threw — session completely unreadable.`, e);
         // Fall through to URL param / fallback
