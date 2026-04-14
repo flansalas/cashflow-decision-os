@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth, useOrganization } from "@clerk/nextjs";
 import { OnboardingWizard } from "@/ui/OnboardingWizard";
 import { BarChart3, Settings, Play, CornerDownLeft, Wallet } from "lucide-react";
 
@@ -16,24 +17,43 @@ export default function LandingPage() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [checking, setChecking] = useState(true);
 
+  // Clerk state — must be fully loaded before we do anything
+  const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
+  const { isLoaded: isOrgLoaded, organization } = useOrganization();
+
   useEffect(() => {
+    // Wait for Clerk to fully initialize before calling any API
+    if (!isAuthLoaded || !isOrgLoaded) return;
+
+    // If the user is signed in and has an active org, skip legacy bootstrap entirely.
+    // Route them straight to /dashboard — resolveTenant will use their Clerk org.
+    if (isSignedIn && organization) {
+      console.log(`[LandingPage] Authenticated user with active org "${organization.name}". Routing to /dashboard (no companyId param).`);
+      // Hard-clear any stale legacy company state so it can't interfere
+      localStorage.removeItem("cfdo_company_id");
+      router.replace("/dashboard");
+      return;
+    }
+
+    // Unauthenticated / no org: legacy bootstrap path
     const savedId = localStorage.getItem("cfdo_company_id");
     const url = savedId
       ? `/api/company/status?companyId=${savedId}`
       : `/api/company/status`;
 
+    console.log(`[LandingPage] Unauthenticated path. Fetching company status. savedId=${savedId}`);
     fetch(url)
       .then(r => r.json())
       .then((s: CompanyStatus) => {
         setStatus(s);
-        // If they have an incomplete onboarding, update localStorage if needed
+        // Sync localStorage if the API returned a different (newer) companyId
         if (s.exists && savedId !== s.companyId) {
           localStorage.setItem("cfdo_company_id", s.companyId);
         }
       })
       .catch(() => setStatus({ exists: false }))
       .finally(() => setChecking(false));
-  }, []);
+  }, [isAuthLoaded, isOrgLoaded, isSignedIn, organization]);
 
   const handleUseMyData = () => {
     setWizardOpen(true);
@@ -91,7 +111,14 @@ export default function LandingPage() {
           {/* Primary: go straight to dashboard if company already completed */}
           {isCompleted ? (
             <button
-              onClick={() => router.push(`/dashboard?companyId=${status!.companyId}`)}
+              onClick={() => {
+                // If authenticated with an active org, NEVER pass companyId — let resolveTenant use the Clerk org
+                if (isSignedIn && organization) {
+                  router.push("/dashboard");
+                } else {
+                  router.push(`/dashboard?companyId=${status!.companyId}`);
+                }
+              }}
               className="w-full py-3.5 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-[8px] transition-colors border border-emerald-500 text-base flex flex-col items-center justify-center gap-1"
             >
               <span className="flex items-center gap-2">
