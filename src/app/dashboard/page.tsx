@@ -1,10 +1,9 @@
 // Dashboard page component – renders the Survival Dashboard
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
-import { useOrganization } from "@clerk/nextjs";
+import { useOrganization, useAuth } from "@clerk/nextjs";
 import { HeaderTruthBar } from "@/ui/HeaderTruthBar";
 import { ForecastChart } from "@/ui/ForecastChart";
 import { ForecastRunwayView } from "@/ui/ForecastRunwayView";
@@ -153,7 +152,8 @@ function DashboardContent() {
         return () => window.removeEventListener("scroll", handleScroll);
     }, [isScrolled]);
 
-    const { organization } = useOrganization();
+    const { isLoaded: isOrgLoaded, organization } = useOrganization();
+    const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
     
     // The effective companyId to pass to sub-components (resolved eagerly for the wizard guard)
     // If we have an active Organization, we NEVER pass the stale URL param or local state.
@@ -239,14 +239,24 @@ function DashboardContent() {
     };
 
     useEffect(() => {
-        // If organization is loaded and selected, fetch without explicit companyId so backend uses orgId
-        if (organization) {
-            fetchDashboard(null);
-        } else if (companyId !== null) {
-            fetchDashboard(companyId);
+        // Guard: Wait for Clerk to be fully loaded
+        if (!isAuthLoaded || !isOrgLoaded) return;
+
+        // If the user is signed in, ONLY fetch the dashboard once the organization is fully established.
+        // (AppSidebar will auto-select the organization if they have exactly one membership)
+        if (isSignedIn) {
+            if (organization) {
+                fetchDashboard(null); // Fetch securely without URL params
+            }
+            // If they are signed in but haven't selected an org yet, we wait.
+        } else {
+            // Unauthenticated user (ghost layer)
+            if (companyId !== null) {
+                fetchDashboard(companyId);
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [companyId, organization?.id]);
+    }, [isAuthLoaded, isOrgLoaded, isSignedIn, companyId, organization?.id]);
 
     // Setup Wizard Listener
     useEffect(() => {
