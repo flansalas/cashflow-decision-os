@@ -96,7 +96,8 @@ function AuthenticatedHomepage() {
 }
 
 // ─── Anonymous mode ────────────────────────────────────────────────────────────
-// Only renders when Clerk confirms user is NOT signed in. Full legacy Pilot/demo behavior.
+// Only renders when Clerk confirms user is NOT signed in.
+// SECURITY: Never resolves tenant state for visitors without an explicit companyId.
 function AnonymousHomepage() {
   const router = useRouter();
   const [status, setStatus] = useState<CompanyStatus | null>(null);
@@ -104,12 +105,15 @@ function AnonymousHomepage() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    // Only check status if the user previously saved a companyId in this browser.
+    // Never fall back to "most recent company" — that leaks real tenant names to strangers.
     const savedId = localStorage.getItem("cfdo_company_id");
-    const url = savedId
-      ? `/api/company/status?companyId=${savedId}`
-      : `/api/company/status`;
+    if (!savedId) {
+      setChecking(false);
+      return;
+    }
 
-    fetch(url)
+    fetch(`/api/company/status?companyId=${savedId}`)
       .then(r => r.json())
       .then((s: CompanyStatus) => {
         setStatus(s);
@@ -213,6 +217,7 @@ function AnonymousHomepage() {
     </PageShell>
   );
 }
+
 
 // ─── Root — gates on Clerk load state, then picks mode ────────────────────────
 export default function LandingPage() {

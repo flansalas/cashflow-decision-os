@@ -31,10 +31,34 @@ export function AppSidebar() {
     });
 
     useEffect(() => {
-        if (isLoaded && !organization && userMemberships.data?.length === 1 && setActive) {
-            setActive({ organization: userMemberships.data[0].organization.id });
+        if (!isLoaded || !setActive) return;
+        if (organization) return; // already have an active org
+
+        const memberships = userMemberships.data ?? [];
+        if (memberships.length === 0) return;
+
+        if (memberships.length === 1) {
+            // Single-org user: always auto-select their only org
+            setActive({ organization: memberships[0].organization.id });
+        } else {
+            // Multi-org user: restore last explicitly chosen org, or do nothing
+            // (let the user pick via the OrganizationSwitcher)
+            const lastOrgId = localStorage.getItem("cfdo_last_org_id");
+            const isValidLastOrg = lastOrgId && memberships.some(m => m.organization.id === lastOrgId);
+            if (isValidLastOrg) {
+                setActive({ organization: lastOrgId! });
+            }
+            // If no valid last selection, do NOT auto-pick — show the switcher
         }
     }, [isLoaded, organization, userMemberships.data, setActive]);
+
+    // Persist the active org whenever it changes, and evict any stale legacy companyId
+    useEffect(() => {
+        if (organization?.id) {
+            localStorage.setItem("cfdo_last_org_id", organization.id);
+            localStorage.removeItem("cfdo_company_id"); // prevent cross-tenant bleed
+        }
+    }, [organization?.id]);
 
     // Hydrate from localStorage
     useEffect(() => {
