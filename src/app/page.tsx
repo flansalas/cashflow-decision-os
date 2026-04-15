@@ -3,9 +3,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth, useOrganization } from "@clerk/nextjs";
+import { useAuth, useOrganization, useOrganizationList } from "@clerk/nextjs";
 import { OnboardingWizard } from "@/ui/OnboardingWizard";
-import { BarChart3, Settings, Play, CornerDownLeft, Wallet, Building2, LogIn } from "lucide-react";
+import { BarChart3, Settings, Play, CornerDownLeft, Wallet, Building2, LogIn, ChevronRight, Check } from "lucide-react";
 
 type CompanyStatus =
   | { exists: false }
@@ -39,37 +39,95 @@ function PageShell({ children }: { children: React.ReactNode }) {
 }
 
 // ─── Authenticated mode ────────────────────────────────────────────────────────
-// Only renders when Clerk confirms isSignedIn. Never touches localStorage or Pilot data.
+// Only renders when Clerk confirms isSignedIn.
 function AuthenticatedHomepage() {
   const router = useRouter();
   const { organization, isLoaded: isOrgLoaded } = useOrganization();
+  const { isLoaded: listLoaded, setActive, userMemberships } = useOrganizationList({
+    userMemberships: { infinite: true },
+  });
 
-  // Auto-redirect once org is confirmed
+  const memberships = userMemberships.data ?? [];
+  const isMultiOrg = listLoaded && memberships.length > 1;
+  const isSingleOrg = listLoaded && memberships.length === 1;
+
+  // Single-org: auto-activate and redirect immediately
   useEffect(() => {
-    if (!isOrgLoaded) return;
-    if (organization) {
+    if (!isOrgLoaded || !listLoaded) return;
+    if (isSingleOrg && organization) {
       localStorage.removeItem("cfdo_company_id");
       router.replace("/dashboard");
     }
-  }, [isOrgLoaded, organization, router]);
+    // Multi-org users: do NOT auto-redirect — show the selection card below
+  }, [isOrgLoaded, listLoaded, isSingleOrg, organization, router]);
 
-  // Show a loading spinner while org is resolving
-  if (!isOrgLoaded || organization) {
+  // Still loading Clerk state
+  if (!isOrgLoaded || !listLoaded) {
     return (
       <PageShell>
-        <div className="space-y-4">
-          <div className="flex justify-center">
-            <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-          <p className="text-gray-400 text-sm">
-            {organization ? "Entering your dashboard…" : "Loading your session…"}
-          </p>
+        <div className="flex justify-center">
+          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
         </div>
       </PageShell>
     );
   }
 
-  // Signed in but no org — prompt them to select or create one
+  // Single-org user with active org: show redirect spinner
+  if (isSingleOrg && organization) {
+    return (
+      <PageShell>
+        <div className="space-y-3 text-center">
+          <div className="flex justify-center">
+            <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+          <p className="text-gray-400 text-sm">Entering your dashboard…</p>
+        </div>
+      </PageShell>
+    );
+  }
+
+  // Multi-org user: show explicit company chooser
+  if (isMultiOrg) {
+    return (
+      <PageShell>
+        <div className="space-y-3 text-left">
+          <p className="text-gray-400 text-sm text-center mb-1">Select a company to continue</p>
+          {memberships.map(m => {
+            const isActive = organization?.id === m.organization.id;
+            return (
+              <button
+                key={m.organization.id}
+                onClick={async () => {
+                  if (setActive) {
+                    await setActive({ organization: m.organization.id });
+                    localStorage.removeItem("cfdo_company_id");
+                    localStorage.setItem("cfdo_last_org_id", m.organization.id);
+                    router.replace("/dashboard");
+                  }
+                }}
+                className={`w-full flex items-center justify-between px-4 py-3.5 rounded-[8px] border transition-all ${
+                  isActive
+                    ? "bg-emerald-900/30 border-emerald-600/60 text-white"
+                    : "bg-gray-800 border-gray-700 hover:border-gray-500 hover:bg-gray-700/80 text-gray-200"
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                  <span className="font-medium text-sm">{m.organization.name}</span>
+                </span>
+                {isActive
+                  ? <Check className="w-4 h-4 text-emerald-400" />
+                  : <ChevronRight className="w-4 h-4 text-gray-500" />
+                }
+              </button>
+            );
+          })}
+        </div>
+      </PageShell>
+    );
+  }
+
+  // Signed in but no org memberships at all
   return (
     <PageShell>
       <div className="space-y-4">
@@ -79,26 +137,24 @@ function AuthenticatedHomepage() {
             No active organization found
           </p>
           <p className="text-yellow-200/70 text-xs mt-1">
-            Your account doesn&apos;t have an active company selected. Please use the Organization Switcher in the dashboard sidebar to select your company, or contact your administrator.
+            Your account isn&apos;t linked to a company yet. Contact your administrator.
           </p>
         </div>
-        <button
-          onClick={() => {
-            router.push("/dashboard");
-          }}
-          className="w-full py-3.5 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-[8px] transition-colors border border-emerald-500 text-base flex items-center justify-center gap-2"
+        <a
+          href="/sign-in"
+          className="w-full py-3 px-6 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-[8px] transition-colors border border-gray-700 text-sm flex items-center justify-center gap-2"
         >
-          <BarChart3 className="w-5 h-5" /> Go to Dashboard
-        </button>
+          <LogIn className="w-4 h-4" /> Sign in with a different account
+        </a>
       </div>
     </PageShell>
   );
 }
 
-// ─── Anonymous mode ────────────────────────────────────────────────────────────
+// ─── Anonymous / public landing ────────────────────────────────────────────────
 // Only renders when Clerk confirms user is NOT signed in.
 // SECURITY: Never resolves tenant state for visitors without an explicit companyId.
-function AnonymousHomepage() {
+function AnonymousPublicPage() {
   const router = useRouter();
   const [status, setStatus] = useState<CompanyStatus | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -106,13 +162,11 @@ function AnonymousHomepage() {
 
   useEffect(() => {
     // Only check status if the user previously saved a companyId in this browser.
-    // Never fall back to "most recent company" — that leaks real tenant names to strangers.
     const savedId = localStorage.getItem("cfdo_company_id");
     if (!savedId) {
       setChecking(false);
       return;
     }
-
     fetch(`/api/company/status?companyId=${savedId}`)
       .then(r => r.json())
       .then((s: CompanyStatus) => {
@@ -125,87 +179,73 @@ function AnonymousHomepage() {
       .finally(() => setChecking(false));
   }, []);
 
-  let ctaLabel: React.ReactNode = (
-    <span className="flex items-center justify-center gap-2">
-      <BarChart3 className="w-5 h-5" /> Use My Data
-    </span>
-  );
-  let ctaSub = "";
-  const isCompleted = !checking && status?.exists && status.onboardingCompleted;
-  if (!checking && status?.exists) {
-    if (status.onboardingCompleted) {
-      ctaLabel = (
-        <span className="flex items-center justify-center gap-2">
-          <Settings className="w-5 h-5" /> Re-configure Setup
-        </span>
-      );
-      ctaSub = status.name;
-    } else {
-      ctaLabel = (
-        <span className="flex items-center justify-center gap-2">
-          <CornerDownLeft className="w-5 h-5" /> Continue Setup
-        </span>
-      );
-      ctaSub = `Step ${status.onboardingStep + 1} of 5 — ${status.name}`;
-    }
-  }
+  const hasReturningSetup = !checking && status?.exists && !status.onboardingCompleted;
+  const hasCompletedSetup = !checking && status?.exists && status.onboardingCompleted;
 
   return (
     <PageShell>
       <div className="space-y-3">
-        {isCompleted ? (
+
+        {/* PRIMARY: Sign in — always first and most prominent */}
+        <a
+          href="/sign-in"
+          className="w-full py-4 px-6 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold rounded-[8px] transition-all border border-emerald-500 text-base flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-900/30"
+        >
+          <LogIn className="w-5 h-5" />
+          Sign in to your account
+        </a>
+
+        <div className="relative flex items-center gap-3 py-1">
+          <div className="flex-1 h-px bg-gray-800" />
+          <span className="text-xs text-gray-600 font-medium tracking-wide uppercase">or</span>
+          <div className="flex-1 h-px bg-gray-800" />
+        </div>
+
+        {/* SECONDARY: Returning setup / completed user shortcut */}
+        {hasCompletedSetup && (
           <button
-            onClick={() => {
-              router.push(`/dashboard?companyId=${status!.companyId}`);
-            }}
-            className="w-full py-3.5 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-[8px] transition-colors border border-emerald-500 text-base flex flex-col items-center justify-center gap-1"
+            onClick={() => router.push(`/dashboard?companyId=${status!.companyId}`)}
+            className="w-full py-3.5 px-6 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-[8px] transition-colors border border-gray-700 hover:border-gray-600 text-sm flex flex-col items-center justify-center gap-0.5"
           >
             <span className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5" /> Go to Dashboard
+              <BarChart3 className="w-4 h-4" /> Open My Dashboard
             </span>
-            <span className="block text-xs text-emerald-100 font-normal">{status!.name}</span>
-          </button>
-        ) : (
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="w-full py-3.5 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-[8px] transition-colors border border-emerald-500 text-base flex items-center justify-center gap-2"
-          >
-            <Play className="w-5 h-5 fill-current" /> View Demo
+            <span className="text-xs text-gray-400 font-normal">{status!.name}</span>
           </button>
         )}
 
-        <button
-          onClick={() => setWizardOpen(true)}
-          disabled={checking}
-          className="w-full py-3.5 px-6 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-[8px] transition-colors border border-gray-700 hover:border-gray-600 text-base disabled:opacity-60 flex flex-col items-center justify-center gap-1"
-        >
-          {checking ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin" />
-              Checking…
-            </span>
-          ) : (
-            <>
-              {ctaLabel}
-              {ctaSub && <span className="block text-xs text-gray-400 font-normal">{ctaSub}</span>}
-            </>
-          )}
-        </button>
-
-        {/* Sign-in nudge for users who have accounts */}
-        <div className="pt-2">
-          <a
-            href="/sign-in"
-            className="text-sm text-gray-500 hover:text-gray-300 transition-colors flex items-center justify-center gap-1.5"
+        {hasReturningSetup && (
+          <button
+            onClick={() => setWizardOpen(true)}
+            className="w-full py-3.5 px-6 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-[8px] transition-colors border border-gray-700 hover:border-gray-600 text-sm flex flex-col items-center justify-center gap-0.5"
           >
-            <LogIn className="w-3.5 h-3.5" /> Sign in to your company account
-          </a>
-        </div>
-      </div>
+            <span className="flex items-center gap-2">
+              <CornerDownLeft className="w-4 h-4" /> Continue Setup
+            </span>
+            <span className="text-xs text-gray-400 font-normal">
+              Step {status!.onboardingStep + 1} of 5 — {status!.name}
+            </span>
+          </button>
+        )}
 
-      <p className="text-xs text-gray-700">
-        Single-user local app · No AI magic · No auth required
-      </p>
+        {/* New setup — only if no returning session */}
+        {!checking && !status?.exists && (
+          <button
+            onClick={() => setWizardOpen(true)}
+            className="w-full py-3.5 px-6 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-[8px] transition-colors border border-gray-700 hover:border-gray-600 text-sm flex items-center justify-center gap-2"
+          >
+            <Settings className="w-4 h-4" /> Connect my company data
+          </button>
+        )}
+
+        {/* TERTIARY: Demo — always last */}
+        <button
+          onClick={() => router.push("/dashboard")}
+          className="w-full py-2.5 px-6 text-gray-500 hover:text-gray-300 text-sm transition-colors flex items-center justify-center gap-2"
+        >
+          <Play className="w-3.5 h-3.5" /> View demo without signing in
+        </button>
+      </div>
 
       {wizardOpen && (
         <OnboardingWizard
@@ -219,11 +259,12 @@ function AnonymousHomepage() {
 }
 
 
+
 // ─── Root — gates on Clerk load state, then picks mode ────────────────────────
 export default function LandingPage() {
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
 
-  // While Clerk is initializing, show nothing (avoids flash of anonymous UI for signed-in users)
+  // While Clerk is initializing, hold render to avoid flash of anonymous UI for signed-in users
   if (!isAuthLoaded) {
     return (
       <PageShell>
@@ -234,11 +275,11 @@ export default function LandingPage() {
     );
   }
 
-
   // Hard split: never allow authenticated state to bleed into anonymous mode or vice versa
   if (isSignedIn) {
     return <AuthenticatedHomepage />;
   }
 
-  return <AnonymousHomepage />;
+  return <AnonymousPublicPage />;
 }
+
