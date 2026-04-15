@@ -21,7 +21,6 @@ const STORAGE_KEY = "cfdo_sidebar_collapsed";
 export function AppSidebar() {
     const pathname = usePathname();
     const [collapsed, setCollapsed] = useState(true);
-    const [companyName, setCompanyName] = useState<string | null>(null);
     const [isDemo, setIsDemo] = useState(false);
 
     // Clerk Org Auto-Selection
@@ -60,32 +59,21 @@ export function AppSidebar() {
         }
     }, [organization?.id]);
 
-    // Hydrate from localStorage
+    // Hydrate sidebar-collapsed state and legacy isDemo flag from localStorage.
+    // companyName is NOT read from localStorage — it comes from Clerk organization.name below.
     useEffect(() => {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved !== null) setCollapsed(saved === "true");
-            
-            const name = localStorage.getItem("cfdo_company_name");
-            if (name) setCompanyName(name);
-            
+
             const demo = localStorage.getItem("cfdo_is_demo");
             if (demo === "true") setIsDemo(true);
         } catch { /* noop */ }
-        
-        // Listen for storage changes across tabs or from our own app
-        const handleStorage = () => {
-            try {
-                const name = localStorage.getItem("cfdo_company_name");
-                if (name) setCompanyName(name);
-                
-                const demo = localStorage.getItem("cfdo_is_demo");
-                setIsDemo(demo === "true");
-            } catch { /* noop */ }
-        };
-        const interval = setInterval(handleStorage, 1000);
-        return () => clearInterval(interval);
     }, []);
+
+    // Active company name: always comes from Clerk's active organization.
+    // Falls back to null (shows nothing) — never shows a stale previous org name.
+    const companyName = organization?.name ?? null;
 
     const toggle = () => {
         const next = !collapsed;

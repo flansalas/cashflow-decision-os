@@ -197,11 +197,12 @@ function DashboardContent() {
                 if (d.error) {
                     setError(d.error);
                 } else {
-                    console.log("Dashboard Commitments:", d.commitments);
                     setData(d);
-                    
+
                     try {
-                        localStorage.setItem('cfdo_company_name', d.company.name);
+                        // cfdo_company_name intentionally NOT written here \u2014
+                        // sidebar now reads org name from Clerk directly.
+                        // Keep isDemo for unauthenticated/legacy mode.
                         localStorage.setItem('cfdo_is_demo', String(d.company.isDemo));
                     } catch { /* noop */ }
 
