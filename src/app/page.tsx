@@ -234,17 +234,9 @@ function AnonymousPublicPage() {
             onClick={() => setWizardOpen(true)}
             className="w-full py-3.5 px-6 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-[8px] transition-colors border border-gray-700 hover:border-gray-600 text-sm flex items-center justify-center gap-2"
           >
-            <Settings className="w-4 h-4" /> Connect my company data
+            <Settings className="w-4 h-4" /> Set up a new company
           </button>
         )}
-
-        {/* TERTIARY: Demo — always last */}
-        <button
-          onClick={() => router.push("/dashboard")}
-          className="w-full py-2.5 px-6 text-gray-500 hover:text-gray-300 text-sm transition-colors flex items-center justify-center gap-2"
-        >
-          <Play className="w-3.5 h-3.5" /> View demo without signing in
-        </button>
       </div>
 
       {wizardOpen && (

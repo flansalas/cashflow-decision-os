@@ -68,6 +68,12 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "No cash snapshot found. Complete onboarding first." }, { status: 400 });
         }
 
+        // Validate asOfDate
+        if (isNaN(new Date(cashSnapshot.asOfDate).getTime())) {
+            console.error("Dashboard API error: Invalid asOfDate in CashSnapshot", cashSnapshot.asOfDate);
+            return NextResponse.json({ error: "Invalid snapshot date. Please re-run onboarding." }, { status: 400 });
+        }
+
         const assumptions = assumptionRaw ?? {
             bufferMin: 10000,
             fixedWeeklyOutflow: 0,
@@ -255,7 +261,7 @@ export async function GET(req: NextRequest) {
                 direction: e.category.direction as "inflow" | "outflow",
                 label: e.label,
                 amount: e.amount,
-                weekNumber: e.weekNumber,
+                targetDate: e.targetDate,
             })),
         };
 
@@ -521,10 +527,10 @@ export async function GET(req: NextRequest) {
                 totalOverdueAR: overdueAR.reduce((s, i) => s + i.amountOpen, 0),
             },
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Dashboard API error:", error);
         return NextResponse.json(
-            { error: "Failed to compute dashboard data" },
+            { error: "Failed to compute dashboard data: " + (error?.message || String(error)) },
             { status: 500 }
         );
     }

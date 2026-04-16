@@ -4,7 +4,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
 import { v4 as uuidv4 } from "uuid";
-
 import { resolveTenant } from "@/lib/tenant";
 
 export async function GET(req: NextRequest) {
@@ -14,9 +13,29 @@ export async function GET(req: NextRequest) {
     const entries = await prisma.cashFlowEntry.findMany({
         where: { companyId },
         include: { category: true },
-        orderBy: [{ weekNumber: "asc" }, { createdAt: "asc" }],
+        orderBy: [{ targetDate: "asc" }, { createdAt: "asc" }],
     });
-    return NextResponse.json(entries);
+
+    const mappedEntries = entries.map(e => {
+        const today = new Date();
+        const monday = new Date();
+        const day = today.getDay();
+        const diff = (day === 0 ? -6 : 1 - day);
+        monday.setDate(today.getDate() + diff);
+        monday.setHours(0, 0, 0, 0);
+
+        const target = new Date(e.targetDate);
+        target.setHours(0, 0, 0, 0);
+
+        const diffTime = target.getTime() - monday.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        let weekNumber = Math.floor(diffDays / 7) + 1;
+        if (weekNumber < 1) weekNumber = 1;
+
+        return { ...e, weekNumber };
+    });
+
+    return NextResponse.json(mappedEntries);
 }
 
 export async function POST(req: NextRequest) {
@@ -30,6 +49,16 @@ export async function POST(req: NextRequest) {
     if (!amount || amount <= 0) return NextResponse.json({ error: "Amount must be positive" }, { status: 400 });
     if (!weekNumber || weekNumber < 1 || weekNumber > 13) return NextResponse.json({ error: "Week number must be 1-13" }, { status: 400 });
 
+    const today = new Date();
+    const monday = new Date();
+    const day = today.getDay();
+    const diff = (day === 0 ? -6 : 1 - day);
+    monday.setDate(today.getDate() + diff);
+    monday.setHours(0, 0, 0, 0);
+    
+    const targetDate = new Date(monday);
+    targetDate.setDate(targetDate.getDate() + (weekNumber - 1) * 7);
+
     try {
         const created = await prisma.cashFlowEntry.create({
             data: {
@@ -38,12 +67,12 @@ export async function POST(req: NextRequest) {
                 categoryId,
                 label: label.trim(),
                 amount,
-                weekNumber,
+                targetDate,
                 note: note?.trim() || null,
             },
             include: { category: true },
         });
-        return NextResponse.json(created);
+        return NextResponse.json({ ...created, weekNumber });
     } catch (error) {
         console.error("Create entry error:", error);
         return NextResponse.json({ error: "Failed to create entry" }, { status: 500 });

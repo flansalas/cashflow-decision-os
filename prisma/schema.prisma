@@ -396,7 +396,7 @@ model CashFlowEntry {
   categoryId String
   label      String
   amount     Float
-  weekNumber Int
+  targetDate DateTime @default(now())
   note       String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

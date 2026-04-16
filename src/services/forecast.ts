@@ -96,7 +96,7 @@ export interface ForecastInput {
     /** One-time outflows from rescheduled recurring items: { patternId, displayName, amount, weekStart, sourceWeekStart } */
     oneTimeOutflows?: Array<{ patternId: string; displayName: string; amount: number; weekStart: Date; sourceWeekStart?: string | null }>;
     /** Manual cash flow entries from the Cash Adjustments screen */
-    cashFlowEntries?: Array<{ categoryId: string; categoryName: string; direction: "inflow" | "outflow"; label: string; amount: number; weekNumber: number }>;
+    cashFlowEntries?: Array<{ categoryId: string; categoryName: string; direction: "inflow" | "outflow"; label: string; amount: number; targetDate: Date }>;
 }
  
 interface RecurrenceInstance {
@@ -201,9 +201,10 @@ export function parsePaymentCurve(json: string): PaymentCurve {
 }
 
 function hashForecast(weeks: ForecastWeekResult[]): string {
-    const data = weeks.map(w =>
-        `${w.weekStart.toISOString()}|${w.endCashExpected}|${w.endCashWorst}|${w.endCashBest}`
-    ).join(";");
+    const data = weeks.map(w => {
+        const iso = isNaN(w.weekStart.getTime()) ? "INVALID" : w.weekStart.toISOString();
+        return `${iso}|${w.endCashExpected}|${w.endCashWorst}|${w.endCashBest}`;
+    }).join(";");
     // Simple hash
     let hash = 0;
     for (let i = 0; i < data.length; i++) {
@@ -309,8 +310,13 @@ export function computeForecast(input: ForecastInput): ForecastResult {
     const manualEntriesByWeek = new Map<number, Array<any>>();
     for (let w = 0; w < 13; w++) manualEntriesByWeek.set(w, []);
     for (const entry of (input.cashFlowEntries || [])) {
-        if (entry.weekNumber >= 1 && entry.weekNumber <= 13) {
-            manualEntriesByWeek.get(entry.weekNumber - 1)!.push(entry);
+        for (let w = 0; w < 13; w++) {
+            const weekStart = addWeeks(currentMonday, w);
+            const weekEnd = addDays(weekStart, 6);
+            if (isInWeek(new Date(entry.targetDate), weekStart, weekEnd)) {
+                manualEntriesByWeek.get(w)!.push(entry);
+                break;
+            }
         }
     }
 
@@ -406,7 +412,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 const weekEnd = addDays(weekStart, 6);
                 if (isInWeek(d, weekStart, weekEnd)) {
                     // Skip this occurrence if it has been rescheduled away
-                    const weekStartISO = weekStart.toISOString().slice(0, 10);
+                    const weekStartISO = isNaN(weekStart.getTime()) ? "0000-00-00" : weekStart.toISOString().slice(0, 10);
                     if (!skipSet.has(weekStartISO)) {
                         recurringByWeek.get(w)!.push({ pattern: rec, amount: rec.typicalAmount });
                     }
