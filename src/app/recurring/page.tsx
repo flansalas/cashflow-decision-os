@@ -12,6 +12,7 @@ import {
     GripVertical, TrendingDown, TrendingUp, BarChart3
 } from "lucide-react";
 import { HelpBubble } from "@/ui/HelpBubble";
+import { useAuth, useOrganization } from "@clerk/nextjs";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -816,7 +817,12 @@ function RecurringContent() {
     const searchParams = useSearchParams();
     const highlightWeek = searchParams.get("highlightWeek") ? Number(searchParams.get("highlightWeek")) : null;
     const highlightId = searchParams.get("highlightId");
-    const companyId = searchParams.get("companyId") ?? (typeof window !== "undefined" ? localStorage.getItem("cfdo_company_id") : null);
+
+    const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
+    const { isLoaded: isOrgLoaded, organization } = useOrganization();
+
+    // Only use legacy companyId for unauthenticated mode
+    const legacyCompanyId = (!isSignedIn && (searchParams.get("companyId") ?? (typeof window !== "undefined" ? localStorage.getItem("cfdo_company_id") : null))) || null;
 
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -834,7 +840,10 @@ function RecurringContent() {
     }, []);
 
     const fetchData = useCallback(() => {
-        const url = companyId ? `/api/dashboard?companyId=${companyId}` : "/api/dashboard";
+        // Authenticated with active org: no companyId — backend uses Clerk orgId
+        // Legacy/unauthenticated: pass legacyCompanyId
+        const q = (isSignedIn && organization) ? "" : (legacyCompanyId ? `?companyId=${legacyCompanyId}` : "");
+        const url = `/api/dashboard${q}`;
         setLoading(true);
         fetch(url)
             .then(r => r.json())
@@ -844,9 +853,14 @@ function RecurringContent() {
             })
             .catch(() => setError("Failed to load"))
             .finally(() => setLoading(false));
-    }, [companyId]);
+    }, [isSignedIn, organization, legacyCompanyId]);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => {
+        if (!isAuthLoaded || !isOrgLoaded) return;
+        if (isSignedIn && !organization) return; // wait for org activation
+        fetchData();
+    }, [isAuthLoaded, isOrgLoaded, isSignedIn, organization?.id, fetchData]);
+
 
     // Auto-switch to Manage if highlighting a specific commitment pattern
     useEffect(() => {

@@ -7,6 +7,7 @@ import { CashflowGrid } from "@/ui/CashflowGrid";
 import { ARAPUploadStep } from "@/ui/ARAPUploadStep";
 import { BankUploadStep } from "@/ui/BankUploadStep";
 import { ArrowLeft, Upload, Landmark, X, AlertTriangle, Box } from "lucide-react";
+import { useAuth, useOrganization } from "@clerk/nextjs";
 import type { GridItem } from "@/ui/ARAPCard";
 
 interface WeekMeta {
@@ -78,6 +79,12 @@ function CashflowContent() {
         router.replace(`/cashflow${params.size > 0 ? `?${params}` : ""}`, { scroll: false });
     }, [router, searchParams]);
 
+    const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
+    const { isLoaded: isOrgLoaded, organization } = useOrganization();
+
+    // Only use legacy companyId for unauthenticated mode
+    const legacyCompanyId = (!isSignedIn && (urlCompanyId ?? (typeof window !== "undefined" ? localStorage.getItem("cfdo_company_id") : null))) || null;
+
     const [data, setData] = useState<GridData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -110,10 +117,11 @@ function CashflowContent() {
         }
     }, [searchParams, router]);
 
-    const companyId = urlCompanyId ?? (typeof window !== "undefined" ? localStorage.getItem("cfdo_company_id") : null);
-
     const fetchGrid = useCallback(() => {
-        const url = companyId ? `/api/cashflow-grid?companyId=${companyId}` : "/api/cashflow-grid";
+        // Authenticated with active org: no companyId — backend uses Clerk orgId
+        // Legacy/unauthenticated: pass legacyCompanyId
+        const q = (isSignedIn && organization) ? "" : (legacyCompanyId ? `?companyId=${legacyCompanyId}` : "");
+        const url = `/api/cashflow-grid${q}`;
         // Only show the full-screen spinner on the very first load
         if (!hasLoadedRef.current) setLoading(true);
         fetch(url)
@@ -124,9 +132,13 @@ function CashflowContent() {
             })
             .catch(() => setError("Failed to load"))
             .finally(() => { if (!hasLoadedRef.current) setLoading(false); else setLoading(false); });
-    }, [companyId]);
+    }, [isSignedIn, organization, legacyCompanyId]);
 
-    useEffect(() => { fetchGrid(); }, [fetchGrid]);
+    useEffect(() => {
+        if (!isAuthLoaded || !isOrgLoaded) return;
+        if (isSignedIn && !organization) return; // wait for org activation
+        fetchGrid();
+    }, [isAuthLoaded, isOrgLoaded, isSignedIn, organization?.id, fetchGrid]);
 
     if (loading) {
         return (
