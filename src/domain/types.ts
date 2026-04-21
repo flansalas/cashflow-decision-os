@@ -200,6 +200,7 @@ export interface SimulationDelta {
     worstCaseRunOutBefore: number | null;
     worstCaseRunOutAfter: number | null;
     lowestBalanceDelta: number;
+    immediateCashLift?: number;
     improvesConstraint: boolean;
 }
 

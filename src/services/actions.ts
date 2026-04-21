@@ -209,6 +209,10 @@ export function generateActions(input: ActionInput): GeneratedAction[] {
                         runwayImprovementWeeks = 13 - forecast.constraintWeek;
                     }
 
+                    const immediateCashLift = simForecast.weeks[0] && forecast.weeks[0] 
+                        ? simForecast.weeks[0].endCashExpected - forecast.weeks[0].endCashExpected 
+                        : 0;
+
                     action.simulationDelta = {
                         constraintWeekBefore: forecast.constraintWeek,
                         constraintWeekAfter: simForecast.constraintWeek,
@@ -216,6 +220,7 @@ export function generateActions(input: ActionInput): GeneratedAction[] {
                         worstCaseRunOutBefore: forecast.worstCaseRunOutWeek,
                         worstCaseRunOutAfter: simForecast.worstCaseRunOutWeek,
                         lowestBalanceDelta: simForecast.lowestExpectedBalance - forecast.lowestExpectedBalance,
+                        immediateCashLift,
                         improvesConstraint: runwayImprovementWeeks > 0 || (simForecast.lowestExpectedBalance > forecast.lowestExpectedBalance)
                     };
                 }
@@ -235,6 +240,10 @@ export function generateActions(input: ActionInput): GeneratedAction[] {
                         runwayImprovementWeeks = 13 - forecast.constraintWeek;
                     }
 
+                    const immediateCashLift = simForecast.weeks[0] && forecast.weeks[0] 
+                        ? simForecast.weeks[0].endCashExpected - forecast.weeks[0].endCashExpected 
+                        : 0;
+
                     action.simulationDelta = {
                         constraintWeekBefore: forecast.constraintWeek,
                         constraintWeekAfter: simForecast.constraintWeek,
@@ -242,6 +251,7 @@ export function generateActions(input: ActionInput): GeneratedAction[] {
                         worstCaseRunOutBefore: forecast.worstCaseRunOutWeek,
                         worstCaseRunOutAfter: simForecast.worstCaseRunOutWeek,
                         lowestBalanceDelta: simForecast.lowestExpectedBalance - forecast.lowestExpectedBalance,
+                        immediateCashLift,
                         improvesConstraint: runwayImprovementWeeks > 0 || (simForecast.lowestExpectedBalance > forecast.lowestExpectedBalance)
                     };
                 }
