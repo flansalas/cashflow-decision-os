@@ -95,7 +95,7 @@ export function ActionsPanel({ actions }: Props) {
                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-tight ${certaintyBadge[action.impactCertainty]}`}>
                                         {action.impactCertainty} certainty
                                     </span>
-                                    {action.type === "delay_ap" && action.simulationDelta && (
+                                    {["delay_ap", "collect_ar"].includes(action.type) && action.simulationDelta && (
                                         <div className="flex items-center gap-1.5 ml-2">
                                             <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-tight bg-indigo-500/10 text-indigo-400 border border-indigo-500/25">
                                                 <FlaskConical className="w-3 h-3" />

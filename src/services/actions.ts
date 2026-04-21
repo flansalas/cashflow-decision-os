@@ -219,6 +219,32 @@ export function generateActions(input: ActionInput): GeneratedAction[] {
                         improvesConstraint: runwayImprovementWeeks > 0 || (simForecast.lowestExpectedBalance > forecast.lowestExpectedBalance)
                     };
                 }
+            } else if (action.type === "collect_ar" && action.targetId) {
+                const clonedInvoices = input.rawForecastInput.invoices.map(i => ({ ...i }));
+                const targetInv = clonedInvoices.find(i => i.id === action.targetId);
+                if (targetInv) {
+                    // Simulate collection 3 days from current asOfDate
+                    targetInv.overrideExpectedDate = new Date(new Date(input.rawForecastInput.asOfDate).getTime() + 3 * 86400000);
+                    
+                    const simForecast = computeForecast({ ...input.rawForecastInput, invoices: clonedInvoices });
+                    
+                    let runwayImprovementWeeks = 0;
+                    if (forecast.constraintWeek !== null && simForecast.constraintWeek !== null) {
+                        runwayImprovementWeeks = simForecast.constraintWeek - forecast.constraintWeek;
+                    } else if (forecast.constraintWeek !== null && simForecast.constraintWeek === null) {
+                        runwayImprovementWeeks = 13 - forecast.constraintWeek;
+                    }
+
+                    action.simulationDelta = {
+                        constraintWeekBefore: forecast.constraintWeek,
+                        constraintWeekAfter: simForecast.constraintWeek,
+                        runwayImprovementWeeks,
+                        worstCaseRunOutBefore: forecast.worstCaseRunOutWeek,
+                        worstCaseRunOutAfter: simForecast.worstCaseRunOutWeek,
+                        lowestBalanceDelta: simForecast.lowestExpectedBalance - forecast.lowestExpectedBalance,
+                        improvesConstraint: runwayImprovementWeeks > 0 || (simForecast.lowestExpectedBalance > forecast.lowestExpectedBalance)
+                    };
+                }
             }
         }
     }
