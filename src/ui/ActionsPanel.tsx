@@ -95,7 +95,7 @@ export function ActionsPanel({ actions }: Props) {
                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-tight ${certaintyBadge[action.impactCertainty]}`}>
                                         {action.impactCertainty} certainty
                                     </span>
-                                    {["delay_ap", "collect_ar"].includes(action.type) && action.simulationDelta && (action.simulationDelta.runwayImprovementWeeks > 0 || action.simulationDelta.lowestBalanceDelta > 0 || (action.simulationDelta.immediateCashLift && action.simulationDelta.immediateCashLift > 0)) && (
+                                    {["delay_ap", "collect_ar"].includes(action.type) && action.simulationDelta && (action.simulationDelta.runwayImprovementWeeks > 0 || action.simulationDelta.lowestBalanceDelta > 0 || (action.simulationDelta.immediateCashLift || 0) > 0) && (
                                         <div className="flex items-center gap-1.5 ml-2">
                                             <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-tight bg-indigo-500/10 text-indigo-400 border border-indigo-500/25">
                                                 <FlaskConical className="w-3 h-3" />
