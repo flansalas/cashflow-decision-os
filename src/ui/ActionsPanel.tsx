@@ -95,15 +95,19 @@ export function ActionsPanel({ actions }: Props) {
                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-tight ${certaintyBadge[action.impactCertainty]}`}>
                                         {action.impactCertainty} certainty
                                     </span>
-                                    {["delay_ap", "collect_ar"].includes(action.type) && action.simulationDelta && (
+                                    {["delay_ap", "collect_ar"].includes(action.type) && action.simulationDelta && (action.simulationDelta.runwayImprovementWeeks > 0 || action.simulationDelta.lowestBalanceDelta > 0) && (
                                         <div className="flex items-center gap-1.5 ml-2">
                                             <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-tight bg-indigo-500/10 text-indigo-400 border border-indigo-500/25">
                                                 <FlaskConical className="w-3 h-3" />
-                                                {action.simulationDelta.runwayImprovementWeeks > 0 ? `+${action.simulationDelta.runwayImprovementWeeks} WKS RUNWAY` : "NO WKS RUNWAY"}
+                                                {action.simulationDelta.runwayImprovementWeeks > 0 
+                                                    ? `+${action.simulationDelta.runwayImprovementWeeks} ${action.simulationDelta.runwayImprovementWeeks === 1 ? "WK" : "WKS"} RUNWAY` 
+                                                    : `+${fmt(action.simulationDelta.lowestBalanceDelta)} CASH FLOOR`}
                                             </span>
                                             {action.simulationDelta.constraintWeekBefore !== null && (
                                                 <span className="text-[9px] uppercase tracking-widest font-semibold text-slate-500">
-                                                    Constraint: Wk {action.simulationDelta.constraintWeekBefore} → {action.simulationDelta.constraintWeekAfter !== null ? `Wk ${action.simulationDelta.constraintWeekAfter}` : 'Cleared'}
+                                                    {action.simulationDelta.constraintWeekBefore !== action.simulationDelta.constraintWeekAfter
+                                                        ? `Constraint: Wk ${action.simulationDelta.constraintWeekBefore} → ${action.simulationDelta.constraintWeekAfter !== null ? `Wk ${action.simulationDelta.constraintWeekAfter}` : 'Cleared'}`
+                                                        : `Stabilizes Week ${action.simulationDelta.constraintWeekBefore}`}
                                                 </span>
                                             )}
                                         </div>
