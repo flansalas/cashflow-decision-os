@@ -175,3 +175,31 @@ export function getCashMismatchThreshold(bankBalance: number): number {
     const pct = bankBalance * 0.02;
     return Math.max(500, Math.min(5000, Math.max(2000, pct)));
 }
+
+// ── Business Cash State ────────────────────────────────────────────────
+export type BusinessCashState = "safe" | "threatened" | "critical" | "exhausted";
+
+// ── Action Lifecycle ───────────────────────────────────────────────────
+export type ActionLifecycle = "generated" | "pending" | "applied" | "verified" | "expired" | "ignored";
+
+// ── Data Quality Gate ──────────────────────────────────────────────────
+export type DataQualityGate = "green" | "yellow" | "red";
+
+export interface DataQualityGateResult {
+    gate: DataQualityGate;
+    reasons: string[];
+    redReasons: string[];
+    yellowReasons: string[];
+}
+
+// ── Simulation Delta ───────────────────────────────────────────────────
+export interface SimulationDelta {
+    constraintWeekBefore: number | null;
+    constraintWeekAfter: number | null;
+    runwayImprovementWeeks: number;
+    worstCaseRunOutBefore: number | null;
+    worstCaseRunOutAfter: number | null;
+    lowestBalanceDelta: number;
+    improvesConstraint: boolean;
+}
+

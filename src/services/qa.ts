@@ -1,7 +1,7 @@
 // services/qa.ts – Data quality anomalies + confidence scoring with specific reason bullets
 // Pure logic. No React, no DB imports.
 
-import type { ConfidenceResult, ConfidenceLevel } from "@/domain/types";
+import type { ConfidenceResult, ConfidenceLevel, DataQualityGateResult } from "@/domain/types";
 import type { BaselineResult } from "./baseline";
 
 export interface QAInput {
@@ -321,4 +321,62 @@ export function computeConfidence(input: QAInput, anomalies: Anomaly[]): Confide
     else label = "low";
 
     return { score, label, reasons };
+}
+
+// ─── Data Quality Gate (Phase 1) ──────────────────────────────────────────
+
+export function computeDataQualityGate(input: QAInput): DataQualityGateResult {
+    const redReasons: string[] = [];
+    const yellowReasons: string[] = [];
+    const reasons: string[] = [];
+    const now = new Date();
+
+    // ── AR Staleness ──
+    if (input.arRefreshDate) {
+        const daysSince = Math.round((now.getTime() - input.arRefreshDate.getTime()) / 86_400_000);
+        if (daysSince > 14) redReasons.push(`AR data is >14 days old (${daysSince} days)`);
+        else if (daysSince > 7) yellowReasons.push(`AR data is 7-14 days old (${daysSince} days)`);
+    } else {
+        yellowReasons.push("AR refresh date unknown");
+    }
+
+    // ── AP Staleness ──
+    if (input.apRefreshDate) {
+        const daysSince = Math.round((now.getTime() - input.apRefreshDate.getTime()) / 86_400_000);
+        if (daysSince > 14) redReasons.push(`AP data is >14 days old (${daysSince} days)`);
+        else if (daysSince > 7) yellowReasons.push(`AP data is 7-14 days old (${daysSince} days)`);
+    } else {
+        yellowReasons.push("AP refresh date unknown");
+    }
+
+    // ── Payroll Configuration ──
+    const payrollManual = input.assumptions.payrollAllInAmount != null && input.assumptions.payrollNextDate != null;
+    const payrollDetectedHigh = input.payrollPatternDetected && input.payrollPatternConfidence === "high";
+
+    if (!payrollManual && !payrollDetectedHigh) {
+        if (input.payrollPatternDetected) {
+            yellowReasons.push("Payroll pattern detected but confidence is low/med — confirm exact amount");
+        } else {
+            redReasons.push("Payroll is not configured and no historical pattern was detected");
+        }
+    }
+
+    // ── Cash Reality Check ──
+    if (input.cashMismatchUnreconciled) {
+        redReasons.push("Bank balance mismatch is unreconciled — starting cash may be incorrect");
+    }
+
+    let gate: "green" | "yellow" | "red" = "green";
+    if (redReasons.length > 0) {
+        gate = "red";
+    } else if (yellowReasons.length > 0) {
+        gate = "yellow";
+    }
+
+    reasons.push(...redReasons, ...yellowReasons);
+    if (gate === "green") {
+        reasons.push("All data inputs are current and fully configured.");
+    }
+
+    return { gate, reasons, redReasons, yellowReasons };
 }

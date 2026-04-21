@@ -4,11 +4,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
 import { computeForecast, type ForecastInput, type ForecastInvoice, type ForecastBill, type ForecastRecurring } from "@/services/forecast";
-import { detectAnomalies, computeConfidence, type QAInput } from "@/services/qa";
+import { detectAnomalies, computeConfidence, computeDataQualityGate, type QAInput } from "@/services/qa";
 import { generateActions } from "@/services/actions";
 import { computeBaseline, type BankTxForBaseline, type RecurringPatternForBaseline } from "@/services/baseline";
 import { computeExpectedPaymentDate, parsePaymentCurve, getMonday, addDays } from "@/services/forecast";
 import { resolveTenant } from "@/lib/tenant";
+import type { BusinessCashState } from "@/domain/types";
 
 export async function GET(req: NextRequest) {
     try {
@@ -318,6 +319,7 @@ export async function GET(req: NextRequest) {
 
         const anomalies = detectAnomalies(qaInput);
         const confidence = computeConfidence(qaInput, anomalies);
+        const dataQualityGate = computeDataQualityGate(qaInput);
 
         // ── Actions ────────────────────────────────────────────────────
         const actions = generateActions({
@@ -325,6 +327,7 @@ export async function GET(req: NextRequest) {
             invoices,
             bills,
             bufferMin: assumptions.bufferMin,
+            rawForecastInput: forecastInput,
         });
 
         // ── Payroll info for header ─────────────────────────────────────
@@ -475,9 +478,20 @@ export async function GET(req: NextRequest) {
             });
         }
 
+        // ── Phase 1: Business Cash State ───────────────────────────────
+        let businessCashState: BusinessCashState = "safe";
+        if (forecast.weeks[0]?.endCashExpected < 0) {
+            businessCashState = "exhausted";
+        } else if (forecast.expectedRunOutWeek !== null) {
+            businessCashState = "critical";
+        } else if (forecast.constraintWeek !== null) {
+            businessCashState = "threatened";
+        }
+
         // ── Response ───────────────────────────────────────────────────
         return NextResponse.json({
             company: { id: company.id, name: company.name, isDemo: company.isDemo },
+            businessCashState,
             cash: {
                 bankBalance,
                 adjustmentsTotal,
@@ -507,6 +521,7 @@ export async function GET(req: NextRequest) {
             },
             forecast,
             confidence,
+            dataQualityGate,
             anomalies,
             anomalyCount: anomalies.length,
             actions: actions.slice(0, 5),

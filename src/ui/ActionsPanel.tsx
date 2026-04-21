@@ -1,6 +1,7 @@
 // ui/ActionsPanel.tsx – Urgent Actions list — redesigned for Tactical Ledger aesthetic
 "use client";
-import { ArrowDownLeft, Clock, Scissors, PlusCircle, AlertTriangle, Pin, CheckCircle, ArrowRight } from "lucide-react";
+import { ArrowDownLeft, Clock, Scissors, PlusCircle, AlertTriangle, Pin, CheckCircle, ArrowRight, FlaskConical } from "lucide-react";
+import type { SimulationDelta } from "@/domain/types";
 
 interface Action {
     type: string;
@@ -11,6 +12,7 @@ interface Action {
     impactCertainty: string;
     targetType: string;
     targetId: string | null;
+    simulationDelta?: SimulationDelta;
 }
 
 interface Props {
@@ -93,6 +95,19 @@ export function ActionsPanel({ actions }: Props) {
                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-tight ${certaintyBadge[action.impactCertainty]}`}>
                                         {action.impactCertainty} certainty
                                     </span>
+                                    {action.type === "delay_ap" && action.simulationDelta && (
+                                        <div className="flex items-center gap-1.5 ml-2">
+                                            <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-tight bg-indigo-500/10 text-indigo-400 border border-indigo-500/25">
+                                                <FlaskConical className="w-3 h-3" />
+                                                {action.simulationDelta.runwayImprovementWeeks > 0 ? `+${action.simulationDelta.runwayImprovementWeeks} WKS RUNWAY` : "NO WKS RUNWAY"}
+                                            </span>
+                                            {action.simulationDelta.constraintWeekBefore !== null && (
+                                                <span className="text-[9px] uppercase tracking-widest font-semibold text-slate-500">
+                                                    Constraint: Wk {action.simulationDelta.constraintWeekBefore} → {action.simulationDelta.constraintWeekAfter !== null ? `Wk ${action.simulationDelta.constraintWeekAfter}` : 'Cleared'}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                                 <p className="text-sm font-bold text-white mb-0.5 group-hover:text-indigo-300 transition-colors uppercase tracking-tight">{action.title}</p>
                                 <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>{action.description}</p>

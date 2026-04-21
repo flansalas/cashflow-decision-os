@@ -1,8 +1,9 @@
 // services/actions.ts – Rules-based action engine
 // Pure logic. No React, no DB imports.
 
-import type { ImpactCertainty, ActionPriority } from "@/domain/types";
-import type { ForecastResult, ForecastInvoice, ForecastBill } from "./forecast";
+import type { ImpactCertainty, ActionPriority, BusinessCashState, SimulationDelta } from "@/domain/types";
+import type { ForecastResult, ForecastInvoice, ForecastBill, ForecastInput } from "./forecast";
+import { computeForecast } from "./forecast";
 
 export interface GeneratedAction {
     type: "collect_ar" | "delay_ap" | "reduce_outflows" | "add_cash_adjustment" | "other" | "risk_alert";
@@ -15,6 +16,7 @@ export interface GeneratedAction {
     targetType: string;
     targetId: string | null;
     reasoningJson: string;
+    simulationDelta?: SimulationDelta;
 }
 
 export interface ActionInput {
@@ -22,6 +24,7 @@ export interface ActionInput {
     invoices: ForecastInvoice[];
     bills: ForecastBill[];
     bufferMin: number;
+    rawForecastInput?: ForecastInput;
 }
 
 export function generateActions(input: ActionInput): GeneratedAction[] {
@@ -182,6 +185,43 @@ export function generateActions(input: ActionInput): GeneratedAction[] {
 
     // Ensure top 2 most certain are always included
     // (They already are by construction since we sort certainty-first)
+
+    if (input.rawForecastInput) {
+        let baselineState: BusinessCashState = "safe";
+        if (forecast.weeks[0]?.endCashExpected < 0) baselineState = "exhausted";
+        else if (forecast.expectedRunOutWeek !== null) baselineState = "critical";
+        else if (forecast.constraintWeek !== null) baselineState = "threatened";
+
+        for (const action of actions) {
+            if (action.type === "delay_ap" && action.targetId) {
+                const clonedBills = input.rawForecastInput.bills.map(b => ({ ...b }));
+                const targetBill = clonedBills.find(b => b.id === action.targetId);
+                if (targetBill) {
+                    const oldDate = targetBill.overrideDueDate || targetBill.dueDate || targetBill.billDate || new Date(input.rawForecastInput.asOfDate);
+                    targetBill.overrideDueDate = new Date(new Date(oldDate).getTime() + 14 * 86400000);
+                    
+                    const simForecast = computeForecast({ ...input.rawForecastInput, bills: clonedBills });
+                    
+                    let runwayImprovementWeeks = 0;
+                    if (forecast.constraintWeek !== null && simForecast.constraintWeek !== null) {
+                        runwayImprovementWeeks = simForecast.constraintWeek - forecast.constraintWeek;
+                    } else if (forecast.constraintWeek !== null && simForecast.constraintWeek === null) {
+                        runwayImprovementWeeks = 13 - forecast.constraintWeek;
+                    }
+
+                    action.simulationDelta = {
+                        constraintWeekBefore: forecast.constraintWeek,
+                        constraintWeekAfter: simForecast.constraintWeek,
+                        runwayImprovementWeeks,
+                        worstCaseRunOutBefore: forecast.worstCaseRunOutWeek,
+                        worstCaseRunOutAfter: simForecast.worstCaseRunOutWeek,
+                        lowestBalanceDelta: simForecast.lowestExpectedBalance - forecast.lowestExpectedBalance,
+                        improvesConstraint: runwayImprovementWeeks > 0 || (simForecast.lowestExpectedBalance > forecast.lowestExpectedBalance)
+                    };
+                }
+            }
+        }
+    }
 
     return actions;
 }

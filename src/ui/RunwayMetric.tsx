@@ -1,19 +1,21 @@
 "use client";
 
 // ── Integrated Health Runway Gauge ───────────────────────────────────────────
+import type { BusinessCashState } from "@/domain/types";
 
-export function RunwayMetric({ expectedWeek, worstWeek, isCompact }: { expectedWeek: number | null; worstWeek: number | null; isCompact?: boolean }) {
+export function RunwayMetric({ businessCashState, expectedWeek, worstWeek, isCompact }: { businessCashState: BusinessCashState; expectedWeek: number | null; worstWeek: number | null; isCompact?: boolean }) {
     const TOTAL = 13;
     const isExpectedSafe = expectedWeek === null;
     const isWorstSafe = worstWeek === null;
 
     // Health synthesis
-    const status = (isExpectedSafe && isWorstSafe) ? "STABLE" : isExpectedSafe ? "VULNERABLE" : "CRITICAL";
+    const status = businessCashState;
+    const displayStatus = status === "exhausted" ? "EXHAUSTED" : status === "critical" ? "CRITICAL" : status === "threatened" ? "THREATENED" : "SAFE";
     
     const labelColor = 
-        status === "STABLE" ? "var(--color-positive)" : 
-        status === "VULNERABLE" ? "#d97706" : // Amber for vulnerable
-        "var(--color-danger)";
+        status === "safe" ? "var(--color-positive)" : 
+        status === "threatened" ? "#d97706" : // Amber for vulnerable
+        "var(--color-danger)"; // red for critical and exhausted
 
     // Label construction: Range-first
     let runwayText: string;
@@ -38,7 +40,7 @@ export function RunwayMetric({ expectedWeek, worstWeek, isCompact }: { expectedW
                     color: labelColor,
                     background: `${labelColor}15`
                 }}>
-                    {status}
+                    {displayStatus}
                 </span>
                 <p className="font-bold font-financial leading-none tracking-tight text-[15px] pt-[1px] whitespace-nowrap" style={{ color: labelColor }}>
                     {runwayText}
@@ -56,7 +58,7 @@ export function RunwayMetric({ expectedWeek, worstWeek, isCompact }: { expectedW
                     color: labelColor,
                     background: `${labelColor}15`
                 }}>
-                    {status}
+                    {displayStatus}
                 </span>
             </div>
             <div className="flex flex-col items-end transition-all duration-500 w-full gap-1">

@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, RotateCw, ChevronDown, ArrowRight, ListFilter, ClipboardList, TrendingUp, TrendingDown, Box, Settings2, Search, Trash2, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, RotateCw, ChevronDown, ArrowRight, ListFilter, ClipboardList, TrendingUp, TrendingDown, Box, Settings2, Search, Trash2, CheckCircle2, ShieldCheck, ShieldAlert } from "lucide-react";
 import { RunwayMetric } from "./RunwayMetric";
 import { HelpBubble } from "./HelpBubble";
 import { GlobalSearch } from "./GlobalSearch";
+import type { BusinessCashState, DataQualityGateResult } from "@/domain/types";
 
 function fmt(n: number): string {
     const sign = n < 0 ? "-" : "";
@@ -12,6 +13,8 @@ function fmt(n: number): string {
 }
 
 interface Props {
+    businessCashState: BusinessCashState;
+    dataQualityGate: DataQualityGateResult;
     bankBalance: number;
     adjustmentsTotal: number;
     adjustedCash: number;
@@ -44,7 +47,7 @@ interface Props {
 }
 
 export function HeaderTruthBar({
-    bankBalance, adjustmentsTotal, adjustedCash, buffer,
+    businessCashState, dataQualityGate, bankBalance, adjustmentsTotal, adjustedCash, buffer,
     confidence, lastUpdated, asOfDate, companyId,
     payroll, payrollPromptNeeded, adjustments, onUpdateBalanceClick, onBalanceUpdated,
     expectedRunOutWeek, worstCaseRunOutWeek, inflow30, outflow30, isCompact, companyName, isCompanyDemo,
@@ -123,7 +126,7 @@ export function HeaderTruthBar({
 
     const isExpectedSafe = expectedRunOutWeek === null;
     const isWorstSafe = worstCaseRunOutWeek === null;
-    const healthStatus = (isExpectedSafe && isWorstSafe) ? "STABLE" : isExpectedSafe ? "VULNERABLE" : "CRITICAL";
+    const healthStatus = businessCashState;
 
     return (
         <div className={`border shadow-sm bg-white relative flex flex-col z-[50] transition-all duration-500 ease-in-out ${isCompact ? 'rounded-2xl lg:rounded-full' : 'rounded-2xl'}`} style={{ borderColor: 'var(--border-default)' }}>
@@ -353,9 +356,13 @@ export function HeaderTruthBar({
                         <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-12' : 'w-16'}`}>In (30d)</span>
                         <div className="flex flex-col items-start relative w-full min-w-0">
                             <span className={`font-black font-financial text-emerald-700 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-lg xl:text-xl 2xl:text-2xl'}`}>{fmt(inflow30)}</span>
-                            <button onClick={() => setShowReasons(!showReasons)} className={`font-medium text-slate-400 hover:text-emerald-700 absolute flex items-center gap-1 opacity-80 group-hover/in:opacity-100 transition-all duration-500 whitespace-nowrap ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3'}`}>
-                                <TrendingUp className="w-2.5 h-2.5" />
-                                {confidence.score}% Confidence
+                            <button onClick={() => setShowReasons(!showReasons)} className={`font-medium text-slate-400 hover:text-slate-700 absolute flex items-center gap-1 opacity-80 group-hover/in:opacity-100 transition-all duration-500 whitespace-nowrap ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3'}`}>
+                                {dataQualityGate.gate === "green" ? (
+                                    <ShieldCheck className="w-2.5 h-2.5 text-emerald-500" />
+                                ) : (
+                                    <ShieldAlert className={`w-2.5 h-2.5 ${dataQualityGate.gate === "red" ? 'text-rose-500' : 'text-amber-500'}`} />
+                                )}
+                                {dataQualityGate.gate === "green" ? "Data: Verified" : dataQualityGate.gate === "yellow" ? "Data: Warning" : "Data: Action Needed"}
                             </button>
 
                             {/* Confidence Reasons Popover */}
@@ -364,14 +371,18 @@ export function HeaderTruthBar({
                                     <div className="fixed inset-0 z-[50]" onClick={() => setShowReasons(false)} />
                                     <div className="absolute z-[60] top-full mt-4 w-80 border rounded-xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
                                         <div className="flex justify-between items-center mb-3">
-                                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Inflow Quality Score</p>
+                                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Data Quality Gate</p>
                                             <button onClick={() => setShowReasons(false)} className="text-slate-300 hover:text-slate-600">&times;</button>
                                         </div>
-                                        {confidence.reasons.map((r, i) => (
-                                            <div key={i} className="text-xs mb-1.5 flex gap-2 text-slate-600">
-                                                <span className="text-emerald-400 font-black">•</span> {r}
-                                            </div>
-                                        ))}
+                                        {dataQualityGate.reasons.length === 0 ? (
+                                            <div className="text-xs text-slate-500 flex gap-2"><span className="text-emerald-400 font-black">•</span> All core data requirements met.</div>
+                                        ) : (
+                                            dataQualityGate.reasons.map((r, i) => (
+                                                <div key={i} className="text-xs mb-1.5 flex gap-2 text-slate-600">
+                                                    <span className={`${dataQualityGate.redReasons?.includes(r) ? 'text-rose-400' : dataQualityGate.yellowReasons?.includes(r) ? 'text-amber-400' : 'text-emerald-400'} font-black`}>•</span> {r}
+                                                </div>
+                                            ))
+                                        )}
                                     </div>
                                 </>
                             )}
@@ -404,7 +415,7 @@ export function HeaderTruthBar({
                     {/* Contextual Action - Visible Only When Expanded */}
                     {!isCompact && (
                         <div className="relative z-10 flex shrink-0 items-center justify-start h-full">
-                            {onDrillIn && healthStatus !== "STABLE" && (
+                            {onDrillIn && healthStatus !== "safe" && (
                                 <button
                                     onClick={onDrillIn}
                                     className="flex items-center gap-1.5 font-black uppercase text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded transition-colors group/drill border border-transparent hover:border-rose-100 tracking-[0.15em] text-[10px] px-3 py-1.5"
@@ -421,8 +432,8 @@ export function HeaderTruthBar({
                             <div className="flex items-baseline w-full gap-2">
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 w-12">Health</span>
                                 <div className="flex-1 flex justify-end gap-3 items-center min-w-0">
-                                    <RunwayMetric expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} isCompact={isCompact} />
-                                    {onDrillIn && healthStatus !== "STABLE" && (
+                                    <RunwayMetric businessCashState={businessCashState} expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} isCompact={isCompact} />
+                                    {onDrillIn && healthStatus !== "safe" && (
                                         <button onClick={onDrillIn} className="flex items-center gap-1 border border-rose-200 text-rose-500 hover:bg-rose-50 px-2 py-0.5 rounded text-[8px] uppercase font-black whitespace-nowrap bg-white/50 shadow-sm shrink-0 transition-colors">
                                            Fix <ArrowRight className="w-2.5 h-2.5" />
                                         </button>
@@ -430,7 +441,7 @@ export function HeaderTruthBar({
                                 </div>
                             </div>
                         ) : (
-                            <RunwayMetric expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} isCompact={isCompact} />
+                            <RunwayMetric businessCashState={businessCashState} expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} isCompact={isCompact} />
                         )}
                         
                         {!isCompact && (lowestExpected !== undefined || lowestWorst !== undefined) && (
@@ -454,9 +465,10 @@ export function HeaderTruthBar({
                     {/* Background glow color tint */}
                     {(() => {
                         const statusConfig = {
-                            STABLE: { glow: "bg-emerald-400/5 lg:rounded-br-2xl" },
-                            VULNERABLE: { glow: "bg-amber-400/10 lg:rounded-br-2xl" },
-                            CRITICAL: { glow: "bg-rose-400/10 lg:rounded-br-2xl" }
+                            safe: { glow: "bg-emerald-400/5 lg:rounded-br-2xl" },
+                            threatened: { glow: "bg-amber-400/10 lg:rounded-br-2xl" },
+                            critical: { glow: "bg-rose-400/10 lg:rounded-br-2xl" },
+                            exhausted: { glow: "bg-rose-500/15 lg:rounded-br-2xl" }
                         }[healthStatus];
                         return <div className={`absolute inset-0 ${statusConfig.glow} pointer-events-none transition-all duration-500 ${isCompact ? 'rounded-2xl lg:rounded-r-full' : ''}`} />;
                     })()}

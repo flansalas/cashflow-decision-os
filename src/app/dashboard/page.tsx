@@ -22,9 +22,12 @@ import { SpotlightProvider } from "@/ui/SpotlightContext";
 import { NebulaOverlay } from "@/ui/NebulaOverlay";
 import { RiskOptimismDial } from "@/ui/RiskOptimismDial";
 import { AlertTriangle, Settings2, BarChart3, Target, PlaneTakeoff, AlignEndHorizontal, Zap, ClipboardList, Lightbulb, ChevronDown, ArrowRight, LineChart, Box, ArrowLeft, Upload, Landmark, RefreshCw, X, CheckCircle, ThermometerSun, ShieldCheck, ShieldAlert } from "lucide-react";
+import type { BusinessCashState, DataQualityGateResult } from "@/domain/types";
 
 interface DashboardData {
     company: { id: string; name: string; isDemo: boolean };
+    businessCashState: BusinessCashState;
+    dataQualityGate: DataQualityGateResult;
     cash: {
         bankBalance: number;
         adjustmentsTotal: number;
@@ -314,6 +317,8 @@ function DashboardContent() {
                         isCompact={isScrolled}
                         companyName={data.company.name}
                         isCompanyDemo={data.company.isDemo}
+                        businessCashState={data.businessCashState}
+                        dataQualityGate={data.dataQualityGate}
                         bankBalance={data.cash.bankBalance}
                         adjustmentsTotal={data.cash.adjustmentsTotal}
                         adjustedCash={data.cash.adjustedOpeningCash}
