@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
             prisma.vendorProfile.findMany({ where: { companyId: cid } }),
             prisma.assumption.findFirst({ where: { companyId: cid } }),
             prisma.recurringPattern.findMany({ where: { companyId: cid } }),
-            prisma.override.findMany({ where: { companyId: cid, status: "active" } }),
+            prisma.override.findMany({ where: { companyId: cid, status: "active" }, orderBy: { createdAt: "desc" } }),
             // Load bank txs for baseline computation (last 12 weeks = ~84 days)
             prisma.bankTransaction.findMany({
                 where: {
@@ -350,7 +350,7 @@ export async function GET(req: NextRequest) {
         // ── Backlog detection ──────────────────────────────────────────
         // «Past-due» = effective date is before this week's Monday AND no future override is active.
         // These items are silently dropped from the 13-week forecast, so we surface them here.
-        const today = cashSnapshot.asOfDate;
+        const today = new Date(); // Use real server time for backlog, not potentially-stale snapshot date
         const currentMonday = getMonday(today);
         const paymentCurve = parsePaymentCurve(assumptions.paymentCurveJson);
 
