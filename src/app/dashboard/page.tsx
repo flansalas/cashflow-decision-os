@@ -143,6 +143,9 @@ function DashboardContent() {
     const [forecastDiff, setForecastDiff] = useState<Map<number, number>>(new Map());
     const [isScrolled, setIsScrolled] = useState(false);
     const otherViewsRef = useRef<HTMLDetailsElement>(null);
+    // Tracks the last time we fetched the dashboard — used to decide whether to
+    // re-fetch when the user returns from the Ledger after moving items.
+    const lastFetchTimeRef = useRef<number>(0);
 
     // Scroll listener for sticky header morphing
     useEffect(() => {
@@ -194,6 +197,7 @@ function DashboardContent() {
     const fetchDashboard = (cid?: string | null) => {
         const id = cid ?? companyId;
         const url = id ? `/api/dashboard?companyId=${id}` : "/api/dashboard";
+        lastFetchTimeRef.current = Date.now();
         fetch(url)
             .then(r => r.json())
             .then(d => {
@@ -270,6 +274,28 @@ function DashboardContent() {
         
         return () => window.removeEventListener('open-setup', handleOpenSetup);
     }, [searchParams]);
+
+    // Re-fetch forecast when the user returns from the Ledger after moving items.
+    // The Ledger writes 'cfdo_forecast_stale' to localStorage after each override.
+    // This listener fires when the tab becomes visible again (e.g. the user
+    // navigated back from /cashflow), and triggers a silent background refresh
+    // only when the stale flag is newer than our last fetch.
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== 'visible') return;
+            try {
+                const staleAt = Number(localStorage.getItem('cfdo_forecast_stale') ?? '0');
+                if (staleAt > lastFetchTimeRef.current) {
+                    localStorage.removeItem('cfdo_forecast_stale');
+                    fetchDashboard(effectiveCompanyId);
+                }
+            } catch { /* localStorage not available */ }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    // effectiveCompanyId may change — re-bind listener when it does
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [effectiveCompanyId]);
 
     if (loading) {
         return (

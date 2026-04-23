@@ -60,6 +60,16 @@ interface GridData {
     }>;
     weeklyRecurringOutflows: RecurringWeek[];
     weeklyRecurringInflows: RecurringWeek[];
+    // Canonical forecast from the same engine as the Dashboard
+    forecast?: {
+        weeks: Array<{
+            weekNumber: number;
+            endCashExpected: number;
+            inflowsExpected: number;
+            outflowsExpected: number;
+            projectedInflow: number; // baseline + manual entries beyond visible AR cards
+        }>;
+    };
 }
 
 function CashflowContent() {
@@ -256,6 +266,7 @@ function CashflowContent() {
                     companyId={data.companyId}
                     highlightWeek={highlightWeek}
                     highlightId={highlightId}
+                    forecastBalances={data.forecast?.weeks}
                     onRefresh={fetchGrid}
                     onClearHighlight={clearHighlight}
                 />

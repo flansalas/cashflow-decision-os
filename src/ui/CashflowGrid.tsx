@@ -31,6 +31,16 @@ interface Props {
     highlightId?: string | null;
     onRefresh: () => void;
     onClearHighlight?: () => void;
+    // Canonical forecast balances from the same engine as the Dashboard.
+    // When provided, these override the client-side balance calculation so
+    // the Ledger and Dashboard always tell the same story.
+    forecastBalances?: Array<{
+        weekNumber: number;
+        endCashExpected: number;
+        inflowsExpected: number;
+        outflowsExpected: number;
+        projectedInflow: number; // baseline + manual entries beyond visible AR cards
+    }>;
 }
 
 function fmt(n: number): string {
@@ -49,6 +59,7 @@ export function CashflowGrid({
     weeks, invoices, bills, openingCash,
     weeklyRecurringOutflows, weeklyRecurringInflows,
     companyId, highlightWeek, highlightId, onRefresh, onClearHighlight,
+    forecastBalances,
 }: Props) {
     const router = useRouter();
     const [dropTargetWeek, setDropTargetWeek] = useState<number | null>(null);
@@ -133,6 +144,8 @@ export function CashflowGrid({
                 }
             }));
             onRefresh();
+            // Signal the Dashboard the forecast is stale after undo
+            try { localStorage.setItem('cfdo_forecast_stale', Date.now().toString()); } catch { /* noop */ }
         } catch { /* ignore */ }
         finally { setDropping(false); }
     }, [undoState, clearUndoToast, companyId, onRefresh]);
@@ -216,8 +229,22 @@ export function CashflowGrid({
     }, [sortMode]);
 
     // Running balance
+    // When server-computed forecast balances are available (same engine as the Dashboard),
+    // use them as the authoritative source. This ensures the Ledger and Dashboard
+    // always show the same In / Out / Net / Balance numbers.
+    // Fallback to client-side estimation only if the API didn't return forecast data.
     const weekBalances = useMemo(() => {
-        const balances: { inflows: number; outflows: number; net: number; balance: number }[] = [];
+        if (forecastBalances?.length) {
+            return forecastBalances.map(fb => ({
+                inflows: fb.inflowsExpected,
+                outflows: fb.outflowsExpected,
+                net: fb.inflowsExpected - fb.outflowsExpected,
+                balance: fb.endCashExpected,
+                projectedInflow: fb.projectedInflow,
+            }));
+        }
+        // Client-side fallback (used if API doesn't return forecast yet)
+        const balances: { inflows: number; outflows: number; net: number; balance: number; projectedInflow: number }[] = [];
         let running = openingCash;
         for (let w = 0; w < 13; w++) {
             const wn = w + 1;
@@ -230,10 +257,10 @@ export function CashflowGrid({
             const outflows = apTotal + recOut;
             const net = inflows - outflows;
             running += net;
-            balances.push({ inflows, outflows, net, balance: running });
+            balances.push({ inflows, outflows, net, balance: running, projectedInflow: 0 });
         }
         return balances;
-    }, [byWeek, openingCash, weeklyRecurringOutflows, weeklyRecurringInflows]);
+    }, [forecastBalances, byWeek, openingCash, weeklyRecurringOutflows, weeklyRecurringInflows]);
 
     // Backlog items (use filtered sets so filter affects backlog too)
     const beyondAR = sortItems(filteredInvoices.filter(i => i.effectiveWeek === null));
@@ -294,8 +321,11 @@ export function CashflowGrid({
         });
     }, []);
 
-    // After a move, keep the drawer open but refresh the selected item data
+    // After a move, keep the drawer open but refresh the selected item data.
+    // Also signal the Dashboard that the forecast is now stale so it re-fetches
+    // when the user navigates back.
     const handleMoved = useCallback(() => {
+        try { localStorage.setItem('cfdo_forecast_stale', Date.now().toString()); } catch { /* noop */ }
         onRefresh();
         // Drawer stays open — user can continue working
     }, [onRefresh]);
@@ -358,6 +388,8 @@ export function CashflowGrid({
             const noun = preState.every(p => p.kind === "ar") ? "invoice" : preState.every(p => p.kind === "ap") ? "bill" : "item";
             const plural = ids.length === 1 ? noun : `${noun}s`;
             showUndoToast(`${ids.length} ${plural} moved to Week ${weekNumber}`, preState);
+            // Signal the Dashboard the forecast is stale
+            try { localStorage.setItem('cfdo_forecast_stale', Date.now().toString()); } catch { /* noop */ }
             onRefresh();
         } catch { /* ignore */ }
         finally { setDropping(false); }
@@ -868,6 +900,13 @@ export function CashflowGrid({
                                                     <span style={{ color: 'var(--text-muted)' }}>In</span>
                                                     <span style={{ color: '#059669' }}>+{fmt(bal.inflows)}</span>
                                                 </div>
+                                                {/* Projected inflow annotation — shown when baseline/manual entries add inflow
+                                                    beyond the visible AR cards. Keeps the user informed without a Dashboard trip. */}
+                                                {(bal.projectedInflow ?? 0) > 500 && (
+                                                    <div className="flex justify-between text-[9px] pl-2" title="Projected inflow from historical bank patterns or manual adjustments — matches Dashboard">
+                                                        <span style={{ color: 'var(--text-faint)' }}>↳ {fmt(bal.projectedInflow)} projected</span>
+                                                    </div>
+                                                )}
                                                 <div className="flex justify-between text-[10px]">
                                                     <span style={{ color: 'var(--text-muted)' }}>Out</span>
                                                     <span style={{ color: '#e11d48' }}>−{fmt(bal.outflows)}</span>
