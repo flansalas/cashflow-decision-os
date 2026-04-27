@@ -40,6 +40,7 @@ interface GridData {
         riskTag: string;
         confidence: string;
         moveCount: number;
+        isExcluded?: boolean;
         kind: "ar";
     }>;
     bills: Array<{
@@ -56,6 +57,7 @@ interface GridData {
         overrideDate: string | null;
         criticality: string;
         moveCount: number;
+        isExcluded?: boolean;
         kind: "ap";
     }>;
     weeklyRecurringOutflows: RecurringWeek[];
@@ -195,6 +197,7 @@ function CashflowContent() {
         daysPastDue: inv.daysPastDue,
         expectedDate: inv.expectedDate,
         moveCount: inv.moveCount,
+        isExcluded: inv.isExcluded,
     }));
 
     const billItems: GridItem[] = data.bills.map(bill => ({
@@ -214,6 +217,7 @@ function CashflowContent() {
         daysPastDue: bill.daysPastDue,
         effectiveDate: bill.effectiveDate,
         moveCount: bill.moveCount,
+        isExcluded: bill.isExcluded,
     }));
 
     return (

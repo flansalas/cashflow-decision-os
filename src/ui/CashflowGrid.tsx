@@ -255,8 +255,8 @@ export function CashflowGrid({
         for (let w = 0; w < 13; w++) {
             const wn = w + 1;
             const items = byWeek.get(wn)!;
-            const arTotal = items.ar.reduce((s, i) => s + i.amountOpen, 0);
-            const apTotal = items.ap.reduce((s, i) => s + i.amountOpen, 0);
+            const arTotal = items.ar.filter(i => !i.isExcluded).reduce((s, i) => s + i.amountOpen, 0);
+            const apTotal = items.ap.filter(i => !i.isExcluded).reduce((s, i) => s + i.amountOpen, 0);
             const recOut = weeklyRecurringOutflows.find(r => r.weekNumber === wn)?.total ?? 0;
             const recIn = weeklyRecurringInflows.find(r => r.weekNumber === wn)?.total ?? 0;
             const inflows = arTotal + recIn;
@@ -275,10 +275,10 @@ export function CashflowGrid({
 
     // Auto-select first item if needed? (optional, usually better to leave closed)
 
-    // Summary stats (always use full unfiltered set for header tallies)
-    const totalAR = invoices.reduce((s, i) => s + i.amountOpen, 0);
-    const totalAP = bills.reduce((s, i) => s + i.amountOpen, 0);
-    const overriddenCount = [...invoices, ...bills].filter(i => i.overrideDate).length;
+    // Summary stats (always use full unfiltered set for header tallies, but ignore excluded items)
+    const totalAR = invoices.filter(i => !i.isExcluded).reduce((s, i) => s + i.amountOpen, 0);
+    const totalAP = bills.filter(i => !i.isExcluded).reduce((s, i) => s + i.amountOpen, 0);
+    const overriddenCount = [...invoices, ...bills].filter(i => i.overrideDate && !i.isExcluded).length;
 
     // Dollar totals for the current multi-selection
     const selectionTotals = useMemo(() => {

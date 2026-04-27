@@ -183,9 +183,9 @@ export function ARAPCard({ item, weeks, companyId, onMoved, onSelect, isSelected
                         : "0 1px 2px 0 rgb(0 0 0 / 0.05)",
                 borderLeftWidth: "3px",
                 borderLeftColor: riskColors[item.risk] ?? "var(--text-muted)",
-                ...(isBacklog && {
-                    opacity: 0.8,
-                    filter: "grayscale(0.2)"
+                ...((isBacklog || item.isExcluded) && {
+                    opacity: item.isExcluded ? 0.6 : 0.8,
+                    filter: item.isExcluded ? "grayscale(0.6)" : "grayscale(0.2)"
                 })
             }}
         >
@@ -193,7 +193,7 @@ export function ARAPCard({ item, weeks, companyId, onMoved, onSelect, isSelected
                 {/* Row 1: drag handle + label */}
                 <div className="flex items-start gap-2">
                     <span className="text-xs shrink-0 mt-0.5" style={{ color: "var(--text-faint)" }}>&#8943;</span>
-                    <span className="line-clamp-2 leading-tight flex-1 font-medium text-xs" style={{ color: "var(--text-secondary)" }} title={item.label}>
+                    <span className={`line-clamp-2 leading-tight flex-1 font-medium text-xs ${item.isExcluded ? "line-through opacity-70" : ""}`} style={{ color: "var(--text-secondary)" }} title={item.label}>
                         {item.label}
                     </span>
                 </div>
@@ -205,7 +205,15 @@ export function ARAPCard({ item, weeks, companyId, onMoved, onSelect, isSelected
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
                         <AgingBadge days={item.daysPastDue} />
-                        {isOverridden && !item.daysPastDue && (
+                        {item.isExcluded && (
+                            <span
+                                className="text-micro border px-1.5 py-0.5 rounded font-semibold tracking-wider uppercase"
+                                style={{ color: "#ef4444", borderColor: "rgba(239,68,68,0.20)", background: "rgba(239,68,68,0.06)" }}
+                            >
+                                Excluded
+                            </span>
+                        )}
+                        {!item.isExcluded && isOverridden && !item.daysPastDue && (
                             <span
                                 className="text-micro border px-1.5 py-0.5 rounded"
                                 style={{ color: "var(--color-primary)", borderColor: "rgba(79,70,229,0.20)", background: "rgba(79,70,229,0.06)" }}
