@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { Hourglass, Package } from "lucide-react";
+import { Hourglass, Package, EyeOff, RotateCcw } from "lucide-react";
 import type { GridItem } from "./ARAPCard";
 
 interface Props {
@@ -91,6 +91,8 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
     const [targetWeek, setTargetWeek] = useState<number>(item.effectiveWeek ?? 1);
     const [saving, setSaving] = useState(false);
     const [parking, setParking] = useState(false);
+    const [excluding, setExcluding] = useState(false);
+    const [restoring, setRestoring] = useState(false);
     const [undoing, setUndoing] = useState(false);
 
     const isAR = item.kind === "ar";
@@ -142,6 +144,32 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
             onClose();
         } catch { /* ignore */ }
         finally { setParking(false); }
+    };
+
+    const handleExclude = async () => {
+        setExcluding(true);
+        try {
+            // "exclude" is a separate type so it does not overwrite date overrides by default in the UI flow,
+            // but we want to make sure it's saved.
+            await fetch("/api/overrides", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ companyId, type: "exclude", targetType, targetId: item.id }),
+            });
+            onMoved();
+            onClose();
+        } catch { /* ignore */ }
+        finally { setExcluding(false); }
+    };
+
+    const handleRestore = async () => {
+        setRestoring(true);
+        try {
+            await fetch(`/api/overrides?targetId=${item.id}&type=exclude`, { method: "DELETE" });
+            onMoved();
+            onClose();
+        } catch { /* ignore */ }
+        finally { setRestoring(false); }
     };
 
     const handleUndo = async () => {
@@ -367,26 +395,67 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
                     </div>
                 </div>
 
-                {/* Park in Backlog */}
-                {item.effectiveWeek !== null && (
-                    <>
+                {/* Park in Backlog / Exclude */}
+                {item.isExcluded ? (
+                    <div>
                         <button
-                            onClick={handleParkInBacklog}
-                            disabled={parking}
-                            className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 shadow-sm"
+                            onClick={handleRestore}
+                            disabled={restoring}
+                            className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 shadow-sm mb-1.5"
                             style={{
                                 color: "var(--color-primary)",
                                 borderColor: "var(--border-default)",
                                 background: "var(--bg-raised)",
                             }}
                         >
-                            {parking ? <Hourglass className="w-3.5 h-3.5" /> : <Package className="w-3.5 h-3.5" />}
-                            <span>{parking ? "Parking…" : "Park in Backlog"}</span>
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>{restoring ? "Restoring…" : "Restore Item"}</span>
                         </button>
                         <p className="text-center text-[11px]" style={{ color: "var(--text-faint)" }}>
-                            Removes from 13-week math · recoverable anytime
+                            Brings this item back into the grid and forecast
                         </p>
-                    </>
+                    </div>
+                ) : (
+                    item.effectiveWeek !== null && (
+                        <div className="flex gap-2">
+                            <div className="flex-1">
+                                <button
+                                    onClick={handleParkInBacklog}
+                                    disabled={parking || excluding}
+                                    className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 shadow-sm"
+                                    style={{
+                                        color: "var(--color-primary)",
+                                        borderColor: "var(--border-default)",
+                                        background: "var(--bg-raised)",
+                                    }}
+                                >
+                                    {parking ? <Hourglass className="w-3.5 h-3.5" /> : <Package className="w-3.5 h-3.5" />}
+                                    <span>{parking ? "Parking…" : "Park in Backlog"}</span>
+                                </button>
+                                <p className="text-center text-[10px] mt-1.5" style={{ color: "var(--text-faint)" }}>
+                                    Removes from 13-week math
+                                </p>
+                            </div>
+                            <div className="flex-1">
+                                <button
+                                    onClick={handleExclude}
+                                    disabled={parking || excluding}
+                                    className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 shadow-sm"
+                                    style={{
+                                        color: "#e11d48",
+                                        borderColor: "rgba(225,29,72,0.2)",
+                                        background: "rgba(225,29,72,0.04)",
+                                    }}
+                                >
+                                    <EyeOff className="w-3.5 h-3.5" />
+                                    <span>{excluding ? "Excluding…" : "Exclude Permanently"}</span>
+                                </button>
+                                <p className="text-center text-[10px] mt-1.5" style={{ color: "var(--text-faint)" }}>
+                                    Hides entirely (recoverable)
+                                </p>
+                            </div>
+                        </div>
+                    )
                 )}
             </div>
         </div>

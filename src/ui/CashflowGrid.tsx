@@ -3,7 +3,7 @@
 
 import { useMemo, useState, useCallback, useEffect, useRef, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Package, Printer, Inbox, Search, X, CheckCircle, RotateCcw, ChevronDown, LayoutList, Flame } from "lucide-react";
+import { Package, Printer, Inbox, Search, X, CheckCircle, RotateCcw, ChevronDown, LayoutList, Flame, EyeOff } from "lucide-react";
 import { ARAPCard, type GridItem, type DragPayload } from "./ARAPCard";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
 import { ExecutionPlanModal } from "./ExecutionPlanModal";
@@ -68,6 +68,7 @@ export function CashflowGrid({
     const [summaryView, setSummaryView] = useState(false);
     const [sortMode, setSortMode] = useState<"az" | "amount" | "aging">("aging");
     const [showPlan, setShowPlan] = useState(false);
+    const [showExcluded, setShowExcluded] = useState(false);
     const [filterQuery, setFilterQuery] = useState("");
     const filterInputRef = useRef<HTMLInputElement>(null);
     const [showSortMenu, setShowSortMenu] = useState(false);
@@ -177,11 +178,16 @@ export function CashflowGrid({
 
     // Filter items by query (name, number, or amount)
     const filterItems = useCallback((items: GridItem[]): GridItem[] => {
+        let filtered = items;
+        if (!showExcluded) {
+            filtered = filtered.filter(item => !item.isExcluded);
+        }
+
         const q = filterQuery.trim().toLowerCase();
-        if (!q) return items;
+        if (!q) return filtered;
         const asNumber = parseFloat(q.replace(/[^0-9.]/g, ""));
         const isNumericSearch = !isNaN(asNumber) && q.replace(/[^0-9.]/g, "").length > 0;
-        return items.filter(item => {
+        return filtered.filter(item => {
             if (isNumericSearch) {
                 const lo = asNumber * 0.99;
                 const hi = asNumber * 1.01;
@@ -195,7 +201,7 @@ export function CashflowGrid({
                 (item.vendorName ?? "").toLowerCase().includes(q)
             );
         });
-    }, [filterQuery]);
+    }, [filterQuery, showExcluded]);
 
     // Filtered item sets (applied before byWeek grouping)
     const filteredInvoices = useMemo(() => filterItems(invoices), [filterItems, invoices]);
@@ -632,6 +638,20 @@ export function CashflowGrid({
                             </div>
                         );
                     })()}
+
+                    {/* Excluded toggle */}
+                    <button
+                        onClick={() => setShowExcluded(v => !v)}
+                        title={showExcluded ? "Hide excluded items" : "Show excluded items"}
+                        className="px-2.5 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 text-xs font-semibold"
+                        style={{
+                            background: showExcluded ? "rgba(225,29,72,0.08)" : "var(--bg-raised)",
+                            borderColor: showExcluded ? "rgba(225,29,72,0.2)" : "var(--border-default)",
+                            color: showExcluded ? "#e11d48" : "var(--text-secondary)"
+                        }}
+                    >
+                        <EyeOff className="w-3.5 h-3.5" />
+                    </button>
 
                     {/* View toggle — icon-only: Detail list vs Heat Map */}
                     <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "var(--border-default)" }}>

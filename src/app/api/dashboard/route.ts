@@ -129,12 +129,17 @@ export async function GET(req: NextRequest) {
             let overrideAmount: number | null = null;
             let partialPayment: number | null = null;
 
+            let isExcluded = false;
+
             for (const ov of ovs) {
                 if (ov.type === "mark_paid") markedPaid = true;
+                if (ov.type === "exclude") isExcluded = true;
                 if (ov.type === "set_expected_payment_date" && ov.effectiveDate) overrideExpectedDate = ov.effectiveDate;
                 if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
                 if (ov.type === "partial_payment" && ov.amount != null) partialPayment = ov.amount;
             }
+
+            if (isExcluded) return null;
 
             return {
                 id: inv.id,
@@ -153,7 +158,7 @@ export async function GET(req: NextRequest) {
                 markedPaid,
                 partialPayment,
             };
-        });
+        }).filter((inv): inv is NonNullable<typeof inv> => inv !== null);
 
         const bills: ForecastBill[] = billsRaw.map(bill => {
             const vp = vendorMap.get(bill.vendorName);
@@ -163,12 +168,17 @@ export async function GET(req: NextRequest) {
             let overrideDueDate: Date | null = null;
             let overrideAmount: number | null = null;
 
+            let isExcluded = false;
+
             for (const ov of ovs) {
                 if (ov.type === "mark_paid") markedPaid = true;
+                if (ov.type === "exclude") isExcluded = true;
                 if (ov.type === "delay_due_date" && ov.effectiveDate) overrideDueDate = ov.effectiveDate;
                 if (ov.type === "set_bill_due_date" && ov.effectiveDate) overrideDueDate = ov.effectiveDate;
                 if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
             }
+
+            if (isExcluded) return null;
 
             return {
                 id: bill.id,
@@ -184,7 +194,7 @@ export async function GET(req: NextRequest) {
                 overrideAmount,
                 markedPaid,
             };
-        });
+        }).filter((bill): bill is NonNullable<typeof bill> => bill !== null);
 
         // Build a map of patternId -> skipDates from active skip_recurring_occurrence overrides
         const skipDatesByPattern = new Map<string, string[]>();
@@ -359,7 +369,8 @@ export async function GET(req: NextRequest) {
                 if (bill.status !== "open") return false;
                 const ovs = overridesByTarget.get(bill.id) || [];
                 const paid = ovs.some(o => o.type === "mark_paid");
-                if (paid) return false;
+                const excluded = ovs.some(o => o.type === "exclude");
+                if (paid || excluded) return false;
                 // If there is a future override, it's already scheduled — not a backlog item
                 const futureOverride = ovs.find(o =>
                     (o.type === "delay_due_date" || o.type === "set_bill_due_date") &&
@@ -390,7 +401,8 @@ export async function GET(req: NextRequest) {
                 if (inv.status !== "open") return false;
                 const ovs = overridesByTarget.get(inv.id) || [];
                 const paid = ovs.some(o => o.type === "mark_paid");
-                if (paid) return false;
+                const excluded = ovs.some(o => o.type === "exclude");
+                if (paid || excluded) return false;
                 // If there is a future override (explicit schedule), it's already in the grid
                 const futureOverride = ovs.find(o =>
                     o.type === "set_expected_payment_date" &&

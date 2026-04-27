@@ -113,8 +113,11 @@ export async function GET(req: NextRequest) {
             let overrideAmount: number | null = null;
             let partialPayment: number | null = null;
 
+            let isExcluded = false;
+
             for (const ov of ovs) {
                 if (ov.type === "mark_paid") markedPaid = true;
+                if (ov.type === "exclude") isExcluded = true;
                 if (ov.type === "set_expected_payment_date" && ov.effectiveDate) overrideExpectedDate = ov.effectiveDate;
                 if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
                 if (ov.type === "partial_payment" && ov.amount != null) partialPayment = ov.amount;
@@ -181,6 +184,7 @@ export async function GET(req: NextRequest) {
                 riskTag: cp?.riskTag ?? "low",
                 confidence,
                 moveCount,
+                isExcluded,
                 kind: "ar" as const,
             };
         })
@@ -197,8 +201,11 @@ export async function GET(req: NextRequest) {
             let overrideDueDate: Date | null = null;
             let overrideAmount: number | null = null;
 
+            let isExcluded = false;
+
             for (const ov of ovs) {
                 if (ov.type === "mark_paid") markedPaid = true;
+                if (ov.type === "exclude") isExcluded = true;
                 if (ov.type === "delay_due_date" && ov.effectiveDate) overrideDueDate = ov.effectiveDate;
                 if (ov.type === "set_bill_due_date" && ov.effectiveDate) overrideDueDate = ov.effectiveDate;
                 if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
@@ -254,6 +261,7 @@ export async function GET(req: NextRequest) {
                 overrideDate: overrideDueDate?.toISOString() ?? null,
                 criticality: vp?.criticality ?? "normal",
                 moveCount,
+                isExcluded,
                 kind: "ap" as const,
             };
         })
@@ -392,7 +400,7 @@ export async function GET(req: NextRequest) {
         });
 
     // Build invoice/bill inputs (same enrichment already done above, re-use the data)
-    const forecastInvoices: ForecastInvoice[] = enrichedInvoices.map((inv: any) => {
+    const forecastInvoices: ForecastInvoice[] = enrichedInvoices.filter((inv: any) => !inv.isExcluded).map((inv: any) => {
         const ovs = overridesByTarget.get(inv.id) || [];
         let overrideExpectedDate: Date | null = null;
         let overrideAmount: number | null = null;
@@ -422,7 +430,7 @@ export async function GET(req: NextRequest) {
         };
     });
 
-    const forecastBills: ForecastBill[] = enrichedBills.map((bill: any) => {
+    const forecastBills: ForecastBill[] = enrichedBills.filter((bill: any) => !bill.isExcluded).map((bill: any) => {
         const ovs = overridesByTarget.get(bill.id) || [];
         let overrideDueDate: Date | null = null;
         let overrideAmount: number | null = null;

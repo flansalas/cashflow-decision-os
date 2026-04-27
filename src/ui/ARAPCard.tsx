@@ -26,6 +26,7 @@ export interface GridItem {
     moveCount?: number;
     expectedDate?: string | null;
     effectiveDate?: string | null;
+    isExcluded?: boolean;
 }
 
 /** Payload stored in dataTransfer during drag */

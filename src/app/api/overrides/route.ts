@@ -10,7 +10,7 @@ const VALID_TYPES = [
     "set_customer_delay", "set_vendor_criticality",
     "set_recurring_pattern", "toggle_recurring_included",
     "set_payroll", "set_rent", "set_fixed_outflow", "add_cash_adjustment",
-    "skip_recurring_occurrence",
+    "skip_recurring_occurrence", "exclude"
 ];
 
 export async function POST(req: NextRequest) {
