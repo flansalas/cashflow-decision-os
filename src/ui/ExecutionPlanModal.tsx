@@ -201,8 +201,9 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, onClos
             {/* Print CSS injected into head */}
             <style>{`
                 @media print {
-                    body > *:not(#execution-plan-overlay) { display: none !important; }
-                    #execution-plan-overlay { position: static !important; background: white !important; }
+                    body { visibility: hidden; }
+                    #execution-plan-overlay { visibility: visible; position: absolute; left: 0; top: 0; width: 100%; background: white !important; }
+                    #execution-plan-overlay * { visibility: visible; }
                     #execution-plan-modal-header { display: none !important; }
                     #execution-plan-tabs { display: none !important; }
                     .no-print { display: none !important; }
