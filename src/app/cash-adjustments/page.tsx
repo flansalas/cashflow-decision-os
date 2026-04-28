@@ -305,7 +305,11 @@ function CategoryCard({ category, companyId, weeks, isHighlighted, highlightWeek
                                                     className="border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500"
                                                     style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}>
                                                     <option value="">Week…</option>
-                                                    {Array.from({ length: 13 }, (_, i) => i + 1).map(wn => <option key={wn} value={wn}>Week {wn}</option>)}
+                                                    {Array.from({ length: 13 }, (_, i) => i + 1).map(wn => {
+                                                        const wInfo = weeks.find(w => w.weekNumber === wn);
+                                                        const rangeStr = wInfo ? ` · ${fmtDate(wInfo.weekStart)} – ${fmtDate(wInfo.weekEnd)}` : "";
+                                                        return <option key={wn} value={wn}>Week {wn}{rangeStr}</option>
+                                                    })}
                                                 </select>
                                                 <input type="text" value={editEntry.note} onChange={e => setEditEntry(s => ({ ...s, note: e.target.value }))}
                                                     placeholder="Note (optional)" className="col-span-2 border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500"
@@ -323,7 +327,15 @@ function CategoryCard({ category, companyId, weeks, isHighlighted, highlightWeek
                                     ) : (
                                         <div className="flex items-center justify-between gap-2">
                                             <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "var(--bg-surface)", color: "var(--text-muted)" }}>W{entry.weekNumber}</span>
+                                                {(() => {
+                                                    const wInfo = weeks.find(w => w.weekNumber === entry.weekNumber);
+                                                    const rangeStr = wInfo ? ` · ${fmtDate(wInfo.weekStart)} – ${fmtDate(wInfo.weekEnd)}` : "";
+                                                    return (
+                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap" style={{ background: "var(--bg-surface)", color: "var(--text-muted)", borderColor: "var(--border-subtle)" }}>
+                                                            Week {entry.weekNumber}{rangeStr}
+                                                        </span>
+                                                    );
+                                                })()}
                                                 <span className="text-sm truncate" style={{ color: "var(--text-primary)" }}>{entry.label}</span>
                                                 {entry.note && <span className="text-[10px] truncate" style={{ color: "var(--text-muted)" }}>— {entry.note}</span>}
                                             </div>
@@ -357,7 +369,11 @@ function CategoryCard({ category, companyId, weeks, isHighlighted, highlightWeek
                                     className="border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500"
                                     style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}>
                                     <option value="">Week…</option>
-                                    {Array.from({ length: 13 }, (_, i) => i + 1).map(wn => <option key={wn} value={wn}>Week {wn}</option>)}
+                                    {Array.from({ length: 13 }, (_, i) => i + 1).map(wn => {
+                                        const wInfo = weeks.find(w => w.weekNumber === wn);
+                                        const rangeStr = wInfo ? ` · ${fmtDate(wInfo.weekStart)} – ${fmtDate(wInfo.weekEnd)}` : "";
+                                        return <option key={wn} value={wn}>Week {wn}{rangeStr}</option>
+                                    })}
                                 </select>
                                 <input type="text" value={newEntry.note} onChange={e => setNewEntry(s => ({ ...s, note: e.target.value }))}
                                     placeholder="Note (optional)" className="col-span-2 border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500"
