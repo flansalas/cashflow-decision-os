@@ -604,7 +604,7 @@ function CashAdjustmentsContent() {
                         </a>
                         <span style={{ color: "var(--border-default)" }}>/</span>
                         <span style={{ color: "var(--color-primary)" }} className="font-bold text-sm flex items-center gap-1.5">
-                            <Layers className="w-4 h-4" /> Cash Adjustments
+                            <Layers className="w-4 h-4" /> One-Time Cash Adjustments
                         </span>
                     </div>
                     <button onClick={fetchData} className="p-1.5 rounded-lg border text-sm" title="Refresh"
@@ -617,6 +617,32 @@ function CashAdjustmentsContent() {
             <main className="max-w-5xl mx-auto px-5 py-6 space-y-5">
                 {/* Survival Runway */}
                 <SurvivalRunway weeks={weeks} bufferMin={bufferMin} />
+
+                {/* Guidance Banner */}
+                <div
+                    className="rounded-xl border px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4"
+                    style={{ background: "rgba(245,158,11,0.05)", borderColor: "rgba(245,158,11,0.25)" }}
+                >
+                    <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold mb-0.5" style={{ color: "#92400e" }}>
+                            Use this page for one-time or irregular cash flows only.
+                        </p>
+                        <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                            Examples: tax payment, equipment purchase, large customer deposit, one-time bonus.<br />
+                            For <strong>payroll, rent, recurring income, or any repeated expense</strong>, use{" "}
+                            <a href="/recurring" className="font-semibold underline hover:opacity-80 transition-opacity" style={{ color: "var(--color-primary)" }}>
+                                Commitments
+                            </a>{" "}instead — it will carry those forward automatically each week.
+                        </p>
+                    </div>
+                    <a
+                        href="/recurring"
+                        className="shrink-0 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors hover:opacity-90"
+                        style={{ background: "var(--color-primary)", borderColor: "var(--color-primary)", color: "#fff" }}
+                    >
+                        Go to Commitments →
+                    </a>
+                </div>
 
                 {/* Direction Toggle */}
                 <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "var(--border-default)" }}>
