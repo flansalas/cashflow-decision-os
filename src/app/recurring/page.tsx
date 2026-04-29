@@ -774,6 +774,11 @@ function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss, 
                                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
+                        {addState.direction === "inflow" && (
+                            <div className="text-xs font-medium text-amber-800 bg-amber-50 px-3 py-2 rounded border border-amber-200 mt-2">
+                                <strong>Avoid double-counting AR:</strong> Uploaded customer invoices are already included in your forecast. Only add recurring inflows here if they are not already captured in AR invoices.
+                            </div>
+                        )}
                         <button onClick={() => setAddState(s => ({ ...s, isCritical: !s.isCritical }))}
                             className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded border ${addState.isCritical ? "border-red-200 text-red-800 bg-red-50" : "border-gray-200 text-gray-500 bg-gray-50"}`}>
                             {addState.isCritical ? <><AlertTriangle className="w-3 h-3 inline-block mr-1" /> Critical — click to unmark</> : <><Circle className="w-3 h-3 inline-block mr-1" /> Mark as critical</>}
