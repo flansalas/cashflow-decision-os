@@ -11,6 +11,7 @@ interface PatchBody {
     typicalAmount?: number;
     nextExpectedDate?: string | null;
     displayName?: string;
+    cadence?: string;
 }
 
 export async function PATCH(
@@ -36,6 +37,7 @@ export async function PATCH(
             typicalAmount: number;
             nextExpectedDate: Date | null;
             displayName: string;
+            cadence: string;
         }> = {};
 
         if (body.isIncluded !== undefined) updateData.isIncluded = body.isIncluded;
@@ -51,10 +53,27 @@ export async function PATCH(
             updateData.nextExpectedDate = body.nextExpectedDate ? new Date(body.nextExpectedDate) : null;
         }
 
+        let cadenceChanged = false;
+        if (body.cadence !== undefined && body.cadence !== existing.cadence) {
+            updateData.cadence = body.cadence;
+            cadenceChanged = true;
+        }
+
         const updated = await prisma.recurringPattern.update({
             where: { id },
             data: updateData,
         });
+
+        if (cadenceChanged) {
+            await prisma.override.updateMany({
+                where: {
+                    targetId: id,
+                    status: "active",
+                    type: { in: ["skip_recurring_occurrence", "add_one_time_outflow"] }
+                },
+                data: { status: "archived" }
+            });
+        }
 
         return NextResponse.json({
             id: updated.id,
@@ -63,6 +82,7 @@ export async function PATCH(
             isCritical: updated.isCritical,
             typicalAmount: updated.typicalAmount,
             nextExpectedDate: updated.nextExpectedDate,
+            cadence: updated.cadence,
         });
     } catch (error) {
         console.error("Commitments PATCH error:", error);
@@ -82,6 +102,16 @@ export async function DELETE(
         if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
         await prisma.recurringPattern.delete({ where: { id } });
+
+        await prisma.override.updateMany({
+            where: {
+                targetId: id,
+                status: "active",
+                type: { in: ["skip_recurring_occurrence", "add_one_time_outflow"] }
+            },
+            data: { status: "archived" }
+        });
+
         return NextResponse.json({ ok: true });
     } catch (error) {
         console.error("Commitments DELETE error:", error);

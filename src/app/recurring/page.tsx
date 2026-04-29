@@ -86,7 +86,7 @@ const categoryIcons: Record<string, React.ReactNode> = {
 const CADENCES = ["weekly", "biweekly", "monthly", "irregular"];
 const CATEGORIES = ["other", "rent", "loan", "subscription", "utilities", "fuel", "materials", "taxes", "card_payment", "asset_sale"];
 
-interface EditState { amount: string; nextDate: string; displayName: string; }
+interface EditState { amount: string; nextDate: string; displayName: string; cadence: string; }
 interface AddState { displayName: string; category: string; cadence: string; amount: string; nextDate: string; isCritical: boolean; direction: string; }
 const EMPTY_ADD: AddState = { displayName: "", category: "other", cadence: "monthly", amount: "", nextDate: "", isCritical: false, direction: "outflow" };
 
@@ -570,12 +570,25 @@ function CommitmentRow({ c, highlightId, editingId, editState, saving, setEditin
                                     style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }} min={0} step={100} />
                             </div>
                             <div className="flex-1">
+                                <label className="text-xs block mb-1 uppercase tracking-wider font-semibold" style={{ color: "var(--text-muted)" }}>Cadence</label>
+                                <select value={editState.cadence} onChange={e => setEditState({ ...editState, cadence: e.target.value })}
+                                    className="w-full border rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+                                    style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}>
+                                    {CADENCES.map(cad => <option key={cad} value={cad}>{cad === "irregular" ? "one-time" : cad}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex-1">
                                 <label className="text-xs block mb-1 uppercase tracking-wider font-semibold" style={{ color: "var(--text-muted)" }}>Next Date</label>
                                 <input type="date" value={editState.nextDate} onChange={e => setEditState({ ...editState, nextDate: e.target.value })}
                                     className="w-full border rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
                                     style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }} />
                             </div>
                         </div>
+                        {editState.cadence !== c.cadence && (
+                            <p className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1.5 rounded border border-amber-100">
+                                Changing cadence will reset any custom skipped or rescheduled dates for this commitment.
+                            </p>
+                        )}
                     </div>
                     <div className="flex gap-2 pt-1">
                         <button onClick={async () => {
@@ -583,7 +596,8 @@ function CommitmentRow({ c, highlightId, editingId, editState, saving, setEditin
                             const ok = await patch(c.id, { 
                                 displayName: editState.displayName.trim(),
                                 typicalAmount: amount, 
-                                nextExpectedDate: editState.nextDate || null 
+                                nextExpectedDate: editState.nextDate || null,
+                                cadence: editState.cadence
                             });
                             if (ok) setEditingId(null);
                         }} disabled={saving === c.id}
@@ -613,6 +627,7 @@ function CommitmentRow({ c, highlightId, editingId, editState, saving, setEditin
                         setEditState({ 
                             displayName: c.displayName,
                             amount: String(c.typicalAmount), 
+                            cadence: c.cadence,
                             nextDate: c.nextExpectedDate ? new Date(c.nextExpectedDate).toISOString().slice(0, 10) : "" 
                         }); 
                     }}
@@ -630,7 +645,7 @@ function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss, 
     showAddForm: boolean; setShowAddForm: (show: boolean) => void;
 }) {
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [editState, setEditState] = useState<EditState>({ amount: "", nextDate: "", displayName: "" });
+    const [editState, setEditState] = useState<EditState>({ amount: "", nextDate: "", displayName: "", cadence: "" });
     const [saving, setSaving] = useState<string | null>(null);
     const [localCommitments, setLocalCommitments] = useState<Commitment[]>(commitments);
     const [error, setError] = useState<string | null>(null);
