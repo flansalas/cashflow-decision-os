@@ -228,7 +228,7 @@ export function AppSidebar() {
             title={collapsed ? "Expand sidebar" : undefined}
         >
             {/* Sidebar Header (QBO Style) */}
-            <div className={`flex items-center shrink-0 h-14 relative ${collapsed ? "justify-center border-b" : "px-4 border-b"}`} style={{ borderColor: "var(--border-subtle)" }}>
+            <div className={`flex items-center shrink-0 h-14 ${collapsed ? "justify-center border-b" : "justify-between px-4 border-b"}`} style={{ borderColor: "var(--border-subtle)" }}>
                 
                 {/* Logo and Name */}
                 {!collapsed && (
@@ -243,28 +243,26 @@ export function AppSidebar() {
                     </div>
                 )}
 
-                {/* Toggle Button Tab */}
+                {/* Toggle Button */}
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
                         toggle();
                     }}
                     className={`
-                        absolute top-4 -right-4 z-10
-                        flex items-center justify-center 
-                        border-t border-r border-b border-slate-200 bg-white rounded-r-lg
-                        transition-all duration-200 hover:bg-slate-50 shadow-sm
-                        w-4 h-11 text-slate-400 hover:text-indigo-600
+                        flex items-center justify-center shrink-0
+                        rounded-md transition-all duration-200 hover:bg-slate-100
+                        w-8 h-8 text-slate-400 hover:text-indigo-600
                     `}
                     title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                 >
                     <div className="w-full h-full flex items-center justify-center">
                         {collapsed ? (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="translate-x-[0.5px]">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="translate-x-[0.5px]">
                                 <polyline points="9 18 15 12 9 6" />
                             </svg>
                         ) : (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="-translate-x-[0.5px]">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="-translate-x-[0.5px]">
                                 <polyline points="15 18 9 12 15 6" />
                             </svg>
                         )}
