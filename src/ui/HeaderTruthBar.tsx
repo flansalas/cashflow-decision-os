@@ -411,7 +411,7 @@ export function HeaderTruthBar({
                 </div>
 
                 {/* Health & Runway */}
-                <div className={`w-full lg:flex-[1.5] min-w-0 flex items-center justify-between relative group/health transition-all duration-500 gap-2 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-4 py-3 xl:px-5'}`}>
+                <div className={`w-full lg:flex-[2.5] min-w-0 flex items-center justify-between relative group/health transition-all duration-500 gap-2 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-4 py-3 xl:px-5'}`}>
                     {/* Contextual Action - Visible Only When Expanded */}
                     {!isCompact && (
                         <div className="relative z-10 flex shrink-0 items-center justify-start h-full">

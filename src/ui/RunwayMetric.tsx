@@ -34,7 +34,7 @@ export function RunwayMetric({ businessCashState, expectedWeek, worstWeek, isCom
 
     if (isCompact) {
         return (
-            <div className="flex items-center gap-2 justify-end w-full">
+            <div className="flex items-center gap-2 justify-end min-w-0">
                 <span className="px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest border shrink-0" style={{ 
                     borderColor: labelColor, 
                     color: labelColor,
@@ -52,7 +52,7 @@ export function RunwayMetric({ businessCashState, expectedWeek, worstWeek, isCom
     return (
         <div className="flex flex-col items-end w-full">
             <div className="flex items-center gap-2 transition-all duration-500 mb-1.5 translate-y-[-2px]">
-                <span className="uppercase font-black opacity-30 text-slate-500 transition-all duration-500 text-[10px] tracking-[0.2em]">Financial Health</span>
+                <span className="uppercase font-black opacity-30 text-slate-500 transition-all duration-500 text-[10px] tracking-[0.2em] truncate min-w-0">Financial Health</span>
                 <span className="px-1.5 py-0.5 rounded text-[9px] font-black tracking-widest border" style={{ 
                     borderColor: labelColor, 
                     color: labelColor,
