@@ -374,6 +374,9 @@ function DashboardContent() {
             </div>
 
             <main className="max-w-[88rem] mx-auto px-6 py-6 space-y-6">
+                {/* ── Weekly Cash Routine ── */}
+                <WeeklyRoutineCard />
+
                 {/* ── Dashboard Pulse Grid ─────────────────────────── */}
                 <div className="flex flex-col gap-5">
                     {/* FULL WIDTH: The Pulse (Chart) */}
@@ -504,8 +507,6 @@ function DashboardContent() {
                     );
                 })()}
 
-                {/* ── Weekly Cash Routine ── */}
-                <WeeklyRoutineCard />
 
                 {/* ── 13-Week Forecast Summary Grid ─────────── */}
                 <details className="rounded-2xl border overflow-hidden shadow-sm group transition-shadow hover:shadow-[0_8px_16px_rgba(15,23,42,0.04)] bg-white" style={{ borderColor: "var(--border-subtle)" }}>
