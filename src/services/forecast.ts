@@ -395,16 +395,6 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         const endDate = addWeeks(currentMonday, 13);
         const windowStart = new Date(currentMonday);
 
-        // Backtrack to first potential occurrence in/before the window
-        while (d > windowStart) {
-            if (rec.cadence === "weekly") d = addDays(d, -7);
-            else if (rec.cadence === "biweekly") d = addDays(d, -14);
-            else if (rec.cadence === "monthly") {
-                const prev = new Date(d);
-                prev.setMonth(prev.getMonth() - 1);
-                d = prev;
-            } else break;
-        }
 
         while (d <= endDate) {
             for (let w = 0; w < 13; w++) {
@@ -470,16 +460,6 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         const endDate = addWeeks(currentMonday, 13);
         const windowStart = new Date(currentMonday);
 
-        // Backtrack payroll
-        while (d > windowStart) {
-            if (cadence === "weekly") d = addDays(d, -7);
-            else if (cadence === "biweekly") d = addDays(d, -14);
-            else if (cadence === "monthly") {
-                const prev = new Date(d);
-                prev.setMonth(prev.getMonth() - 1);
-                d = prev;
-            } else break;
-        }
 
         const payrollPattern: ForecastRecurring = {
             id: "synthetic-payroll",
@@ -565,16 +545,6 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         const endDate = addWeeks(currentMonday, 13);
         const windowStart = new Date(currentMonday);
 
-        // Backtrack to first potential occurrence in/before the window
-        while (d > windowStart) {
-            if (rec.cadence === "weekly") d = addDays(d, -7);
-            else if (rec.cadence === "biweekly") d = addDays(d, -14);
-            else if (rec.cadence === "monthly") {
-                const prev = new Date(d);
-                prev.setMonth(prev.getMonth() - 1);
-                d = prev;
-            } else break;
-        }
 
         while (d <= endDate) {
             for (let w = 0; w < 13; w++) {
