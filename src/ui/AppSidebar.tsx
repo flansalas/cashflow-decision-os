@@ -112,13 +112,13 @@ export function AppSidebar() {
         },
         {
             icon: <Repeat2 className="w-[18px] h-[18px]" />,
-            label: "Commitments",
+            label: "Recurring Cash",
             href: "/recurring",
             section: "workspace",
         },
         {
             icon: <Layers className="w-[18px] h-[18px]" />,
-            label: "Cash Adjustments",
+            label: "One-Time Adjustments",
             href: "/cash-adjustments",
             section: "workspace",
         },

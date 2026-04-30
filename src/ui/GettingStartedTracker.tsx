@@ -79,11 +79,11 @@ export function GettingStartedTracker({
         {
             id: "commitments",
             label: "Add your rent & bills",
-            description: "Recurring commitments make the forecast realistic.",
+            description: "Recurring cash makes the forecast realistic.",
             icon: <ClipboardList className="w-4 h-4" />,
             done: hasCommitments,
             action: {
-                label: "Add commitment",
+                label: "Add recurring cash",
                 onClick: () => {
                     onOpenCommitments();
                     // Small delay to allow scroll/tab switch to settle before spotlighting

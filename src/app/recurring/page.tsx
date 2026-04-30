@@ -894,7 +894,7 @@ function RecurringContent() {
             <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg-base)" }}>
                 <div className="text-center space-y-4">
                     <div className="animate-spin w-10 h-10 border-[3px] border-indigo-500 border-t-transparent rounded-full mx-auto" />
-                    <p className="text-sm tracking-wide" style={{ color: "var(--text-muted)" }}>Loading recurring commitments…</p>
+                    <p className="text-sm tracking-wide" style={{ color: "var(--text-muted)" }}>Loading recurring cash…</p>
                 </div>
             </div>
         );
@@ -925,7 +925,7 @@ function RecurringContent() {
                             <ArrowLeft className="w-3 h-3" /> Dashboard
                         </a>
                         <span style={{ color: "var(--border-default)" }}>/</span>
-                        <span style={{ color: "var(--color-primary)" }} className="font-bold text-sm flex items-center gap-1.5"><Calendar className="w-4 h-4" /> Recurring Commitments</span>
+                        <span style={{ color: "var(--color-primary)" }} className="font-bold text-sm flex items-center gap-1.5"><Calendar className="w-4 h-4" /> Recurring Cash</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
@@ -937,7 +937,7 @@ function RecurringContent() {
                             className="px-3 py-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider rounded-lg shadow-sm transition-all"
                             style={{ background: "var(--color-primary)", color: "white" }}
                         >
-                            <Plus className="w-3.5 h-3.5" /> Add Commitment
+                            <Plus className="w-3.5 h-3.5" /> Add Recurring Cash
                         </button>
                         <button onClick={fetchData} className="p-1.5 rounded-lg border text-sm" title="Refresh" style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)", color: "var(--text-muted)" }}>
                             <RefreshCw className="w-3.5 h-3.5" />

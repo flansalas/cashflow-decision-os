@@ -568,7 +568,7 @@ function CashAdjustmentsContent() {
             <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg-base)" }}>
                 <div className="text-center space-y-4">
                     <div className="animate-spin w-10 h-10 border-[3px] border-indigo-500 border-t-transparent rounded-full mx-auto" />
-                    <p className="text-sm tracking-wide" style={{ color: "var(--text-muted)" }}>Loading cash adjustments…</p>
+                    <p className="text-sm tracking-wide" style={{ color: "var(--text-muted)" }}>Loading one-time adjustments…</p>
                 </div>
             </div>
         );
@@ -604,7 +604,7 @@ function CashAdjustmentsContent() {
                         </a>
                         <span style={{ color: "var(--border-default)" }}>/</span>
                         <span style={{ color: "var(--color-primary)" }} className="font-bold text-sm flex items-center gap-1.5">
-                            <Layers className="w-4 h-4" /> One-Time Cash Adjustments
+                            <Layers className="w-4 h-4" /> One-Time Adjustments
                         </span>
                     </div>
                     <button onClick={fetchData} className="p-1.5 rounded-lg border text-sm" title="Refresh"
@@ -631,7 +631,7 @@ function CashAdjustmentsContent() {
                             Examples: tax payment, equipment purchase, large customer deposit, one-time bonus.<br />
                             For <strong>payroll, rent, recurring income, or any repeated expense</strong>, use{" "}
                             <a href="/recurring" className="font-semibold underline hover:opacity-80 transition-opacity" style={{ color: "var(--color-primary)" }}>
-                                Commitments
+                                Recurring Cash
                             </a>{" "}instead — it will carry those forward automatically each week.
                         </p>
                     </div>
@@ -640,7 +640,7 @@ function CashAdjustmentsContent() {
                         className="shrink-0 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors hover:opacity-90"
                         style={{ background: "var(--color-primary)", borderColor: "var(--color-primary)", color: "#fff" }}
                     >
-                        Go to Commitments →
+                        Go to Recurring Cash →
                     </a>
                 </div>
 
