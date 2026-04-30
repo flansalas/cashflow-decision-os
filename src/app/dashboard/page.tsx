@@ -11,6 +11,7 @@ import { ForecastPulseView } from "@/ui/ForecastPulseView";
 import { ForecastActionsView } from "@/ui/ForecastActionsView";
 import { ForecastSummaryGrid } from "@/ui/ForecastSummaryGrid";
 import { ActionsPanel } from "@/ui/ActionsPanel";
+import { WeeklyRoutineCard } from "@/ui/WeeklyRoutineCard";
 import { WhyWeekModal } from "@/ui/WhyWeekModal";
 import { OnboardingWizard } from "@/ui/OnboardingWizard";
 import { ScenarioBuilder, type ScenarioItem } from "@/ui/ScenarioBuilder";
@@ -502,6 +503,9 @@ function DashboardContent() {
                         </details>
                     );
                 })()}
+
+                {/* ── Weekly Cash Routine ── */}
+                <WeeklyRoutineCard />
 
                 {/* ── 13-Week Forecast Summary Grid ─────────── */}
                 <details className="rounded-2xl border overflow-hidden shadow-sm group transition-shadow hover:shadow-[0_8px_16px_rgba(15,23,42,0.04)] bg-white" style={{ borderColor: "var(--border-subtle)" }}>
