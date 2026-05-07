@@ -21,7 +21,6 @@ import { UpdateBalanceDialog } from "@/ui/UpdateBalanceDialog";
 import { GettingStartedTracker } from "@/ui/GettingStartedTracker";
 import { SpotlightProvider } from "@/ui/SpotlightContext";
 import { NebulaOverlay } from "@/ui/NebulaOverlay";
-import { RiskOptimismDial } from "@/ui/RiskOptimismDial";
 import { AlertTriangle, Settings2, BarChart3, Target, PlaneTakeoff, AlignEndHorizontal, Zap, ClipboardList, Lightbulb, ChevronDown, ArrowRight, LineChart, Box, ArrowLeft, Upload, Landmark, RefreshCw, X, CheckCircle, ThermometerSun, ShieldCheck, ShieldAlert } from "lucide-react";
 import type { BusinessCashState, DataQualityGateResult } from "@/domain/types";
 
@@ -407,15 +406,6 @@ function DashboardContent() {
                                         </button>
                                     ))}
                                 </div>
-                            </div>
-                            
-                            {/* Simulation Controls Right-Aligned */}
-                            <div className="flex items-center">
-                                <RiskOptimismDial 
-                                    companyId={effectiveCompanyId ?? ""}
-                                    initialMargin={data.assumptions.projectionSafetyMargin}
-                                    onChanged={() => fetchDashboard(effectiveCompanyId)}
-                                />
                             </div>
                         </div>
 
