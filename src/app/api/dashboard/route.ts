@@ -11,6 +11,8 @@ import { computeExpectedPaymentDate, parsePaymentCurve, getMonday, addDays } fro
 import { resolveTenant } from "@/lib/tenant";
 import type { BusinessCashState } from "@/domain/types";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
     try {
         const tenantId = await resolveTenant(req);

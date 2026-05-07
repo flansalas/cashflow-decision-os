@@ -199,7 +199,7 @@ function DashboardContent() {
         const id = cid ?? companyId;
         const url = id ? `/api/dashboard?companyId=${id}` : "/api/dashboard";
         lastFetchTimeRef.current = Date.now();
-        fetch(url)
+        fetch(url, { cache: "no-store" })
             .then(r => r.json())
             .then(d => {
                 if (d.error) {

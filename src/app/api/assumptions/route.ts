@@ -4,7 +4,22 @@ import prisma from "@/db/prisma";
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { companyId, bufferMin, projectionSafetyMargin } = body;
+        let { companyId, bufferMin, projectionSafetyMargin } = body;
+
+        // Resolve Clerk Org ID to internal DB UUID if necessary
+        if (companyId && companyId.startsWith('org_')) {
+            const company = await prisma.company.findUnique({
+                where: { clerkOrgId: companyId },
+                select: { id: true }
+            });
+            if (company) companyId = company.id;
+        }
+
+        // Local development fallback if companyId is missing
+        if (!companyId) {
+            const fallback = await prisma.company.findFirst({ orderBy: { createdAt: "desc" }});
+            if (fallback) companyId = fallback.id;
+        }
 
         if (!companyId) {
             return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
