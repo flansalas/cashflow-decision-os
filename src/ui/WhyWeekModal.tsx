@@ -398,7 +398,7 @@ function RecurringReschedulePopover({
 
 // ── Section Block ─────────────────────────────────────────────────────────────
 function SectionBlock({
-    title, items, sign, companyId, sourceWeekStart, onReschedule, startOpen = false,
+    title, items, sign, companyId, sourceWeekStart, onReschedule, startOpen = false, weekNumber,
 }: {
     title: string;
     items: BreakdownItem[];
@@ -407,6 +407,7 @@ function SectionBlock({
     sourceWeekStart: string;
     onReschedule: () => void;
     startOpen?: boolean;
+    weekNumber: number;
 }) {
     const [reschedulingId, setReschedulingId] = useState<string | null>(null);
     const [resettingId, setResettingId] = useState<string | null>(null);
@@ -458,6 +459,26 @@ function SectionBlock({
         }
     };
 
+    const isClickable = (item: BreakdownItem) => {
+        if (item.sourceType === "invoice" || item.sourceType === "bill" || item.sourceType === "recurring") return !!item.sourceId;
+        if (item.sourceType === "manual") return true;
+        return false;
+    };
+
+    const handleRowClick = (e: React.MouseEvent, item: BreakdownItem) => {
+        if ((e.target as HTMLElement).closest('button, input')) return;
+
+        if ((item.sourceType === "invoice" || item.sourceType === "bill") && item.sourceId) {
+            const mode = item.sourceType === "invoice" ? "ar" : "ap";
+            window.location.href = `/cashflow?mode=${mode}&highlightId=${item.sourceId}`;
+        } else if (item.sourceType === "recurring" && item.sourceId) {
+            window.location.href = `/recurring?highlightId=${item.sourceId}`;
+        } else if (item.sourceType === "manual") {
+            const dir = sign === "+" ? "in" : "out";
+            window.location.href = `/cash-adjustments?direction=${dir}&highlightWeek=${weekNumber}`;
+        }
+    };
+
     return (
         <div className="mb-4">
             {/* Section header — ALL sections are collapsible */}
@@ -487,7 +508,11 @@ function SectionBlock({
                 <div className="space-y-2 mb-4">
                     {items.map((item, i) => (
                         <div key={i} className="group/row stagger-item" style={{ animationDelay: `${i * 40}ms` }}>
-                            <div className="flex items-center justify-between py-2.5 px-3.5 rounded-xl gap-2 border bg-white shadow-sm transition-all hover:shadow-md hover:scale-[1.01] hover-elevate" style={{ borderColor: item.type === "rescheduled" ? "rgba(99,102,241,0.25)" : "var(--border-subtle)" }}>
+                            <div 
+                                className={`flex items-center justify-between py-2.5 px-3.5 rounded-xl gap-2 border bg-white shadow-sm transition-all hover:shadow-md hover:scale-[1.01] hover-elevate ${isClickable(item) ? "cursor-pointer" : ""}`} 
+                                style={{ borderColor: item.type === "rescheduled" ? "rgba(99,102,241,0.25)" : "var(--border-subtle)" }}
+                                onClick={(e) => isClickable(item) && handleRowClick(e, item)}
+                            >
                                 <div className="flex items-center gap-2 min-w-0">
                                     <span className={`text-base shrink-0 ${confidenceDot[item.confidence]}`}>•</span>
                                     <div className="min-w-0">
@@ -535,6 +560,14 @@ function SectionBlock({
                                         >
                                             <ArrowRight className="w-3.5 h-3.5 mr-0.5" /> Week
                                         </button>
+                                    )}
+                                    {isClickable(item) && (
+                                        <div 
+                                            className="ml-1 opacity-0 group-hover/row:opacity-100 transition-opacity text-slate-300"
+                                            title="View source"
+                                        >
+                                            <ArrowRight className="w-3.5 h-3.5" />
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -682,6 +715,7 @@ export function WhyWeekModal({ week, weekNumber, weekStart, companyId, scenarioI
                                 key={section} title={section} items={items} sign="+"
                                 companyId={companyId} sourceWeekStart={weekStart} onReschedule={onReschedule}
                                 startOpen={section === "AR Receipts" && week.endCashExpected < (buffer ?? 0)}
+                                weekNumber={weekNumber}
                             />
                         ))
                     )}
@@ -715,6 +749,7 @@ export function WhyWeekModal({ week, weekNumber, weekStart, companyId, scenarioI
                                 key={section} title={section} items={items} sign="-"
                                 companyId={companyId} sourceWeekStart={weekStart} onReschedule={onReschedule}
                                 startOpen={false}
+                                weekNumber={weekNumber}
                             />
                         ))
                     )}
