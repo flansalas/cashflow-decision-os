@@ -62,12 +62,12 @@ function fmt(n: number): string {
 function formatDate(iso: string | null): string {
     if (!iso) return "Unknown";
     const d = new Date(iso);
-    return (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear().toString().slice(-2);
+    return (d.getUTCMonth() + 1) + "/" + d.getUTCDate() + "/" + d.getUTCFullYear().toString().slice(-2);
 }
 
 function formatWeekLabel(weekEnd: string): string {
     const d = new Date(weekEnd);
-    return (d.getMonth() + 1) + "/" + d.getDate();
+    return (d.getUTCMonth() + 1) + "/" + d.getUTCDate();
 }
 
 // ─── Week Picker ──────────────────────────────────────────────────────────────

@@ -162,7 +162,7 @@ function ViewContextHero({ week, viewMode, buffer }: { week: WeekData; viewMode:
                             {fmt(week.endCashExpected)}
                         </h3>
                         <p className="text-sm mt-3 leading-relaxed text-slate-500 font-medium">
-                            Terminal position for period ending {new Date(week.weekEnd).toLocaleDateString("en-US", { month: 'short', day: 'numeric' })}. 
+                            Terminal position for period ending {new Date(week.weekEnd).toLocaleDateString("en-US", { timeZone: "UTC", month: 'short', day: 'numeric' })}. 
                             The net movement creates a <span className={`font-bold ${isPositiveWeek ? "text-emerald-700" : "text-rose-600"}`}>{fmt(Math.abs(net))} {isPositiveWeek ? "surplus" : "burn"}</span>.
                         </p>
                     </div>
@@ -635,7 +635,7 @@ export function WhyWeekModal({ week, weekNumber, weekStart, companyId, scenarioI
                         <div className="flex items-center gap-3">
                             <span className="text-[10px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded-lg border bg-slate-50 text-slate-500 border-slate-200">Fiscal Week {weekNumber}</span>
                             <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                             <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">{new Date(week.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – {new Date(week.weekEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                             <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">{new Date(week.weekStart).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" })} – {new Date(week.weekEnd).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" })}</span>
                         </div>
                         <h2 className="text-xl font-black mt-2 text-slate-900">
                              Week Intelligence

@@ -17,7 +17,7 @@ function fmt(n: number) {
 function formatDateRange(start: string | Date, end: string | Date) {
     const s = new Date(start);
     const e = new Date(end);
-    return `${s.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${e.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+    return `${s.toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" })} – ${e.toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" })}`;
 }
 
 interface HoveredInfo {

@@ -19,14 +19,12 @@ function fmt(n: number): string {
 
 function fmtDate(iso: string | null | undefined): string {
     if (!iso) return "—";
-    const d = new Date(iso);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    return new Date(iso).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
 }
 
 function fmtDateShort(iso: string | null | undefined): string {
     if (!iso) return "—";
-    const d = new Date(iso);
-    return `${d.getMonth() + 1}/${d.getDate()}`;
+    return new Date(iso).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
 }
 
 const riskColors: Record<string, { color: string; bg: string; label: string }> = {

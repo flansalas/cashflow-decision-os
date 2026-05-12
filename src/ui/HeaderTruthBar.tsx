@@ -399,7 +399,7 @@ export function HeaderTruthBar({
                             {payroll ? (
                                 <span className={`font-medium text-slate-400 absolute whitespace-nowrap flex items-center gap-1 opacity-80 group-hover/out:opacity-100 transition-all duration-500 ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3.5'}`}>
                                     <TrendingDown className="w-2.5 h-2.5" />
-                                    Payroll {new Date(payroll.nextDate!).toLocaleDateString(undefined, { month: 'short', day: 'numeric'})}
+                                    Payroll {new Date(payroll.nextDate!).toLocaleDateString("en-US", { timeZone: "UTC", month: 'short', day: 'numeric'})}
                                 </span>
                             ) : payrollPromptNeeded ? (
                                 <span className={`font-medium text-amber-600 absolute whitespace-nowrap flex items-center gap-1 opacity-80 group-hover/out:opacity-100 transition-all duration-500 ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3.5'}`}>

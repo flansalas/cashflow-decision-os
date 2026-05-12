@@ -37,7 +37,7 @@ function fmt(n: number): string {
 
 function formatDate(dateStr: string): string {
     const d = new Date(dateStr);
-    return (d.getMonth() + 1) + "/" + d.getDate();
+    return (d.getUTCMonth() + 1) + "/" + d.getUTCDate();
 }
 
 export function ForecastBarView({ weeks, buffer, constraintWeek, scenarioItems = [], onWeekClick }: Props) {
