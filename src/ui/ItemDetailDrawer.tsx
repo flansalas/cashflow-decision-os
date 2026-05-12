@@ -106,7 +106,7 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
 
         const weekStart = new Date(wk.weekStart);
         const friday = new Date(weekStart);
-        friday.setDate(friday.getDate() + 4);
+        friday.setUTCDate(friday.getUTCDate() + 4);
         const dateStr = friday.toISOString().slice(0, 10);
 
         setSaving(true);

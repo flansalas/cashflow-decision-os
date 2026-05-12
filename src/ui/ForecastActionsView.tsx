@@ -236,12 +236,12 @@ function WeekCard({
             .sort((a, b) => b.amount - a.amount)[0]
         : null;
 
-    // "Push to next week" = weekEnd + 7 days
+    // "Push to next week" = weekEnd + 7 days (UTC-safe)
     const nextWeekDate = new Date(week.weekEnd);
-    nextWeekDate.setDate(nextWeekDate.getDate() + 7);
+    nextWeekDate.setUTCDate(nextWeekDate.getUTCDate() + 7);
     const nextWeekStr = nextWeekDate.toISOString().split("T")[0];
 
-    const dateStr = new Date(week.weekEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const dateStr = new Date(week.weekEnd).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
 
     return (
         <div

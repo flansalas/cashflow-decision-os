@@ -84,7 +84,7 @@ function fmt(n: number): string {
 }
 
 function fmtDate(iso: string) {
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return new Date(iso).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
 }
 
 const categoryIcons: Record<string, React.ReactNode> = {
@@ -123,10 +123,12 @@ function WeekRescheduleInline({
         setSaving(true);
         setError(null);
         try {
-            // Snap to Monday of target week
-            const d = new Date(targetDate + "T12:00:00");
-            const day = d.getDay();
-            d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+            // Snap to Monday of target week (UTC-safe)
+            const [y, m, dayNum] = targetDate.split("-").map(Number);
+            const d = new Date(Date.UTC(y, m - 1, dayNum));
+            const day = d.getUTCDay();
+            const diff = day === 0 ? -6 : 1 - day;
+            d.setUTCDate(d.getUTCDate() + diff);
             const targetWeekStart = d.toISOString().slice(0, 10);
 
             const res = await fetch("/api/recurring-reschedule", {
@@ -738,7 +740,7 @@ function ManageTab({ commitments, companyId, onChanged }: {
                                 <div className="flex items-center gap-2 text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                                     <span className="capitalize">{c.cadence}</span>
                                     <span>·</span>
-                                    <span>Next: {c.nextExpectedDate ? new Date(c.nextExpectedDate).toLocaleDateString() : "TBD"}</span>
+                                    <span>Next: {c.nextExpectedDate ? new Date(c.nextExpectedDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : "TBD"}</span>
                                 </div>
                             </div>
                             <div className="text-right shrink-0">

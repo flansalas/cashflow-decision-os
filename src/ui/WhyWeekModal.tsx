@@ -341,11 +341,12 @@ function RecurringReschedulePopover({
         setSaving(true);
         setError(null);
         try {
-            // Snap the chosen date to the Monday of that week
-            const d = new Date(targetDate + "T12:00:00");
-            const day = d.getDay();
+            // Snap the chosen date to the Monday of that week (UTC-safe)
+            const [y, m, dayNum] = targetDate.split("-").map(Number);
+            const d = new Date(Date.UTC(y, m - 1, dayNum));
+            const day = d.getUTCDay();
             const diff = day === 0 ? -6 : 1 - day;
-            d.setDate(d.getDate() + diff);
+            d.setUTCDate(d.getUTCDate() + diff);
             const targetWeekStart = d.toISOString().slice(0, 10);
 
             const res = await fetch("/api/recurring-reschedule", {
