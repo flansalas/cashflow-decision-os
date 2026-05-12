@@ -46,7 +46,7 @@ function fmt(n: number): string {
 }
 
 function fmtDate(iso: string) {
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return new Date(iso).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
 }
 
 // ── Add Category Form ──────────────────────────────────────────────────

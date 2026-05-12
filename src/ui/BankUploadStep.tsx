@@ -278,7 +278,7 @@ function PatternCard({
                         <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>{pattern.cadence}</span>
                     </div>
                     <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                        Seen {pattern.occurrences}× · Next: {new Date(pattern.editedDate).toLocaleDateString()}
+                        Seen {pattern.occurrences}× · Next: {new Date(pattern.editedDate).toLocaleDateString("en-US", { timeZone: "UTC" })}
                     </div>
                 </div>
 

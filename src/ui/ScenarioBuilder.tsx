@@ -31,7 +31,7 @@ interface Props {
 
 function fmtDate(dateStr: string): string {
     const d = new Date(dateStr);
-    return `${d.getMonth() + 1}/${d.getDate()}`;
+    return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 }
 
 const EMPTY_FORM = { label: "", direction: "out" as "in" | "out", fromWeekNumber: 1, toWeekNumber: 1, amount: "" };

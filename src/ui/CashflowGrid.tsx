@@ -52,7 +52,7 @@ function fmt(n: number): string {
 
 function fmtDate(d: string): string {
     const dt = new Date(d);
-    return `${dt.getMonth() + 1}/${dt.getDate()}`;
+    return `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}`;
 }
 
 export function CashflowGrid({
@@ -727,7 +727,7 @@ export function CashflowGrid({
                                 <div key={wk.weekNumber} className="flex flex-col items-center rounded-lg p-2 border text-center"
                                     style={{ background: zone.bg, borderColor: zone.border }}>
                                     <span className="text-[11px] font-bold" style={{ color: "var(--text-muted)" }}>W{wk.weekNumber}</span>
-                                    <span className="text-[8px] mt-0.5" style={{ color: "var(--text-faint)" }}>{new Date(wk.weekStart).toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}</span>
+                                    <span className="text-[8px] mt-0.5" style={{ color: "var(--text-faint)" }}>{new Date(wk.weekStart).toLocaleDateString("en-US", { timeZone: "UTC", month: "numeric", day: "numeric" })}</span>
                                     <span className={`text-xs font-bold font-financial mt-1.5 ${bal.net >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                                         {bal.net >= 0 ? "+" : ""}{fmt(bal.net)}
                                     </span>

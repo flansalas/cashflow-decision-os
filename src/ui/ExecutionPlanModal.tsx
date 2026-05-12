@@ -28,7 +28,7 @@ function fmt(n: number): string {
 function fmtDate(iso: string | null | undefined): string {
     if (!iso) return "—";
     const d = new Date(iso);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    return d.toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
 }
 
 function agingLabel(days: number | null | undefined): { text: string; urgent: boolean } {

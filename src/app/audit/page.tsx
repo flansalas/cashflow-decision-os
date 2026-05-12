@@ -247,7 +247,7 @@ function AuditLogContent() {
                                                                  }
                                                              } else if (typeof val === 'string' && val.includes('T00:00:00')) {
                                                                  // crude date check
-                                                                 try { displayVal = new Date(val).toLocaleDateString(); } catch {}
+                                                                 try { displayVal = new Date(val).toLocaleDateString("en-US", { timeZone: "UTC" }); } catch {}
                                                              }
                                                              
                                                              const displayKey = key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
