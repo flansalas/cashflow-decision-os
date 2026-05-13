@@ -38,9 +38,19 @@ export async function POST(req: NextRequest) {
         bankBalance: number;
         asOfDate?: string;
         adjustments?: Array<{ type: string; amount: number; note: string | null }>;
+        priorWeekForecast?: {
+            forecastVersionHash?: string;
+            generatedAt?: string;
+            weekStart: string;
+            weekEnd: string;
+            endCashExpected: number;
+            inflowsExpected: number;
+            outflowsExpected: number;
+            breakdownJson?: string;
+        };
     };
 
-    const { companyId, bankBalance, asOfDate, adjustments = [] } = body;
+    const { companyId, bankBalance, asOfDate, adjustments = [], priorWeekForecast } = body;
 
     if (!companyId) {
         return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
@@ -128,10 +138,35 @@ export async function POST(req: NextRequest) {
                 }
             });
 
-            return snapshot;
+            // ── Create Forecast Checkpoint for V1 ──────────────────────────────
+            let checkpoint = null;
+            if (priorWeekForecast) {
+                checkpoint = await tx.forecastCheckpoint.create({
+                    data: {
+                        companyId,
+                        cashSnapshotId: snapshot.id,
+                        snapshotSource: "client_observed_v1",
+                        forecastVersionHash: priorWeekForecast.forecastVersionHash || null,
+                        generatedAt: priorWeekForecast.generatedAt ? new Date(priorWeekForecast.generatedAt) : null,
+                        weekStart: new Date(priorWeekForecast.weekStart),
+                        weekEnd: new Date(priorWeekForecast.weekEnd),
+                        endCashExpected: priorWeekForecast.endCashExpected,
+                        inflowsExpected: priorWeekForecast.inflowsExpected,
+                        outflowsExpected: priorWeekForecast.outflowsExpected,
+                        breakdownJson: priorWeekForecast.breakdownJson || null,
+                    }
+                });
+            }
+
+            return { snapshot, checkpoint };
         });
 
-        return NextResponse.json({ ok: true, snapshotId: result.id, asOfDate: result.asOfDate });
+        return NextResponse.json({ 
+            ok: true, 
+            snapshotId: result.snapshot.id, 
+            asOfDate: result.snapshot.asOfDate,
+            checkpoint: result.checkpoint 
+        });
     } catch (error) {
         console.error("Cash check-in error:", error);
         return NextResponse.json({ error: "Failed to save balance and adjustments" }, { status: 500 });

@@ -647,6 +647,8 @@ function DashboardContent() {
                     currentBalance={data.cash.bankBalance}
                     currentAdjustments={data.cash.adjustments}
                     companyId={data.company.id}
+                    priorWeekData={data.forecast.weeks[0]}
+                    lastUpdated={data.lastUpdated}
                     onSaved={() => {
                         setShowUpdateBalance(false);
                         fetchDashboard(effectiveCompanyId);

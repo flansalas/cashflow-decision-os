@@ -23,25 +23,26 @@ model Company {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  notes              CompanyNote[]
-  cashSnapshots      CashSnapshot[]
-  cashAdjustments    CashAdjustment[]
-  customerProfiles   CustomerProfile[]
-  vendorProfiles     VendorProfile[]
-  receivableInvoices ReceivableInvoice[]
-  payableBills       PayableBill[]
-  assumptions        Assumption[]
-  bankAccounts       BankAccount[]
-  bankTransactions   BankTransaction[]
-  recurringPatterns  RecurringPattern[]
-  mappingProfiles    MappingProfile[]
-  overrides          Override[]
-  changeLogs         ChangeLog[]
-  forecastWeeks      ForecastWeek[]
-  actionItems        ActionItem[]
-  scenarioItems      ScenarioItem[]
-  cashFlowCategories CashFlowCategory[]
-  cashFlowEntries    CashFlowEntry[]
+  notes               CompanyNote[]
+  cashSnapshots       CashSnapshot[]
+  cashAdjustments     CashAdjustment[]
+  customerProfiles    CustomerProfile[]
+  vendorProfiles      VendorProfile[]
+  receivableInvoices  ReceivableInvoice[]
+  payableBills        PayableBill[]
+  assumptions         Assumption[]
+  bankAccounts        BankAccount[]
+  bankTransactions    BankTransaction[]
+  recurringPatterns   RecurringPattern[]
+  mappingProfiles     MappingProfile[]
+  overrides           Override[]
+  changeLogs          ChangeLog[]
+  forecastWeeks       ForecastWeek[]
+  actionItems         ActionItem[]
+  scenarioItems       ScenarioItem[]
+  cashFlowCategories  CashFlowCategory[]
+  cashFlowEntries     CashFlowEntry[]
+  forecastCheckpoints ForecastCheckpoint[]
 }
 
 model CompanyNote {
@@ -65,7 +66,8 @@ model CashSnapshot {
   bankBalance Float
   createdAt   DateTime @default(now())
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  forecastCheckpoint ForecastCheckpoint?
 }
 
 // type: pending_deposit | uncleared_check | restricted_cash | other
@@ -403,4 +405,27 @@ model CashFlowEntry {
 
   company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   category CashFlowCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+}
+
+// ────────────────────────────────────────────────
+// FORECAST MEMORY / CHECKPOINT
+// ────────────────────────────────────────────────
+
+model ForecastCheckpoint {
+  id                  String    @id @default(uuid())
+  companyId           String
+  cashSnapshotId      String    @unique
+  snapshotSource      String    @default("client_observed_v1")
+  forecastVersionHash String?
+  generatedAt         DateTime?
+  weekStart           DateTime
+  weekEnd             DateTime
+  endCashExpected     Float
+  inflowsExpected     Float
+  outflowsExpected    Float
+  breakdownJson       String?
+  createdAt           DateTime  @default(now())
+
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  cashSnapshot CashSnapshot @relation(fields: [cashSnapshotId], references: [id], onDelete: Cascade)
 }

@@ -32,6 +32,8 @@ interface Props {
     currentBalance: number;
     currentAdjustments: Array<{ type: string; amount: number; note: string | null }>;
     companyId: string;
+    priorWeekData?: any;
+    lastUpdated?: string | null;
     onSaved: () => void;
     onCancel: () => void;
 }
@@ -40,6 +42,8 @@ export function UpdateBalanceDialog({
     currentBalance,
     currentAdjustments,
     companyId,
+    priorWeekData,
+    lastUpdated,
     onSaved,
     onCancel,
 }: Props) {
@@ -108,6 +112,18 @@ export function UpdateBalanceDialog({
                     bankBalance: parsedBalance,
                     asOfDate,
                     adjustments: adjustments.map(({ id: _, ...rest }) => rest),
+                    ...(priorWeekData ? {
+                        priorWeekForecast: {
+                            forecastVersionHash: "client_observed_v1",
+                            generatedAt: lastUpdated || new Date().toISOString(),
+                            weekStart: priorWeekData.weekStart,
+                            weekEnd: priorWeekData.weekEnd,
+                            endCashExpected: priorWeekData.cashEnd,
+                            inflowsExpected: priorWeekData.cashIn,
+                            outflowsExpected: priorWeekData.cashOut,
+                            breakdownJson: priorWeekData.breakdown ? JSON.stringify(priorWeekData.breakdown) : undefined,
+                        }
+                    } : {})
                 }),
             });
             if (!res.ok) { setError("Failed to save — try again"); setSaving(false); return; }
@@ -449,6 +465,22 @@ export function UpdateBalanceDialog({
             </div>
 
             <div className="w-full grid grid-cols-3 gap-3">
+                {priorWeekData && (
+                    <div className="col-span-3 mb-2 p-4 rounded-xl border flex justify-between items-center bg-gray-50 dark:bg-gray-800/50" style={{ borderColor: "var(--border-subtle)" }}>
+                        <div className="text-left">
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Variance</p>
+                            <p className="text-sm">
+                                <span className="font-semibold text-gray-700 dark:text-gray-300">Expected:</span> {fmt(priorWeekData.cashEnd)}
+                            </p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-lg font-bold" style={{ color: (summary.newBalance - priorWeekData.cashEnd) >= 0 ? "var(--color-positive)" : "var(--color-danger)" }}>
+                                {(summary.newBalance - priorWeekData.cashEnd) > 0 ? "+" : ""}{fmt(summary.newBalance - priorWeekData.cashEnd)}
+                            </p>
+                            <p className="text-xs text-gray-500">vs Prior Projection</p>
+                        </div>
+                    </div>
+                )}
                 {[
                     { label: "New Spendable Cash", value: fmt(summary.newBalance), color: summary.newBalance >= 0 ? "var(--color-positive)" : "var(--color-danger)" },
                     { label: "Scheduled Items", value: summary.snoozed.toString(), color: "var(--color-primary)" },
