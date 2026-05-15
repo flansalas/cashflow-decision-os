@@ -70,8 +70,8 @@ function AuthenticatedHomepage() {
     // Multi-org users: do NOT auto-redirect — show the selection card below
   }, [isOrgLoaded, listLoaded, isSingleOrg, organization, router, setActive, memberships]);
 
-  // Still loading Clerk state
-  if (!isOrgLoaded || !listLoaded) {
+  // Still loading Clerk state or fetching membership data
+  if (!isOrgLoaded || !listLoaded || userMemberships.isLoading) {
     return (
       <PageShell>
         <div className="flex justify-center">
