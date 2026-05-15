@@ -54,12 +54,18 @@ function AuthenticatedHomepage() {
   // Single-org: auto-activate and redirect immediately
   useEffect(() => {
     if (!isOrgLoaded || !listLoaded) return;
-    if (isSingleOrg && organization) {
-      localStorage.removeItem("cfdo_company_id");
-      router.replace("/dashboard");
+    if (isSingleOrg) {
+      if (!organization && setActive && memberships[0]) {
+        // Auto-activate the single organization if none is active
+        setActive({ organization: memberships[0].organization.id });
+      } else if (organization) {
+        // Already active, proceed to dashboard
+        localStorage.removeItem("cfdo_company_id");
+        router.replace("/dashboard");
+      }
     }
     // Multi-org users: do NOT auto-redirect — show the selection card below
-  }, [isOrgLoaded, listLoaded, isSingleOrg, organization, router]);
+  }, [isOrgLoaded, listLoaded, isSingleOrg, organization, router, setActive, memberships]);
 
   // Still loading Clerk state
   if (!isOrgLoaded || !listLoaded) {
