@@ -42,6 +42,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
 // Only renders when Clerk confirms isSignedIn.
 function AuthenticatedHomepage() {
   const router = useRouter();
+  const { userId } = useAuth();
   const { organization, isLoaded: isOrgLoaded } = useOrganization();
   const { isLoaded: listLoaded, setActive, userMemberships } = useOrganizationList({
     userMemberships: { infinite: true },
@@ -137,6 +138,19 @@ function AuthenticatedHomepage() {
   }
 
   // Signed in but no org memberships at all
+  console.log("CFDO Diagnostic:", {
+    userId,
+    activeOrgId: organization?.id,
+    isOrgLoaded,
+    listLoaded,
+    isLoading: userMemberships.isLoading,
+    isFetching: userMemberships.isFetching,
+    isError: userMemberships.isError,
+    errorMessage: userMemberships.error?.message,
+    membershipsLength: memberships.length,
+    membershipIds: memberships.map(m => m.organization.id)
+  });
+
   return (
     <PageShell>
       <div className="space-y-4">
@@ -155,6 +169,15 @@ function AuthenticatedHomepage() {
         >
           <LogIn className="w-4 h-4" /> Sign in with a different account
         </a>
+        
+        <div className="mt-6 text-left text-[10px] text-gray-500 font-mono break-all p-3 bg-gray-900/50 rounded border border-gray-800">
+          <p className="font-bold text-gray-400 mb-1">Diagnostic Info</p>
+          <p>User: {userId || "none"}</p>
+          <p>Active Org: {organization?.id || "none"}</p>
+          <p>Flags: orgLoaded={String(isOrgLoaded)} listLoaded={String(listLoaded)} isLoading={String(userMemberships.isLoading)} isFetching={String(userMemberships.isFetching)}</p>
+          {userMemberships.isError && <p className="text-red-400">Error: {userMemberships.error?.message}</p>}
+          <p>Memberships ({memberships.length}): {memberships.map(m => m.organization.name).join(", ")}</p>
+        </div>
       </div>
     </PageShell>
   );
