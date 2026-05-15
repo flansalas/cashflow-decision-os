@@ -57,7 +57,10 @@ function AuthenticatedHomepage() {
     if (isSingleOrg) {
       if (!organization && setActive && memberships[0]) {
         // Auto-activate the single organization if none is active
-        setActive({ organization: memberships[0].organization.id });
+        setActive({ organization: memberships[0].organization.id }).then(() => {
+          localStorage.removeItem("cfdo_company_id");
+          router.replace("/dashboard");
+        });
       } else if (organization) {
         // Already active, proceed to dashboard
         localStorage.removeItem("cfdo_company_id");
@@ -78,8 +81,8 @@ function AuthenticatedHomepage() {
     );
   }
 
-  // Single-org user with active org: show redirect spinner
-  if (isSingleOrg && organization) {
+  // Single-org user: show redirect spinner while activating or redirecting
+  if (isSingleOrg) {
     return (
       <PageShell>
         <div className="space-y-3 text-center">
