@@ -1,5 +1,13 @@
 # CashFlowDecision OS — Agent Operating Protocol
 
+## Project Doctrine
+- Before implementing, read PRODUCT.md and ARCHITECTURE.md.
+- Compare every task against the core loop: Data → Forecast → Explain → Decide → Simulate → Intervene → Verify → Learn
+- Preserve the principle: The forecast is not the product. The weekly cash decision loop is the product.
+- Prefer the smallest safe implementation.
+- Do not create generic SaaS dashboard features unless they directly support the weekly cash decision loop.
+- For any roadmap or architecture recommendation, inspect the actual repo first and clearly separate current code reality from product vision.
+
 This protocol is mandatory for all AI agent work on the CashFlowDecision OS project.
 
 ## 1. Canonical Repository
