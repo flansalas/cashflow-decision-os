@@ -222,3 +222,18 @@ Stop immediately if:
 - build/typecheck fails
 - a change could affect production behavior outside approved scope
 - the agent is unsure whether the change belongs in the current slice
+
+---
+
+## 10. Memory Maintenance
+
+- `MEMORY.md` is the living project save state.
+- Before any implementation, read `PRODUCT.md`, `ARCHITECTURE.md`, and `MEMORY.md`.
+- `PRODUCT.md` is stable product doctrine and should change only when product vision, ICP, principles, or anti-goals change.
+- `ARCHITECTURE.md` documents current technical reality and should change only when architecture, data models, routes, or major system boundaries change.
+- `MEMORY.md` should be updated when meaningful implementation work changes product state, current gaps, active focus, roadmap, risks, or the next safest implementation slice.
+- Do not update `MEMORY.md` for typo fixes, minor styling tweaks, aborted work, reverted work, or changes that do not affect product state or roadmap.
+- When a meaningful implementation is completed and verified, update `MEMORY.md` before the commit so the code change and memory update can be committed together.
+- Keep `MEMORY.md` short, current, and operational. Do not use it as a long-term idea dump.
+- Keep `AGENTS.md` and `GEMINI.md` synchronized. If one changes, apply the same change to the other in the same commit.
+- Always separate current code reality from product vision and future plans.
