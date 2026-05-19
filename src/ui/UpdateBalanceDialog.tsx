@@ -118,9 +118,9 @@ export function UpdateBalanceDialog({
                             generatedAt: lastUpdated || new Date().toISOString(),
                             weekStart: priorWeekData.weekStart,
                             weekEnd: priorWeekData.weekEnd,
-                            endCashExpected: priorWeekData.cashEnd,
-                            inflowsExpected: priorWeekData.cashIn,
-                            outflowsExpected: priorWeekData.cashOut,
+                            endCashExpected: priorWeekData.endCashExpected,
+                            inflowsExpected: priorWeekData.inflowsExpected,
+                            outflowsExpected: priorWeekData.outflowsExpected,
                             breakdownJson: priorWeekData.breakdown ? JSON.stringify(priorWeekData.breakdown) : undefined,
                         }
                     } : {})
@@ -465,17 +465,17 @@ export function UpdateBalanceDialog({
             </div>
 
             <div className="w-full grid grid-cols-3 gap-3">
-                {priorWeekData && (
+                {priorWeekData && typeof priorWeekData.endCashExpected === "number" && (
                     <div className="col-span-3 mb-2 p-4 rounded-xl border flex justify-between items-center bg-gray-50 dark:bg-gray-800/50" style={{ borderColor: "var(--border-subtle)" }}>
                         <div className="text-left">
                             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Variance</p>
                             <p className="text-sm">
-                                <span className="font-semibold text-gray-700 dark:text-gray-300">Expected:</span> {fmt(priorWeekData.cashEnd)}
+                                <span className="font-semibold text-gray-700 dark:text-gray-300">Expected:</span> {fmt(priorWeekData.endCashExpected)}
                             </p>
                         </div>
                         <div className="text-right">
-                            <p className="text-lg font-bold" style={{ color: (summary.newBalance - priorWeekData.cashEnd) >= 0 ? "var(--color-positive)" : "var(--color-danger)" }}>
-                                {(summary.newBalance - priorWeekData.cashEnd) > 0 ? "+" : ""}{fmt(summary.newBalance - priorWeekData.cashEnd)}
+                            <p className="text-lg font-bold" style={{ color: (summary.newBalance - priorWeekData.endCashExpected) >= 0 ? "var(--color-positive)" : "var(--color-danger)" }}>
+                                {(summary.newBalance - priorWeekData.endCashExpected) > 0 ? "+" : ""}{fmt(summary.newBalance - priorWeekData.endCashExpected)}
                             </p>
                             <p className="text-xs text-gray-500">vs Prior Projection</p>
                         </div>

@@ -62,8 +62,9 @@ export async function POST(req: NextRequest) {
     const snapshotDate = asOfDate ? new Date(asOfDate) : new Date();
 
     try {
-        // Use a transaction to ensure snapshot and adjustments stay in sync
-        const result = await prisma.$transaction(async (tx) => {
+        // ── Core rollover transaction ─────────────────────────────────────
+        // This must NEVER fail due to checkpoint issues.
+        const coreResult = await prisma.$transaction(async (tx) => {
             const snapshot = await tx.cashSnapshot.create({
                 data: { companyId, bankBalance, asOfDate: snapshotDate },
             });
@@ -138,34 +139,55 @@ export async function POST(req: NextRequest) {
                 }
             });
 
-            // ── Create Forecast Checkpoint for V1 ──────────────────────────────
-            let checkpoint = null;
-            if (priorWeekForecast) {
-                checkpoint = await tx.forecastCheckpoint.create({
-                    data: {
-                        companyId,
-                        cashSnapshotId: snapshot.id,
-                        snapshotSource: "client_observed_v1",
-                        forecastVersionHash: priorWeekForecast.forecastVersionHash || null,
-                        generatedAt: priorWeekForecast.generatedAt ? new Date(priorWeekForecast.generatedAt) : null,
-                        weekStart: new Date(priorWeekForecast.weekStart),
-                        weekEnd: new Date(priorWeekForecast.weekEnd),
-                        endCashExpected: priorWeekForecast.endCashExpected,
-                        inflowsExpected: priorWeekForecast.inflowsExpected,
-                        outflowsExpected: priorWeekForecast.outflowsExpected,
-                        breakdownJson: priorWeekForecast.breakdownJson || null,
-                    }
+            return { snapshot };
+        });
+
+        // ── Attempt ForecastCheckpoint (non-blocking) ─────────────────────
+        // Checkpoint failure must NEVER block the core rollover response.
+        let checkpoint = null;
+        if (priorWeekForecast) {
+            const hasValidWeekStart = priorWeekForecast.weekStart && !isNaN(new Date(priorWeekForecast.weekStart).getTime());
+            const hasValidWeekEnd = priorWeekForecast.weekEnd && !isNaN(new Date(priorWeekForecast.weekEnd).getTime());
+            const hasValidEndCash = typeof priorWeekForecast.endCashExpected === "number" && isFinite(priorWeekForecast.endCashExpected);
+            const hasValidInflows = typeof priorWeekForecast.inflowsExpected === "number" && isFinite(priorWeekForecast.inflowsExpected);
+            const hasValidOutflows = typeof priorWeekForecast.outflowsExpected === "number" && isFinite(priorWeekForecast.outflowsExpected);
+
+            if (hasValidWeekStart && hasValidWeekEnd && hasValidEndCash && hasValidInflows && hasValidOutflows) {
+                try {
+                    checkpoint = await prisma.forecastCheckpoint.create({
+                        data: {
+                            companyId,
+                            cashSnapshotId: coreResult.snapshot.id,
+                            snapshotSource: "client_observed_v1",
+                            forecastVersionHash: priorWeekForecast.forecastVersionHash || null,
+                            generatedAt: priorWeekForecast.generatedAt ? new Date(priorWeekForecast.generatedAt) : null,
+                            weekStart: new Date(priorWeekForecast.weekStart),
+                            weekEnd: new Date(priorWeekForecast.weekEnd),
+                            endCashExpected: priorWeekForecast.endCashExpected,
+                            inflowsExpected: priorWeekForecast.inflowsExpected,
+                            outflowsExpected: priorWeekForecast.outflowsExpected,
+                            breakdownJson: priorWeekForecast.breakdownJson || null,
+                        }
+                    });
+                } catch (cpError) {
+                    console.warn("ForecastCheckpoint creation failed (non-blocking):", cpError);
+                }
+            } else {
+                console.warn("ForecastCheckpoint skipped — missing or invalid fields:", {
+                    hasValidWeekStart,
+                    hasValidWeekEnd,
+                    hasValidEndCash,
+                    hasValidInflows,
+                    hasValidOutflows,
                 });
             }
-
-            return { snapshot, checkpoint };
-        });
+        }
 
         return NextResponse.json({ 
             ok: true, 
-            snapshotId: result.snapshot.id, 
-            asOfDate: result.snapshot.asOfDate,
-            checkpoint: result.checkpoint 
+            snapshotId: coreResult.snapshot.id, 
+            asOfDate: coreResult.snapshot.asOfDate,
+            checkpoint 
         });
     } catch (error) {
         console.error("Cash check-in error:", error);
