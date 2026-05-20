@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Inbox, Upload, X } from "lucide-react";
+import { CheckCircle2, Inbox, Upload, X, TrendingUp } from "lucide-react";
+import { VarianceDriverPanel } from "@/ui/VarianceDriverPanel";
+import type { VarianceDriverResult } from "@/services/variance-drivers";
 
 export type TriageItem = {
     id: string;
@@ -67,6 +69,13 @@ export function UpdateBalanceDialog({
         newBalance: number;
     } | null>(null);
 
+    // Variance driver state
+    const [checkpointId, setCheckpointId] = useState<string | null>(null);
+    const [driverData, setDriverData] = useState<VarianceDriverResult | null>(null);
+    const [driverLoading, setDriverLoading] = useState(false);
+    const [driverOpen, setDriverOpen] = useState(false);
+    const [driverError, setDriverError] = useState(false);
+
     const [adjustments, setAdjustments] = useState(
         currentAdjustments.map(a => ({ ...a, id: Math.random().toString(36).slice(2) }))
     );
@@ -127,6 +136,14 @@ export function UpdateBalanceDialog({
                 }),
             });
             if (!res.ok) { setError("Failed to save — try again"); setSaving(false); return; }
+
+            // Read response body once — capture checkpoint id for variance driver lookup
+            try {
+                const checkinData = await res.json();
+                if (checkinData?.checkpoint?.id) {
+                    setCheckpointId(checkinData.checkpoint.id);
+                }
+            } catch { /* non-blocking */ }
 
             setTriageLoading(true);
             const triageRes = await fetch(`/api/triage?companyId=${companyId}`);
@@ -479,6 +496,54 @@ export function UpdateBalanceDialog({
                             </p>
                             <p className="text-xs text-gray-500">vs Prior Projection</p>
                         </div>
+                    </div>
+                )}
+
+                {/* ── Why did this change? ─────────────────────────────────── */}
+                {priorWeekData && typeof priorWeekData.endCashExpected === "number" && (
+                    <div className="col-span-3 mt-1">
+                        <button
+                            onClick={async () => {
+                                if (driverOpen) { setDriverOpen(false); return; }
+                                setDriverOpen(true);
+                                if (driverData) return; // already loaded
+                                setDriverLoading(true);
+                                setDriverError(false);
+                                try {
+                                    const url = checkpointId
+                                        ? `/api/variance-drivers?checkpointId=${checkpointId}`
+                                        : "/api/variance-drivers?latest=true";
+                                    const r = await fetch(url);
+                                    if (!r.ok) throw new Error("not ok");
+                                    setDriverData(await r.json());
+                                } catch {
+                                    setDriverError(true);
+                                } finally {
+                                    setDriverLoading(false);
+                                }
+                            }}
+                            className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors py-1"
+                        >
+                            <TrendingUp className="w-3.5 h-3.5" />
+                            {driverOpen ? "Hide explanation ↑" : "Why did this change? →"}
+                        </button>
+
+                        {driverOpen && (
+                            <div className="mt-2 rounded-xl border border-slate-100 bg-white p-4 max-h-[340px] overflow-y-auto custom-scrollbar">
+                                {driverLoading && (
+                                    <div className="flex items-center gap-2 text-xs text-slate-400 py-4 justify-center">
+                                        <span className="animate-spin w-4 h-4 border-2 border-slate-300 border-t-indigo-500 rounded-full" />
+                                        Loading variance breakdown…
+                                    </div>
+                                )}
+                                {driverError && !driverLoading && (
+                                    <p className="text-xs text-slate-400 text-center py-4">Variance details unavailable.</p>
+                                )}
+                                {driverData && !driverLoading && (
+                                    <VarianceDriverPanel data={driverData} />
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
                 {[
