@@ -3,7 +3,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Printer, CheckCircle, Phone, Lock, RefreshCw, Zap } from "lucide-react";
+import { Printer, CheckCircle, Phone, Lock, RefreshCw, Zap, Eye, EyeOff } from "lucide-react";
 import type { WeekBreakdown, WeekBreakdownItem } from "@/domain/types";
 import type { GridItem } from "./ARAPCard";
 
@@ -64,10 +64,10 @@ function EmptySection({ message }: { message: string }) {
 }
 
 
-function NonLedgerRow({ item, isOutflow }: { item: WeekBreakdownItem; isOutflow: boolean }) {
+function NonLedgerRow({ item, isOutflow, isExcluded, onToggleExclude }: { item: WeekBreakdownItem; isOutflow: boolean; isExcluded: boolean; onToggleExclude: () => void }) {
     const isManual = item.sourceType === "manual";
     return (
-        <tr style={{ borderBottom: "1px solid #e2e8f0", pageBreakInside: "avoid" }}>
+        <tr className={isExcluded ? "no-print" : ""} style={{ borderBottom: "1px solid #e2e8f0", pageBreakInside: "avoid", opacity: isExcluded ? 0.35 : 1 }}>
             <td style={{ width: "28px", padding: "10px 8px 10px 0", verticalAlign: "top" }}>
                 <div style={{
                     width: "16px", height: "16px", border: "1.5px solid #94a3b8",
@@ -75,13 +75,13 @@ function NonLedgerRow({ item, isOutflow }: { item: WeekBreakdownItem; isOutflow:
                 }} />
             </td>
             <td style={{ padding: "10px 12px 10px 0", verticalAlign: "top", minWidth: "160px" }}>
-                <div style={{ fontWeight: 600, fontSize: "12px", color: "#0f172a" }}>{item.label}</div>
+                <div style={{ fontWeight: 600, fontSize: "12px", color: "#0f172a", textDecoration: isExcluded ? "line-through" : "none" }}>{item.label}</div>
                 <div style={{ fontSize: "10px", color: "#94a3b8", marginTop: "2px" }}>
                     {isManual ? "Manual Cash Adjustment" : "Recurring Commitment"}
                 </div>
             </td>
             <td style={{ padding: "10px 12px 10px 0", verticalAlign: "top", textAlign: "right", whiteSpace: "nowrap" }}>
-                <span style={{ fontWeight: 700, fontSize: "13px", color: isOutflow ? "#dc2626" : "#059669" }}>
+                <span style={{ fontWeight: 700, fontSize: "13px", color: isOutflow ? "#dc2626" : "#059669", textDecoration: isExcluded ? "line-through" : "none" }}>
                     {isOutflow ? "−" : "+"}{fmt(item.amount)}
                 </span>
             </td>
@@ -91,28 +91,33 @@ function NonLedgerRow({ item, isOutflow }: { item: WeekBreakdownItem; isOutflow:
                     borderRadius: "99px", background: "#f1f5f9", color: "#475569",
                     border: "1px solid #e2e8f0"
                 }}>
-                    {isManual ? "One-time action" : "Verify / Execute"}
+                    {isExcluded ? "Excluded from Plan" : (isManual ? "One-time action" : "Verify / Execute")}
                 </span>
             </td>
             <td style={{ padding: "10px 0", verticalAlign: "top", width: "130px" }}>
                 <div style={{ borderBottom: "1px solid #cbd5e1", height: "14px", marginTop: "4px" }} />
             </td>
+            <td className="no-print" style={{ width: "28px", padding: "10px 0", verticalAlign: "middle", textAlign: "right" }}>
+                <button onClick={onToggleExclude} className="text-gray-400 hover:text-slate-700" title="Exclude from print">
+                    {isExcluded ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+            </td>
         </tr>
     );
 }
 
-function AutoDebitRow({ item }: { item: WeekBreakdownItem }) {
+function AutoDebitRow({ item, isExcluded, onToggleExclude }: { item: WeekBreakdownItem; isExcluded: boolean; onToggleExclude: () => void }) {
     return (
-        <tr style={{ borderBottom: "1px solid #e2e8f0", pageBreakInside: "avoid", opacity: 0.85 }}>
+        <tr className={isExcluded ? "no-print" : ""} style={{ borderBottom: "1px solid #e2e8f0", pageBreakInside: "avoid", opacity: isExcluded ? 0.35 : 0.85 }}>
             <td style={{ width: "28px", padding: "10px 8px 10px 0", verticalAlign: "top" }}>
                 <span className="text-gray-400 flex items-center justify-center pt-1"><RefreshCw className="w-3.5 h-3.5" /></span>
             </td>
             <td style={{ padding: "10px 12px 10px 0", verticalAlign: "top", minWidth: "160px" }}>
-                <div style={{ fontWeight: 600, fontSize: "12px", color: "#0f172a" }}>{item.label}</div>
+                <div style={{ fontWeight: 600, fontSize: "12px", color: "#0f172a", textDecoration: isExcluded ? "line-through" : "none" }}>{item.label}</div>
                 <div style={{ fontSize: "10px", color: "#94a3b8", marginTop: "2px" }}>Recurring Auto-Debit</div>
             </td>
             <td style={{ padding: "10px 12px 10px 0", verticalAlign: "top", textAlign: "right", whiteSpace: "nowrap" }}>
-                <span style={{ fontWeight: 700, fontSize: "13px", color: "#dc2626" }}>
+                <span style={{ fontWeight: 700, fontSize: "13px", color: "#dc2626", textDecoration: isExcluded ? "line-through" : "none" }}>
                     −{fmt(item.amount)}
                 </span>
             </td>
@@ -122,8 +127,13 @@ function AutoDebitRow({ item }: { item: WeekBreakdownItem }) {
                     borderRadius: "99px", background: "#f8fafc", color: "#64748b",
                     border: "1px solid #e2e8f0"
                 }}>
-                    Auto-clears. Verify on bank feed.
+                    {isExcluded ? "Excluded from Plan" : "Auto-clears. Verify on bank feed."}
                 </span>
+            </td>
+            <td className="no-print" style={{ width: "28px", padding: "10px 0", verticalAlign: "middle", textAlign: "right" }}>
+                <button onClick={onToggleExclude} className="text-gray-400 hover:text-slate-700" title="Exclude from print">
+                    {isExcluded ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
             </td>
         </tr>
     );
@@ -209,6 +219,9 @@ function ItemRow({ item, isHold, originalDue }: RowProps) {
                     <div style={{ borderBottom: "1px solid #cbd5e1", height: "14px", marginTop: "4px" }} />
                 )}
             </td>
+            <td className="no-print" style={{ width: "28px", padding: "10px 0", verticalAlign: "middle" }}>
+                {/* Empty cell to align with exclude buttons on non-ledger rows */}
+            </td>
         </tr>
     );
 }
@@ -216,7 +229,16 @@ function ItemRow({ item, isHold, originalDue }: RowProps) {
 // ── Main Component ─────────────────────────────────────────────────────────
 export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakdown, onClose }: Props) {
     const [activeTab, setActiveTab] = useState<"all" | "ar" | "ap">("all");
-    const [includeNonLedger, setIncludeNonLedger] = useState(true);
+    const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
+    
+    const toggleExclude = (id: string) => {
+        setExcludedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
 
     const week1 = weeks[0];
     const printDate = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -264,7 +286,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
         const manualInflows: WeekBreakdownItem[] = [];
         const automatedOutflows: WeekBreakdownItem[] = [];
 
-        if (breakdown && includeNonLedger) {
+        if (breakdown) {
             for (const item of breakdown.outflows) {
                 if (item.sourceType === "baseline" || item.sourceType === "assumption" || item.sourceType === "bill") continue;
                 if (item.sourceType === "manual") {
@@ -289,9 +311,9 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
         const baseTotalCollect = collectionTargets.reduce((s, i) => s + i.amountOpen, 0);
         const baseTotalPay = approvedToPay.reduce((s, i) => s + i.amountOpen, 0);
 
-        const mCollect = manualInflows.reduce((s, i) => s + i.amount, 0);
-        const mPay = manualOutflows.reduce((s, i) => s + i.amount, 0);
-        const aPay = automatedOutflows.reduce((s, i) => s + i.amount, 0);
+        const mCollect = manualInflows.filter(i => !excludedIds.has(i.sourceId || i.label)).reduce((s, i) => s + i.amount, 0);
+        const mPay = manualOutflows.filter(i => !excludedIds.has(i.sourceId || i.label)).reduce((s, i) => s + i.amount, 0);
+        const aPay = automatedOutflows.filter(i => !excludedIds.has(i.sourceId || i.label)).reduce((s, i) => s + i.amount, 0);
 
         return { 
             approvedToPay, collectionTargets, holdItems,
@@ -300,7 +322,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
             totalPay: baseTotalPay + mPay,
             totalAutoOutflows: aPay
         };
-    }, [invoices, bills, week1, breakdown, includeNonLedger]);
+    }, [invoices, bills, week1, breakdown, excludedIds]);
 
     const showAR = activeTab === "all" || activeTab === "ar";
     const showAP = activeTab === "all" || activeTab === "ap";
@@ -340,15 +362,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <label className="flex items-center gap-2 cursor-pointer text-[12px] text-gray-300 hover:text-white mr-4 border-r border-gray-700 pr-5 py-1">
-                            <input 
-                                type="checkbox" 
-                                checked={includeNonLedger}
-                                onChange={(e) => setIncludeNonLedger(e.target.checked)}
-                                className="cursor-pointer rounded border-gray-600 bg-gray-800"
-                            />
-                            Include Manual & Recurring Items
-                        </label>
+
 
                         {/* Tab filter */}
                         <div id="execution-plan-tabs" className="flex rounded-lg overflow-hidden border text-[11px] font-semibold" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
@@ -473,9 +487,10 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                                                 {approvedToPay.map(item => (
                                                     <ItemRow key={item.id} item={item} />
                                                 ))}
-                                                {manualOutflows.map(item => (
-                                                    <NonLedgerRow key={item.label} item={item} isOutflow={true} />
-                                                ))}
+                                                {manualOutflows.map(item => {
+                                                    const id = item.sourceId || item.label;
+                                                    return <NonLedgerRow key={item.label} item={item} isOutflow={true} isExcluded={excludedIds.has(id)} onToggleExclude={() => toggleExclude(id)} />;
+                                                })}
                                             </tbody>
                                         </table>
                                         <div style={{
@@ -511,15 +526,17 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                                                 <th style={{ textAlign: "right", padding: "4px 12px 8px 0", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.07em", color: "#94a3b8", fontWeight: 600 }}>Amount</th>
                                                 <th style={{ textAlign: "left", padding: "4px 0 8px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.07em", color: "#94a3b8", fontWeight: 600 }}>Urgency / Tone</th>
                                                 <th style={{ textAlign: "left", padding: "4px 0 8px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.07em", color: "#94a3b8", fontWeight: 600, width: "130px" }}>Outcome</th>
+                                                <th className="no-print" style={{ width: "28px" }} />
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {collectionTargets.map(item => (
                                                 <ItemRow key={item.id} item={item} />
                                             ))}
-                                            {manualInflows.map(item => (
-                                                <NonLedgerRow key={item.label} item={item} isOutflow={false} />
-                                            ))}
+                                            {manualInflows.map(item => {
+                                                const id = item.sourceId || item.label;
+                                                return <NonLedgerRow key={item.label} item={item} isOutflow={false} isExcluded={excludedIds.has(id)} onToggleExclude={() => toggleExclude(id)} />;
+                                            })}
                                         </tbody>
                                     </table>
                                 )}
@@ -547,12 +564,14 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                                                 <th style={{ textAlign: "right", padding: "4px 12px 8px 0", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.07em", color: "#94a3b8", fontWeight: 600 }}>Amount</th>
                                                 <th style={{ textAlign: "left", padding: "4px 0 8px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.07em", color: "#94a3b8", fontWeight: 600 }}>Instruction</th>
                                                 <th style={{ width: "130px" }} />
+                                                <th className="no-print" style={{ width: "28px" }} />
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {automatedOutflows.map(item => (
-                                                <AutoDebitRow key={item.label} item={item} />
-                                            ))}
+                                            {automatedOutflows.map(item => {
+                                                const id = item.sourceId || item.label;
+                                                return <AutoDebitRow key={item.label} item={item} isExcluded={excludedIds.has(id)} onToggleExclude={() => toggleExclude(id)} />;
+                                            })}
                                         </tbody>
                                     </table>
                                 )}
