@@ -333,11 +333,25 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
             <style>{`
                 @media print {
                     body { visibility: hidden; }
-                    #execution-plan-overlay { visibility: visible; position: absolute; left: 0; top: 0; width: 100%; background: white !important; }
+                    #execution-plan-overlay {
+                        visibility: visible;
+                        position: absolute !important;
+                        left: 0; top: 0;
+                        width: 100%;
+                        height: auto !important;
+                        display: block !important;
+                        overflow: visible !important;
+                        background: white !important;
+                    }
                     #execution-plan-overlay * { visibility: visible; }
+                    #execution-plan-scroll-container {
+                        overflow: visible !important;
+                        height: auto !important;
+                        display: block !important;
+                    }
                     #execution-plan-modal-header { display: none !important; }
                     #execution-plan-tabs { display: none !important; }
-                    .no-print { display: none !important; }
+                    .no-print, .no-print * { display: none !important; }
                     @page { margin: 1.2cm 1.4cm; }
                 }
             `}</style>
@@ -401,6 +415,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
 
                 {/* Printable body */}
                 <div
+                    id="execution-plan-scroll-container"
                     className="flex-1 overflow-auto"
                     style={{ background: "#f8fafc" }}
                 >
