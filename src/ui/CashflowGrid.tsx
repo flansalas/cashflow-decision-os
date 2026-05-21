@@ -40,6 +40,7 @@ interface Props {
         inflowsExpected: number;
         outflowsExpected: number;
         projectedInflow: number; // baseline + manual entries beyond visible AR cards
+        breakdown?: any;
     }>;
 }
 
@@ -1043,6 +1044,7 @@ export function CashflowGrid({
                 invoices={invoices}
                 bills={bills}
                 openingCash={openingCash}
+                breakdown={forecastBalances?.[0]?.breakdown}
                 onClose={() => setShowPlan(false)}
             />
         )}

@@ -514,6 +514,7 @@ export async function GET(req: NextRequest) {
                         .filter((i: any) => i.sourceType === "invoice" || i.sourceType === "recurring")
                         .reduce((s: number, i: any) => s + i.amount, 0)
                 ),
+                breakdown: w.breakdown,
             })),
         },
     });

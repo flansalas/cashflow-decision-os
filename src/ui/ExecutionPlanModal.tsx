@@ -3,7 +3,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Printer, CheckCircle, Phone, Lock } from "lucide-react";
+import { Printer, CheckCircle, Phone, Lock, RefreshCw, Zap } from "lucide-react";
+import type { WeekBreakdown, WeekBreakdownItem } from "@/domain/types";
 import type { GridItem } from "./ARAPCard";
 
 interface WeekMeta {
@@ -17,6 +18,7 @@ interface Props {
     invoices: GridItem[];
     bills: GridItem[];
     openingCash: number;
+    breakdown?: WeekBreakdown;
     onClose: () => void;
 }
 
@@ -58,6 +60,72 @@ function SectionHeader({ emoji, title, subtitle, color }: {
 function EmptySection({ message }: { message: string }) {
     return (
         <p style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic", padding: "8px 0" }}>{message}</p>
+    );
+}
+
+
+function NonLedgerRow({ item, isOutflow }: { item: WeekBreakdownItem; isOutflow: boolean }) {
+    const isManual = item.sourceType === "manual";
+    return (
+        <tr style={{ borderBottom: "1px solid #e2e8f0", pageBreakInside: "avoid" }}>
+            <td style={{ width: "28px", padding: "10px 8px 10px 0", verticalAlign: "top" }}>
+                <div style={{
+                    width: "16px", height: "16px", border: "1.5px solid #94a3b8",
+                    borderRadius: "3px", display: "inline-block", flexShrink: 0
+                }} />
+            </td>
+            <td style={{ padding: "10px 12px 10px 0", verticalAlign: "top", minWidth: "160px" }}>
+                <div style={{ fontWeight: 600, fontSize: "12px", color: "#0f172a" }}>{item.label}</div>
+                <div style={{ fontSize: "10px", color: "#94a3b8", marginTop: "2px" }}>
+                    {isManual ? "Manual Cash Adjustment" : "Recurring Commitment"}
+                </div>
+            </td>
+            <td style={{ padding: "10px 12px 10px 0", verticalAlign: "top", textAlign: "right", whiteSpace: "nowrap" }}>
+                <span style={{ fontWeight: 700, fontSize: "13px", color: isOutflow ? "#dc2626" : "#059669" }}>
+                    {isOutflow ? "−" : "+"}{fmt(item.amount)}
+                </span>
+            </td>
+            <td style={{ padding: "10px 0", verticalAlign: "top", minWidth: "200px" }}>
+                <span style={{
+                    display: "inline-block", fontSize: "10px", fontWeight: 600, padding: "2px 7px",
+                    borderRadius: "99px", background: "#f1f5f9", color: "#475569",
+                    border: "1px solid #e2e8f0"
+                }}>
+                    {isManual ? "One-time action" : "Verify / Execute"}
+                </span>
+            </td>
+            <td style={{ padding: "10px 0", verticalAlign: "top", width: "130px" }}>
+                <div style={{ borderBottom: "1px solid #cbd5e1", height: "14px", marginTop: "4px" }} />
+            </td>
+        </tr>
+    );
+}
+
+function AutoDebitRow({ item }: { item: WeekBreakdownItem }) {
+    return (
+        <tr style={{ borderBottom: "1px solid #e2e8f0", pageBreakInside: "avoid", opacity: 0.85 }}>
+            <td style={{ width: "28px", padding: "10px 8px 10px 0", verticalAlign: "top" }}>
+                <span className="text-gray-400 flex items-center justify-center pt-1"><RefreshCw className="w-3.5 h-3.5" /></span>
+            </td>
+            <td style={{ padding: "10px 12px 10px 0", verticalAlign: "top", minWidth: "160px" }}>
+                <div style={{ fontWeight: 600, fontSize: "12px", color: "#0f172a" }}>{item.label}</div>
+                <div style={{ fontSize: "10px", color: "#94a3b8", marginTop: "2px" }}>Recurring Auto-Debit</div>
+            </td>
+            <td style={{ padding: "10px 12px 10px 0", verticalAlign: "top", textAlign: "right", whiteSpace: "nowrap" }}>
+                <span style={{ fontWeight: 700, fontSize: "13px", color: "#dc2626" }}>
+                    −{fmt(item.amount)}
+                </span>
+            </td>
+            <td colSpan={2} style={{ padding: "10px 0", verticalAlign: "top", fontSize: "10px", color: "#64748b" }}>
+                <span style={{
+                    display: "inline-block", fontSize: "10px", fontWeight: 600, padding: "2px 7px",
+                    borderRadius: "99px", background: "#f8fafc", color: "#64748b",
+                    border: "1px solid #e2e8f0"
+                }}>
+                    Auto-clears. Verify on bank feed.
+                </span>
+            </td>
+        </tr>
     );
 }
 
@@ -146,7 +214,7 @@ function ItemRow({ item, isHold, originalDue }: RowProps) {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────
-export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, onClose }: Props) {
+export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakdown, onClose }: Props) {
     const [activeTab, setActiveTab] = useState<"all" | "ar" | "ap">("all");
 
     const week1 = weeks[0];
@@ -157,8 +225,12 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, onClos
         approvedToPay,
         collectionTargets,
         holdItems,
+        manualOutflows,
+        manualInflows,
+        automatedOutflows,
         totalCollect,
         totalPay,
+        totalAutoOutflows
     } = useMemo(() => {
         // Active Week 1 items
         const collectionTargets = invoices
@@ -187,11 +259,47 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, onClos
         }
         holdItems.sort((a, b) => b.item.amountOpen - a.item.amountOpen);
 
-        const totalCollect = collectionTargets.reduce((s, i) => s + i.amountOpen, 0);
-        const totalPay     = approvedToPay.reduce((s, i) => s + i.amountOpen, 0);
+        const manualOutflows: WeekBreakdownItem[] = [];
+        const manualInflows: WeekBreakdownItem[] = [];
+        const automatedOutflows: WeekBreakdownItem[] = [];
 
-        return { approvedToPay, collectionTargets, holdItems, totalCollect, totalPay };
-    }, [invoices, bills, week1]);
+        if (breakdown) {
+            for (const item of breakdown.outflows) {
+                if (item.sourceType === "baseline" || item.sourceType === "assumption" || item.sourceType === "bill") continue;
+                if (item.sourceType === "manual") {
+                    manualOutflows.push(item);
+                } else if (item.sourceType === "recurring") {
+                    const l = item.label.toLowerCase();
+                    if (l.includes("payroll") || l.includes("rent") || l.includes("tax")) {
+                        manualOutflows.push(item);
+                    } else {
+                        automatedOutflows.push(item);
+                    }
+                }
+            }
+            for (const item of breakdown.inflows) {
+                if (item.sourceType === "baseline" || item.sourceType === "invoice") continue;
+                if (item.sourceType === "manual") {
+                    manualInflows.push(item);
+                }
+            }
+        }
+
+        const baseTotalCollect = collectionTargets.reduce((s, i) => s + i.amountOpen, 0);
+        const baseTotalPay = approvedToPay.reduce((s, i) => s + i.amountOpen, 0);
+
+        const mCollect = manualInflows.reduce((s, i) => s + i.amount, 0);
+        const mPay = manualOutflows.reduce((s, i) => s + i.amount, 0);
+        const aPay = automatedOutflows.reduce((s, i) => s + i.amount, 0);
+
+        return { 
+            approvedToPay, collectionTargets, holdItems,
+            manualOutflows, manualInflows, automatedOutflows,
+            totalCollect: baseTotalCollect + mCollect, 
+            totalPay: baseTotalPay + mPay,
+            totalAutoOutflows: aPay
+        };
+    }, [invoices, bills, week1, breakdown]);
 
     const showAR = activeTab === "all" || activeTab === "ar";
     const showAP = activeTab === "all" || activeTab === "ap";
@@ -302,15 +410,16 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, onClos
                             {/* Summary band */}
                             <div style={{
                                 display: "grid",
-                                gridTemplateColumns: "repeat(4, 1fr)",
-                                gap: "12px",
+                                gridTemplateColumns: "repeat(5, 1fr)",
+                                gap: "10px",
                                 marginTop: "20px",
                             }}>
                                 {[
-                                    { label: "Opening Cash",  value: fmt(openingCash),              color: "#0f172a" },
-                                    { label: "Target Collect", value: `+${fmt(totalCollect)}`,       color: "#059669" },
-                                    { label: "Approved to Pay",value: `−${fmt(totalPay)}`,           color: "#dc2626" },
-                                    { label: "Net Impact",     value: `${totalCollect - totalPay >= 0 ? "+" : ""}${fmt(totalCollect - totalPay)}`, color: totalCollect - totalPay >= 0 ? "#059669" : "#dc2626" },
+                                    { label: "Opening Cash", value: fmt(openingCash), color: "#0f172a" },
+                                    { label: "Target Collect", value: `+${fmt(totalCollect)}`, color: "#059669" },
+                                    { label: "To Pay (Manual)", value: `−${fmt(totalPay)}`, color: "#dc2626" },
+                                    { label: "Auto-Debits", value: `−${fmt(totalAutoOutflows)}`, color: "#f59e0b" },
+                                    { label: "Safe Buffer", value: fmt(openingCash + totalCollect - totalPay - totalAutoOutflows), color: (openingCash + totalCollect - totalPay - totalAutoOutflows) >= 0 ? "#0f172a" : "#dc2626" },
                                 ].map(({ label, value, color }) => (
                                     <div key={label} style={{
                                         background: "#f1f5f9",
@@ -335,7 +444,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, onClos
                                     color="#dc2626"
                                 />
 
-                                {approvedToPay.length === 0 ? (
+                                {(approvedToPay.length === 0 && manualOutflows.length === 0) ? (
                                     <EmptySection message="No bills are scheduled for this week." />
                                 ) : (
                                     <>
@@ -352,6 +461,9 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, onClos
                                             <tbody>
                                                 {approvedToPay.map(item => (
                                                     <ItemRow key={item.id} item={item} />
+                                                ))}
+                                                {manualOutflows.map(item => (
+                                                    <NonLedgerRow key={item.label} item={item} isOutflow={true} />
                                                 ))}
                                             </tbody>
                                         </table>
@@ -377,7 +489,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, onClos
                                     color="#059669"
                                 />
 
-                                {collectionTargets.length === 0 ? (
+                                {(collectionTargets.length === 0 && manualInflows.length === 0) ? (
                                     <EmptySection message="No invoices are expected this week." />
                                 ) : (
                                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
@@ -394,13 +506,49 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, onClos
                                             {collectionTargets.map(item => (
                                                 <ItemRow key={item.id} item={item} />
                                             ))}
+                                            {manualInflows.map(item => (
+                                                <NonLedgerRow key={item.label} item={item} isOutflow={false} />
+                                            ))}
                                         </tbody>
                                     </table>
                                 )}
                             </div>
                         )}
 
-                        {/* ── PART 3: HOLD LIST ────────────────────────────────────── */}
+                                                {/* ── PART 3: AUTOMATED OUTFLOWS ────────────────────────────────────── */}
+                        {showAP && (
+                            <div style={{ marginBottom: "40px", pageBreakInside: "avoid" }}>
+                                <SectionHeader
+                                    emoji={<RefreshCw className="w-6 h-6 text-amber-500" />}
+                                    title="Automated Outflows (Verify)"
+                                    subtitle={`${automatedOutflows.length} expected auto-debit${automatedOutflows.length !== 1 ? "s" : ""} · Total: ${fmt(totalAutoOutflows)}`}
+                                    color="#f59e0b"
+                                />
+
+                                {automatedOutflows.length === 0 ? (
+                                    <EmptySection message="No auto-debits expected this week." />
+                                ) : (
+                                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                                        <thead>
+                                            <tr style={{ borderBottom: "1px solid #cbd5e1" }}>
+                                                <th style={{ width: "28px" }} />
+                                                <th style={{ textAlign: "left", padding: "4px 12px 8px 0", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.07em", color: "#94a3b8", fontWeight: 600 }}>Party / Description</th>
+                                                <th style={{ textAlign: "right", padding: "4px 12px 8px 0", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.07em", color: "#94a3b8", fontWeight: 600 }}>Amount</th>
+                                                <th style={{ textAlign: "left", padding: "4px 0 8px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.07em", color: "#94a3b8", fontWeight: 600 }}>Instruction</th>
+                                                <th style={{ width: "130px" }} />
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {automatedOutflows.map(item => (
+                                                <AutoDebitRow key={item.label} item={item} />
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ── PART 4: HOLD LIST ────────────────────────────────────── */}
                         {showAP && (
                             <div style={{ marginBottom: "40px", pageBreakInside: "avoid" }}>
                                 <SectionHeader
