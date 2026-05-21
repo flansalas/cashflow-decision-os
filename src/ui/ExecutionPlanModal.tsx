@@ -216,6 +216,7 @@ function ItemRow({ item, isHold, originalDue }: RowProps) {
 // ── Main Component ─────────────────────────────────────────────────────────
 export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakdown, onClose }: Props) {
     const [activeTab, setActiveTab] = useState<"all" | "ar" | "ap">("all");
+    const [includeNonLedger, setIncludeNonLedger] = useState(true);
 
     const week1 = weeks[0];
     const printDate = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -263,7 +264,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
         const manualInflows: WeekBreakdownItem[] = [];
         const automatedOutflows: WeekBreakdownItem[] = [];
 
-        if (breakdown) {
+        if (breakdown && includeNonLedger) {
             for (const item of breakdown.outflows) {
                 if (item.sourceType === "baseline" || item.sourceType === "assumption" || item.sourceType === "bill") continue;
                 if (item.sourceType === "manual") {
@@ -299,7 +300,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
             totalPay: baseTotalPay + mPay,
             totalAutoOutflows: aPay
         };
-    }, [invoices, bills, week1, breakdown]);
+    }, [invoices, bills, week1, breakdown, includeNonLedger]);
 
     const showAR = activeTab === "all" || activeTab === "ar";
     const showAP = activeTab === "all" || activeTab === "ap";
@@ -339,6 +340,16 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                     </div>
 
                     <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2 cursor-pointer text-[12px] text-gray-300 hover:text-white mr-4 border-r border-gray-700 pr-5 py-1">
+                            <input 
+                                type="checkbox" 
+                                checked={includeNonLedger}
+                                onChange={(e) => setIncludeNonLedger(e.target.checked)}
+                                className="cursor-pointer rounded border-gray-600 bg-gray-800"
+                            />
+                            Include Manual & Recurring Items
+                        </label>
+
                         {/* Tab filter */}
                         <div id="execution-plan-tabs" className="flex rounded-lg overflow-hidden border text-[11px] font-semibold" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
                             {(["all", "ar", "ap"] as const).map(tab => (
