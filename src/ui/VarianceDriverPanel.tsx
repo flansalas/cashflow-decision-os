@@ -152,7 +152,7 @@ export function VarianceDriverPanel({ data }: VarianceDriverPanelProps) {
                     : "bg-rose-50 border-rose-100"
             }`}>
                 <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Variance</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cash vs. Expected</p>
                     <p className={`text-xl font-black font-financial mt-0.5 ${variancePositive ? "text-emerald-700" : "text-rose-700"}`}>
                         {fmt(data.totalVariance)}
                     </p>
@@ -176,6 +176,16 @@ export function VarianceDriverPanel({ data }: VarianceDriverPanelProps) {
             </div>
 
             {/* ── Warnings ──────────────────────────────────────────── */}
+            {data.apNotPaid.count > 0 && data.apNotPaid.total > 0 && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-1">
+                    <p className="text-xs text-amber-800 font-medium flex items-start gap-2">
+                        <span className="mt-0.5">⚠️</span> 
+                        <span>
+                            <strong>Reality Check:</strong> {fmtAbs(data.apNotPaid.total)} of this extra cash is due to unpaid bills. Obligations still remain.
+                        </span>
+                    </p>
+                </div>
+            )}
             {data.warnings.length > 0 && (
                 <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-2.5 space-y-1">
                     {data.warnings.map((w, i) => (
@@ -188,10 +198,10 @@ export function VarianceDriverPanel({ data }: VarianceDriverPanelProps) {
 
             {/* ── AR Drivers ─────────────────────────────────────────── */}
             <div className="space-y-1.5">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Inflows (AR)</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Variance Drivers (Inflows)</p>
 
                 <DriverSection
-                    title="AR Not Collected"
+                    title="Delayed Inflows"
                     subtitle="Expected to receive — didn't arrive"
                     group={data.arNotCollected}
                     accentColor="text-rose-600"
@@ -228,15 +238,15 @@ export function VarianceDriverPanel({ data }: VarianceDriverPanelProps) {
 
             {/* ── AP Drivers ─────────────────────────────────────────── */}
             <div className="space-y-1.5">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Outflows (AP)</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Variance Drivers (Outflows)</p>
 
                 <DriverSection
-                    title="AP Not Paid"
-                    subtitle="Expected to pay — cash preserved"
+                    title="Deferred Outflows"
+                    subtitle="Bills not yet paid (obligations remain)"
                     group={data.apNotPaid}
-                    accentColor="text-emerald-600"
-                    bgColor="bg-emerald-50"
-                    borderColor="border-emerald-100"
+                    accentColor="text-amber-600"
+                    bgColor="bg-amber-50"
+                    borderColor="border-amber-100"
                     defaultOpen={data.apNotPaid.count > 0}
                 />
                 <DriverSection
@@ -266,11 +276,28 @@ export function VarianceDriverPanel({ data }: VarianceDriverPanelProps) {
                 />
             </div>
 
-            {/* ── Unverifiable ───────────────────────────────────────── */}
+            {/* ── Unmatched Difference ───────────────────────────────── */}
+            {data.unexplainedResidual !== 0 && (
+                <div className="rounded-xl border overflow-hidden border-slate-200">
+                    <div className="w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors bg-slate-50">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-xs font-black uppercase tracking-wider text-slate-700">Unmatched Difference</span>
+                            <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">Cash movements not matched to expected items.</span>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-xs font-financial font-bold text-slate-700">
+                                {fmt(data.unexplainedResidual)}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Needs Review ───────────────────────────────────────── */}
             {(data.unverifiableRecurring.count > 0 || data.unverifiableBaseline.count > 0) && (
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 mt-2">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">
-                        Unverifiable (no ground-truth signal)
+                        Needs Review
                     </p>
                     <DriverSection
                         title="Recurring Commitments"
@@ -294,18 +321,8 @@ export function VarianceDriverPanel({ data }: VarianceDriverPanelProps) {
             )}
 
             {/* ── Summary footer ─────────────────────────────────────── */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5">
-                <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Explained variance</span>
-                    <span className={`font-financial font-bold ${data.explainedVariance >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                        {fmt(data.explainedVariance)}
-                    </span>
-                </div>
-                <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Unexplained residual</span>
-                    <span className="font-financial font-bold text-slate-500">{fmt(data.unexplainedResidual)}</span>
-                </div>
-                <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-200">
+            <div className="px-1 mt-2 pb-2">
+                <p className="text-[10px] text-slate-400">
                     Recurring commitments and baseline assumptions cannot be verified without bank transaction data.
                 </p>
             </div>

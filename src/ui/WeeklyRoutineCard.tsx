@@ -33,8 +33,8 @@ function VarianceModal({ data, onClose }: VarianceModalProps) {
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Last Forecast Check</p>
-                        <h2 className="text-sm font-black text-slate-800 mt-0.5">Variance Explanation</h2>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Forecast Review</p>
+                        <h2 className="text-sm font-black text-slate-800 mt-0.5">Forecast vs. Actual Cash</h2>
                     </div>
                     <button
                         onClick={onClose}
