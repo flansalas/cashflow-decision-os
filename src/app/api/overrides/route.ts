@@ -35,6 +35,61 @@ export async function POST(req: NextRequest) {
                        rawTargetType === "bill" ? "payable_bill" :
                        rawTargetType;
 
+    // 1. Check for existing active overrides to prevent duplicates and find oldValue
+    const existingOverrides = await prisma.override.findMany({
+        where: { companyId, targetId: targetId ?? null, type, status: "active" }
+    });
+
+    let oldValue: string | number | null = null;
+
+    if (existingOverrides.length > 0) {
+        const exactMatch = existingOverrides.find(o => 
+            (o.amount === (amount ?? null)) && 
+            (o.effectiveDate?.getTime() === (effectiveDate ? new Date(effectiveDate).getTime() : undefined))
+        );
+        if (exactMatch) {
+            return NextResponse.json({ id: exactMatch.id, ok: true }); // No-op for exact duplicate
+        }
+
+        const current = existingOverrides[0];
+        if (type.includes("date") || type === "delay_due_date") {
+            oldValue = current.effectiveDate ? current.effectiveDate.toISOString() : null;
+        } else if (type === "adjust_amount") {
+            oldValue = current.amount;
+        } else if (type === "exclude") {
+            oldValue = "excluded";
+        }
+
+        // Archive old overrides to avoid stacking
+        await prisma.override.updateMany({
+            where: { companyId, targetId: targetId ?? null, type, status: "active" },
+            data: { status: "archived" }
+        });
+    }
+
+    if (existingOverrides.length === 0 && targetId) {
+        if (targetType === "receivable_invoice") {
+            const inv = await prisma.receivableInvoice.findUnique({ where: { id: targetId } });
+            if (inv) {
+                if (type === "set_expected_payment_date") oldValue = inv.dueDate ? inv.dueDate.toISOString() : null;
+                if (type === "adjust_amount") oldValue = inv.amountOpen;
+                if (type === "exclude") oldValue = inv.status;
+            }
+        } else if (targetType === "payable_bill") {
+            const bill = await prisma.payableBill.findUnique({ where: { id: targetId } });
+            if (bill) {
+                if (type === "set_bill_due_date" || type === "delay_due_date") oldValue = bill.dueDate ? bill.dueDate.toISOString() : null;
+                if (type === "adjust_amount") oldValue = bill.amountOpen;
+                if (type === "exclude") oldValue = bill.status;
+            }
+        } else if (targetType === "recurring_pattern") {
+            const rp = await prisma.recurringPattern.findUnique({ where: { id: targetId } });
+            if (rp) {
+                if (type === "adjust_amount") oldValue = rp.typicalAmount;
+            }
+        }
+    }
+
     const created = await prisma.override.create({
         data: {
             id: uuidv4(),
@@ -48,20 +103,6 @@ export async function POST(req: NextRequest) {
             status: "active",
         },
     });
-
-    let targetName = targetType.replace(/_/g, " "); // fallback
-    if (targetId) {
-        if (targetType === "receivable_invoice") {
-            const inv = await prisma.receivableInvoice.findUnique({ where: { id: targetId } });
-            if (inv) targetName = `Invoice #${inv.invoiceNo} (${inv.customerName})`;
-        } else if (targetType === "payable_bill") {
-            const bill = await prisma.payableBill.findUnique({ where: { id: targetId } });
-            if (bill) targetName = `Bill #${bill.billNo} (${bill.vendorName})`;
-        } else if (targetType === "recurring_pattern") {
-            const rp = await prisma.recurringPattern.findUnique({ where: { id: targetId } });
-            if (rp) targetName = `Recurring Item "${rp.displayName}"`;
-        }
-    }
 
     let actionDesc = type.replace(/_/g, ' ');
     let fieldChanged = "unknown";
@@ -88,18 +129,22 @@ export async function POST(req: NextRequest) {
         newValue = "excluded";
     }
 
-    const { logAuditEvent } = await import("@/services/audit");
-    await logAuditEvent({
-        companyId,
-        targetId: targetId || "unknown",
-        targetType: rawTargetType as any,
-        action: actionDesc,
-        source: "user",
-        fieldChanged,
-        oldValue: null, // We don't have the old value readily available here without more DB lookups
-        newValue,
-        reasoning: "User override via drawer"
-    });
+    try {
+        const { logAuditEvent } = await import("@/services/audit");
+        await logAuditEvent({
+            companyId,
+            targetId: targetId || "unknown",
+            targetType: rawTargetType as any,
+            action: actionDesc,
+            source: "user",
+            fieldChanged,
+            oldValue,
+            newValue,
+            reasoning: "User override via drawer"
+        });
+    } catch (e) {
+        console.error("Audit log failed for POST override:", e);
+    }
 
     return NextResponse.json({ id: created.id, ok: true });
 }
@@ -131,35 +176,34 @@ export async function DELETE(req: NextRequest) {
     });
 
     if (existing) {
-        let targetName = existing.targetType.replace(/_/g, " "); // fallback
-        if (targetId) {
-            if (existing.targetType === "receivable_invoice") {
-                const inv = await prisma.receivableInvoice.findUnique({ where: { id: targetId } });
-                if (inv) targetName = `Invoice #${inv.invoiceNo} (${inv.customerName})`;
-            } else if (existing.targetType === "payable_bill") {
-                const bill = await prisma.payableBill.findUnique({ where: { id: targetId } });
-                if (bill) targetName = `Bill #${bill.billNo} (${bill.vendorName})`;
-            } else if (existing.targetType === "recurring_pattern") {
-                const rp = await prisma.recurringPattern.findUnique({ where: { id: targetId } });
-                if (rp) targetName = `Recurring Item "${rp.displayName}"`;
-            }
+        let oldValue: string | number | null = null;
+        if (existing.type.includes("date") || existing.type === "delay_due_date") {
+            oldValue = existing.effectiveDate ? existing.effectiveDate.toISOString() : null;
+        } else if (existing.type === "adjust_amount") {
+            oldValue = existing.amount;
+        } else if (existing.type === "exclude") {
+            oldValue = "excluded";
         }
 
-        const { logAuditEvent } = await import("@/services/audit");
-        const mappedTargetType = existing.targetType === "receivable_invoice" ? "invoice" : 
-                                 existing.targetType === "payable_bill" ? "bill" : 
-                                 existing.targetType;
-        await logAuditEvent({
-            companyId: existing.companyId,
-            targetId: targetId || "unknown",
-            targetType: mappedTargetType as any,
-            action: `Removed ${existing.type.replace(/_/g, ' ')}`,
-            source: "user",
-            fieldChanged: "override",
-            oldValue: null,
-            newValue: "removed",
-            reasoning: "User restored original value"
-        });
+        try {
+            const { logAuditEvent } = await import("@/services/audit");
+            const mappedTargetType = existing.targetType === "receivable_invoice" ? "invoice" : 
+                                     existing.targetType === "payable_bill" ? "bill" : 
+                                     existing.targetType;
+            await logAuditEvent({
+                companyId: existing.companyId,
+                targetId: targetId || "unknown",
+                targetType: mappedTargetType as any,
+                action: `Removed ${existing.type.replace(/_/g, ' ')}`,
+                source: "user",
+                fieldChanged: "override",
+                oldValue,
+                newValue: "removed",
+                reasoning: "User restored original value"
+            });
+        } catch (e) {
+            console.error("Audit log failed for DELETE override:", e);
+        }
     }
 
     return NextResponse.json({ ok: true });
