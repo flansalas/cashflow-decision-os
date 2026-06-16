@@ -263,7 +263,7 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
                 </div>
 
                 {showHistory ? (
-                    <TransactionHistoryTimeline targetId={item.id} />
+                    <TransactionHistoryTimeline targetId={item.id} key={`${item.effectiveWeek}-${item.moveCount}-${item.isExcluded}`} />
                 ) : (
                     <>
                         {/* ── Amount ────────────────────────────────────────────── */}

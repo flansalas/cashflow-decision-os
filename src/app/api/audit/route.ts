@@ -23,7 +23,27 @@ export async function GET(req: NextRequest) {
             take: 100,
         });
 
-        return NextResponse.json(logs);
+        const events = logs.map(log => {
+            let diff: any = {};
+            try {
+                if (log.diffJson) diff = JSON.parse(log.diffJson);
+            } catch (e) { /* ignore */ }
+
+            return {
+                id: log.id,
+                timestamp: log.timestamp,
+                action: log.action,
+                source: log.source,
+                targetId: diff.targetId || "unknown",
+                targetType: diff.targetType || "unknown",
+                fieldChanged: diff.fieldChanged || "unknown",
+                oldValue: diff.oldValue ?? null,
+                newValue: diff.newValue ?? null,
+                reasoning: diff.reasoning ?? null,
+            };
+        });
+
+        return NextResponse.json({ events });
     } catch (error) {
         console.error("Audit API error:", error);
         return NextResponse.json({ error: "Failed to fetch audit logs" }, { status: 500 });
