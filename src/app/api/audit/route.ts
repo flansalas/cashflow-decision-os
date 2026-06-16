@@ -9,8 +9,16 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "Company not found" }, { status: 404 });
         }
 
+        const targetId = req.nextUrl.searchParams.get("targetId");
+
+        const whereClause: any = { companyId: tenantId };
+        if (targetId) {
+            // Because diffJson is stored as a string, we can do a contains search for the targetId
+            whereClause.diffJson = { contains: `"targetId":"${targetId}"` };
+        }
+
         const logs = await prisma.changeLog.findMany({
-            where: { companyId: tenantId },
+            where: whereClause,
             orderBy: { timestamp: "desc" },
             take: 100,
         });

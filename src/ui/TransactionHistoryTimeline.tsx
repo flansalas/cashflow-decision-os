@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { User, Server, FileText, ArrowRight, ShieldCheck, History } from "lucide-react";
 
 export interface AuditEvent {
@@ -11,55 +12,6 @@ export interface AuditEvent {
     oldValue: string | number | null;
     newValue: string | number | null;
     reasoning: string | null;
-}
-
-// Generate realistic-looking mock data for a transaction
-function getMockEvents(isAR: boolean): AuditEvent[] {
-    const now = Date.now();
-    const dayMs = 86400000;
-    
-    return [
-        {
-            id: "evt-1",
-            action: isAR ? "Expected Date Moved" : "Due Date Delayed",
-            source: "user",
-            timestamp: new Date(now - dayMs * 1).toISOString(),
-            fieldChanged: isAR ? "expectedDate" : "effectiveDate",
-            oldValue: new Date(now - dayMs * 10).toISOString().split("T")[0],
-            newValue: new Date(now + dayMs * 15).toISOString().split("T")[0],
-            reasoning: isAR ? "Customer requested extension" : "Conserving cash for payroll",
-        },
-        {
-            id: "evt-2",
-            action: "System Re-evaluated Risk",
-            source: "system",
-            timestamp: new Date(now - dayMs * 3).toISOString(),
-            fieldChanged: "riskLevel",
-            oldValue: "Normal",
-            newValue: "High Risk",
-            reasoning: "Passed 30 days overdue",
-        },
-        {
-            id: "evt-3",
-            action: "Amount Adjusted",
-            source: "user",
-            timestamp: new Date(now - dayMs * 12).toISOString(),
-            fieldChanged: "amountOpen",
-            oldValue: 12500,
-            newValue: 10000,
-            reasoning: isAR ? "Partial payment received" : "Applied vendor credit",
-        },
-        {
-            id: "evt-4",
-            action: isAR ? "Invoice Created" : "Bill Created",
-            source: "bookkeeper",
-            timestamp: new Date(now - dayMs * 45).toISOString(),
-            fieldChanged: "status",
-            oldValue: null,
-            newValue: "Open",
-            reasoning: "Synced from accounting system",
-        }
-    ];
 }
 
 function SourceIcon({ source }: { source: AuditEvent["source"] }) {
@@ -104,8 +56,34 @@ function formatValue(key: string, val: string | number | null): string {
     return val;
 }
 
-export function TransactionHistoryTimeline({ isAR }: { isAR: boolean }) {
-    const events = getMockEvents(isAR);
+export function TransactionHistoryTimeline({ targetId }: { targetId: string }) {
+    const [events, setEvents] = useState<AuditEvent[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchEvents() {
+            try {
+                const res = await fetch(`/api/audit?targetId=${targetId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setEvents(data.events || []);
+                }
+            } catch (err) {
+                console.error("Failed to fetch audit events", err);
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchEvents();
+    }, [targetId]);
+
+    if (loading) {
+        return <div className="text-center py-4 text-xs text-slate-500">Loading history...</div>;
+    }
+
+    if (events.length === 0) {
+        return <div className="text-center py-6 text-xs text-slate-500">No history available for this item yet.</div>;
+    }
 
     return (
         <div className="relative pt-2 pb-6">

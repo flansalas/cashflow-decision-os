@@ -64,25 +64,41 @@ export async function POST(req: NextRequest) {
     }
 
     let actionDesc = type.replace(/_/g, ' ');
+    let fieldChanged = "unknown";
+    let newValue: string | number | null = null;
+
     if (type === "set_expected_payment_date" && effectiveDate) {
-        actionDesc = `Changed expected payment date to ${new Date(effectiveDate).toLocaleDateString()}`;
+        actionDesc = `Expected Date Moved`;
+        fieldChanged = "expectedDate";
+        newValue = effectiveDate;
     } else if (type === "set_bill_due_date" && effectiveDate) {
-        actionDesc = `Changed bill due date to ${new Date(effectiveDate).toLocaleDateString()}`;
+        actionDesc = `Due Date Delayed`;
+        fieldChanged = "effectiveDate";
+        newValue = effectiveDate;
     } else if (type === "adjust_amount" && amount !== undefined) {
-        actionDesc = `Adjusted amount to $${amount.toLocaleString()}`;
+        actionDesc = `Amount Adjusted`;
+        fieldChanged = "amountOpen";
+        newValue = amount;
     } else if (type === "delay_due_date") {
         actionDesc = `Delayed payment due date`;
+        fieldChanged = "dueDate";
+    } else if (type === "exclude") {
+        actionDesc = `Excluded Permanently`;
+        fieldChanged = "status";
+        newValue = "excluded";
     }
 
-    await prisma.changeLog.create({
-        data: {
-            companyId,
-            action: "FORECAST_OVERRIDE",
-            source: "user_ui",
-            inputText: `${actionDesc} for ${targetName}`,
-            diffJson: JSON.stringify({ type, targetName, amount, effectiveDate }),
-            forecastVersionHashAfter: "pending",
-        }
+    const { logAuditEvent } = await import("@/services/audit");
+    await logAuditEvent({
+        companyId,
+        targetId: targetId || "unknown",
+        targetType: rawTargetType as any,
+        action: actionDesc,
+        source: "user",
+        fieldChanged,
+        oldValue: null, // We don't have the old value readily available here without more DB lookups
+        newValue,
+        reasoning: "User override via drawer"
     });
 
     return NextResponse.json({ id: created.id, ok: true });
@@ -129,15 +145,20 @@ export async function DELETE(req: NextRequest) {
             }
         }
 
-        await prisma.changeLog.create({
-            data: {
-                companyId: existing.companyId,
-                action: "REMOVE_OVERRIDE",
-                source: "user_ui",
-                inputText: `Removed ${existing.type.replace(/_/g, ' ')} for ${targetName}`,
-                diffJson: JSON.stringify({ targetName, type: existing.type }),
-                forecastVersionHashAfter: "pending",
-            }
+        const { logAuditEvent } = await import("@/services/audit");
+        const mappedTargetType = existing.targetType === "receivable_invoice" ? "invoice" : 
+                                 existing.targetType === "payable_bill" ? "bill" : 
+                                 existing.targetType;
+        await logAuditEvent({
+            companyId: existing.companyId,
+            targetId: targetId || "unknown",
+            targetType: mappedTargetType as any,
+            action: `Removed ${existing.type.replace(/_/g, ' ')}`,
+            source: "user",
+            fieldChanged: "override",
+            oldValue: null,
+            newValue: "removed",
+            reasoning: "User restored original value"
         });
     }
 
