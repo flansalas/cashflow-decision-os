@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { Hourglass, Package, EyeOff, RotateCcw } from "lucide-react";
 import type { GridItem } from "./ARAPCard";
+import { TransactionHistoryTimeline } from "./TransactionHistoryTimeline";
 
 interface Props {
     item: GridItem;
@@ -92,6 +93,7 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
     const [excluding, setExcluding] = useState(false);
     const [restoring, setRestoring] = useState(false);
     const [undoing, setUndoing] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
 
     const isAR = item.kind === "ar";
     const isOverridden = !!item.overrideDate;
@@ -241,8 +243,30 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
 
             {/* Body — scrollable */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+                
+                {/* Tabs */}
+                <div className="flex border-b mb-2 mt-[-4px]" style={{ borderColor: "var(--border-subtle)" }}>
+                    <button 
+                        onClick={() => setShowHistory(false)}
+                        className={`pb-2 px-1 text-[11px] uppercase tracking-wider font-bold mr-6 transition-colors ${!showHistory ? 'border-b-[2px] text-slate-800' : 'text-slate-400 hover:text-slate-600 border-b-[2px] border-transparent'}`}
+                        style={{ borderBottomColor: !showHistory ? "var(--color-primary)" : "transparent" }}
+                    >
+                        Details
+                    </button>
+                    <button 
+                        onClick={() => setShowHistory(true)}
+                        className={`pb-2 px-1 text-[11px] uppercase tracking-wider font-bold transition-colors ${showHistory ? 'border-b-[2px] text-slate-800' : 'text-slate-400 hover:text-slate-600 border-b-[2px] border-transparent'}`}
+                        style={{ borderBottomColor: showHistory ? "var(--color-primary)" : "transparent" }}
+                    >
+                        History
+                    </button>
+                </div>
 
-                {/* ── Amount ────────────────────────────────────────────── */}
+                {showHistory ? (
+                    <TransactionHistoryTimeline isAR={isAR} />
+                ) : (
+                    <>
+                        {/* ── Amount ────────────────────────────────────────────── */}
                 <div>
                     <p className="text-[11px] uppercase tracking-widest font-bold mb-2" style={{ color: "var(--text-faint)" }}>
                         Amount
@@ -345,6 +369,8 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
                             )}
                         </div>
                     </div>
+                )}
+                </>
                 )}
             </div>
 
