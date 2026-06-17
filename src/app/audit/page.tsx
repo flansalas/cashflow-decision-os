@@ -36,7 +36,23 @@ function AuditLogContent() {
             const res = await fetch(url);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Failed to load");
-            setLogs(data);
+            
+            const events = Array.isArray(data) ? data : (data.events || []);
+            const mappedLogs = events.map((e: any) => ({
+                id: e.id,
+                timestamp: e.timestamp,
+                source: e.source,
+                action: e.action,
+                inputText: e.reasoning || null,
+                diffJson: JSON.stringify({
+                    targetType: e.targetType,
+                    fieldChanged: e.fieldChanged,
+                    oldValue: e.oldValue,
+                    newValue: e.newValue
+                })
+            }));
+            
+            setLogs(mappedLogs);
             setError(null);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Failed to load");
