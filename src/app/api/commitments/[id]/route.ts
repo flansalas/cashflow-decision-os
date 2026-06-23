@@ -26,49 +26,37 @@ export async function PATCH(
         return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
 
-    // ── Synthetic payroll: backed by assumptions table, not recurringPattern ──
-    if (id === "synthetic-payroll") {
-        const companyId = await resolveTenant(req);
-        if (!companyId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-        const existingAssumption = await prisma.assumption.findFirst({
-            where: { companyId },
-        });
-
-        if (!existingAssumption) {
-            return NextResponse.json({ error: "Payroll assumption not found" }, { status: 404 });
-        }
-
-        const assumptionUpdate: Record<string, unknown> = {};
-        if (body.typicalAmount !== undefined && body.typicalAmount > 0) {
-            assumptionUpdate.payrollAllInAmount = body.typicalAmount;
-        }
-        if (body.nextExpectedDate !== undefined) {
-            assumptionUpdate.payrollNextDate = body.nextExpectedDate ? new Date(body.nextExpectedDate) : null;
-        }
-        if (body.cadence !== undefined) {
-            assumptionUpdate.payrollCadence = body.cadence;
-        }
-
-        const updatedAssumption = await prisma.assumption.update({
-            where: { id: existingAssumption.id },
-            data: assumptionUpdate,
-        });
-
-        return NextResponse.json({
-            id: "synthetic-payroll",
-            displayName: body.displayName ?? "Payroll (Assumed)",
-            category: "payroll",
-            cadence: updatedAssumption.payrollCadence ?? "biweekly",
-            nextExpectedDate: updatedAssumption.payrollNextDate,
-            typicalAmount: updatedAssumption.payrollAllInAmount ?? 0,
-            isIncluded: true,
-            isCritical: true,
-            direction: "outflow",
-        });
-    }
-
     try {
+        // ── Synthetic payroll (stored in Assumption table, not RecurringPattern) ──
+        if (id === "synthetic-payroll") {
+            const companyId = await resolveTenant(req);
+            if (!companyId) return NextResponse.json({ error: "Could not resolve company" }, { status: 400 });
+
+            const assumptionData: Record<string, any> = {};
+            if (body.typicalAmount !== undefined) assumptionData.payrollAllInAmount = body.typicalAmount;
+            if (body.nextExpectedDate !== undefined) {
+                assumptionData.payrollNextDate = body.nextExpectedDate ? new Date(body.nextExpectedDate) : null;
+            }
+            if (body.cadence !== undefined) assumptionData.payrollCadence = body.cadence;
+
+            const existing = await prisma.assumption.findFirst({ where: { companyId } });
+            if (existing) {
+                await prisma.assumption.update({ where: { id: existing.id }, data: assumptionData });
+            } else {
+                await prisma.assumption.create({ data: { companyId, ...assumptionData } });
+            }
+
+            return NextResponse.json({
+                id: "synthetic-payroll",
+                displayName: body.displayName ?? "Payroll (Assumed)",
+                isIncluded: true,
+                isCritical: true,
+                typicalAmount: body.typicalAmount,
+                nextExpectedDate: body.nextExpectedDate ?? null,
+                cadence: body.cadence ?? "biweekly",
+            });
+        }
+
         const existing = await prisma.recurringPattern.findUnique({ where: { id } });
         if (!existing) {
             return NextResponse.json({ error: "Recurring pattern not found" }, { status: 404 });
@@ -141,6 +129,10 @@ export async function DELETE(
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     try {
+        if (id === "synthetic-payroll") {
+            return NextResponse.json({ error: "Payroll (Assumed) is derived from your assumptions and cannot be deleted here. Edit or clear it via Setup." }, { status: 400 });
+        }
+
         const existing = await prisma.recurringPattern.findUnique({ where: { id } });
         if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
