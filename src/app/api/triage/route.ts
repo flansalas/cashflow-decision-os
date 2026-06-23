@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
 
     for (const inv of invoices) {
         const ovs = overridesByTarget.get(inv.id) || [];
-        if (ovs.some(o => o.type === "mark_paid")) continue;
+        if (ovs.some(o => o.type === "mark_paid" || o.type === "exclude")) continue;
 
         const overrideExpectedDate = ovs.find(o => o.type === "set_expected_payment_date")?.effectiveDate ?? null;
         const cp = customerMap.get(inv.customerName);
@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
 
     for (const bill of bills) {
         const ovs = overridesByTarget.get(bill.id) || [];
-        if (ovs.some(o => o.type === "mark_paid")) continue;
+        if (ovs.some(o => o.type === "mark_paid" || o.type === "exclude")) continue;
 
         const overrideDueDate = ovs.find(o => o.type === "delay_due_date" || o.type === "set_bill_due_date")?.effectiveDate ?? null;
 
