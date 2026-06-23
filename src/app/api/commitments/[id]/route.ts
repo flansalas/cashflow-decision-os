@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
+import { resolveTenant } from "@/lib/tenant";
 
 interface PatchBody {
     isIncluded?: boolean;
@@ -23,6 +24,48 @@ export async function PATCH(
 
     if (!id) {
         return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+
+    // ── Synthetic payroll: backed by assumptions table, not recurringPattern ──
+    if (id === "synthetic-payroll") {
+        const companyId = await resolveTenant(req);
+        if (!companyId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+        const existingAssumption = await prisma.assumption.findFirst({
+            where: { companyId },
+        });
+
+        if (!existingAssumption) {
+            return NextResponse.json({ error: "Payroll assumption not found" }, { status: 404 });
+        }
+
+        const assumptionUpdate: Record<string, unknown> = {};
+        if (body.typicalAmount !== undefined && body.typicalAmount > 0) {
+            assumptionUpdate.payrollAllInAmount = body.typicalAmount;
+        }
+        if (body.nextExpectedDate !== undefined) {
+            assumptionUpdate.payrollNextDate = body.nextExpectedDate ? new Date(body.nextExpectedDate) : null;
+        }
+        if (body.cadence !== undefined) {
+            assumptionUpdate.payrollCadence = body.cadence;
+        }
+
+        const updatedAssumption = await prisma.assumption.update({
+            where: { id: existingAssumption.id },
+            data: assumptionUpdate,
+        });
+
+        return NextResponse.json({
+            id: "synthetic-payroll",
+            displayName: body.displayName ?? "Payroll (Assumed)",
+            category: "payroll",
+            cadence: updatedAssumption.payrollCadence ?? "biweekly",
+            nextExpectedDate: updatedAssumption.payrollNextDate,
+            typicalAmount: updatedAssumption.payrollAllInAmount ?? 0,
+            isIncluded: true,
+            isCritical: true,
+            direction: "outflow",
+        });
     }
 
     try {
