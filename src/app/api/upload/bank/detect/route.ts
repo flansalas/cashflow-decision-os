@@ -25,14 +25,14 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ suggestions: [] });
         }
 
-        // Load existing recurring pattern merchant keys to avoid duplicates
+        // Load existing recurring patterns for matching
         const existingPatterns = await prisma.recurringPattern.findMany({
             where: { companyId },
-            select: { merchantKey: true },
+            select: { id: true, merchantKey: true, typicalAmount: true, cadence: true },
         });
-        const existingKeys = new Set(existingPatterns.map(p => p.merchantKey.toLowerCase()));
+        const existingMap = new Map(existingPatterns.map(p => [p.merchantKey.toLowerCase(), p]));
 
-        // Run detection
+        // Run detection on all transactions (passing empty set to not skip any)
         const txsForDetection: BankTxForDetection[] = bankTxs.map(tx => ({
             txDate: tx.txDate,
             amount: tx.amount,
@@ -41,10 +41,33 @@ export async function POST(req: NextRequest) {
         }));
 
         const asOfDate = new Date();
-        const suggestions = detectPatterns(txsForDetection, asOfDate, existingKeys);
+        const allSuggestions = detectPatterns(txsForDetection, asOfDate, new Set());
+
+        const newSuggestions = [];
+        const updateSuggestions = [];
+
+        for (const sug of allSuggestions) {
+            const match = existingMap.get(sug.merchantKey.toLowerCase());
+            if (match) {
+                // Check if it drifted significantly (>5%) or cadence changed
+                const drift = Math.abs(sug.typicalAmount - match.typicalAmount) / match.typicalAmount;
+                if (drift > 0.05 || sug.cadence !== match.cadence) {
+                    updateSuggestions.push({
+                        ...sug,
+                        isUpdate: true,
+                        existingId: match.id,
+                        oldAmount: match.typicalAmount,
+                        oldCadence: match.cadence,
+                    });
+                }
+            } else {
+                newSuggestions.push(sug);
+            }
+        }
 
         return NextResponse.json({
-            suggestions,
+            suggestions: newSuggestions,
+            updateSuggestions,
             totalTransactions: bankTxs.length,
         });
     } catch (error) {

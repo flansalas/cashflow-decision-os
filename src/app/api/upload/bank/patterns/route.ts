@@ -16,6 +16,8 @@ interface ApprovedPattern {
     nextExpectedDate: string;   // ISO date string
     category: string;
     isCritical: boolean;
+    isUpdate?: boolean;
+    existingId?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -28,42 +30,59 @@ export async function POST(req: NextRequest) {
     if (!patterns?.length) return NextResponse.json({ saved: 0 });
 
     try {
-        // Check for existing keys to avoid duplicates
-        const existing = await prisma.recurringPattern.findMany({
-            where: { companyId },
-            select: { merchantKey: true },
-        });
-        const existingKeys = new Set(existing.map(p => p.merchantKey.toLowerCase()));
+        const toCreate = patterns.filter(p => !p.isUpdate);
+        const toUpdate = patterns.filter(p => p.isUpdate && p.existingId);
 
-        const toCreate = patterns.filter(
-            p => !existingKeys.has(p.merchantKey.toLowerCase())
-        );
-
-        if (toCreate.length === 0) {
-            return NextResponse.json({ saved: 0, skipped: patterns.length });
+        // 1. Process Updates
+        for (const p of toUpdate) {
+            await prisma.recurringPattern.update({
+                where: { id: p.existingId! },
+                data: {
+                    typicalAmount: p.typicalAmount,
+                    amountStdDev: p.amountStdDev,
+                    cadence: p.cadence,
+                    nextExpectedDate: new Date(p.nextExpectedDate),
+                    confidence: p.confidence,
+                }
+            });
         }
 
-        await prisma.recurringPattern.createMany({
-            data: toCreate.map(p => ({
-                id: uuidv4(),
-                companyId,
-                direction: "outflow",
-                merchantKey: p.merchantKey,
-                displayName: p.displayName,
-                typicalAmount: p.typicalAmount,
-                amountStdDev: p.amountStdDev,
-                cadence: p.cadence,
-                nextExpectedDate: new Date(p.nextExpectedDate),
-                confidence: p.confidence,
-                category: p.category,
-                isIncluded: true,
-                isCritical: p.isCritical,
-            })),
-        });
+        // 2. Process Creates
+        if (toCreate.length > 0) {
+            // Extra check to prevent duplicate inserts just in case
+            const existing = await prisma.recurringPattern.findMany({
+                where: { companyId },
+                select: { merchantKey: true },
+            });
+            const existingKeys = new Set(existing.map(p => p.merchantKey.toLowerCase()));
+
+            const safeToCreate = toCreate.filter(p => !existingKeys.has(p.merchantKey.toLowerCase()));
+
+            if (safeToCreate.length > 0) {
+                await prisma.recurringPattern.createMany({
+                    data: safeToCreate.map(p => ({
+                        id: uuidv4(),
+                        companyId,
+                        direction: "outflow",
+                        merchantKey: p.merchantKey,
+                        displayName: p.displayName,
+                        typicalAmount: p.typicalAmount,
+                        amountStdDev: p.amountStdDev,
+                        cadence: p.cadence,
+                        nextExpectedDate: new Date(p.nextExpectedDate),
+                        confidence: p.confidence,
+                        category: p.category,
+                        isIncluded: true,
+                        isCritical: p.isCritical,
+                    })),
+                });
+            }
+        }
 
         return NextResponse.json({
-            saved: toCreate.length,
-            skipped: patterns.length - toCreate.length,
+            saved: toCreate.length + toUpdate.length,
+            created: toCreate.length,
+            updated: toUpdate.length,
         });
     } catch (error) {
         console.error("Bank patterns save error:", error);

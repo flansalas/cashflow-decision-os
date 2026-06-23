@@ -124,6 +124,13 @@ interface DashboardData {
     lastUpdated: string;
     onboardingCompleted?: boolean;
     backlog: BacklogData;
+    macroMemory?: {
+        varianceMultiplier: number;
+        averageVariancePct: number;
+        varianceMultiplierIn: number;
+        averageVariancePctIn: number;
+        weeksTracked: number;
+    };
 }
 
 function DashboardContent() {
@@ -622,6 +629,7 @@ function DashboardContent() {
                         scenarioItems={scenarioItems}
                         viewMode={forecastView === "actions" || forecastView === "bar" ? "chart" : forecastView}
                         buffer={data.assumptions.bufferMin}
+                        macroMemory={data.macroMemory}
                         onReschedule={() => { setSelectedWeekNumber(null); fetchDashboard(); }}
                         onNavigateWeek={(delta) => {
                             const newNum = selectedWeekNumber + delta;

@@ -45,6 +45,13 @@ interface Props {
     onReschedule: () => void;
     onNavigateWeek?: (delta: number) => void;
     onClose: () => void;
+    macroMemory?: {
+        varianceMultiplier: number;
+        averageVariancePct: number;
+        varianceMultiplierIn: number;
+        averageVariancePctIn: number;
+        weeksTracked: number;
+    };
 }
 
 function fmt(n: number): string {
@@ -399,7 +406,7 @@ function RecurringReschedulePopover({
 
 // ── Section Block ─────────────────────────────────────────────────────────────
 function SectionBlock({
-    title, items, sign, companyId, sourceWeekStart, onReschedule, startOpen = false, weekNumber,
+    title, items, sign, companyId, sourceWeekStart, onReschedule, startOpen = false, weekNumber, macroMemory,
 }: {
     title: string;
     items: BreakdownItem[];
@@ -409,6 +416,7 @@ function SectionBlock({
     onReschedule: () => void;
     startOpen?: boolean;
     weekNumber: number;
+    macroMemory?: { varianceMultiplier: number; averageVariancePct: number; varianceMultiplierIn: number; averageVariancePctIn: number; weeksTracked: number };
 }) {
     const [reschedulingId, setReschedulingId] = useState<string | null>(null);
     const [resettingId, setResettingId] = useState<string | null>(null);
@@ -525,6 +533,22 @@ function SectionBlock({
                                             </span>
                                             <span className="text-xs" style={{ color: "var(--text-muted)" }}>{item.confidence} confidence</span>
                                         </div>
+                                        
+                                        {/* Macro-Memory Auto-Correction Transparency Note */}
+                                        {item.sourceType === "baseline" && macroMemory && macroMemory.weeksTracked > 0 && (
+                                            <div className="mt-1.5 flex flex-col gap-0.5 text-[9px] uppercase tracking-wide font-semibold text-slate-400 bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 w-fit">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="flex h-1.5 w-1.5 shrink-0">
+                                                        <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-indigo-400 opacity-75"></span>
+                                                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
+                                                    </span>
+                                                    <span className="text-indigo-600 font-black">AI Variance Engine Active</span>
+                                                </div>
+                                                <p className="normal-case tracking-normal text-xs font-medium text-slate-500 mt-0.5">
+                                                    Applied a <strong className="text-slate-700">{(sign === "+" ? macroMemory.varianceMultiplierIn : macroMemory.varianceMultiplier).toFixed(2)}x</strong> multiplier based on your {macroMemory.weeksTracked}-week historical baseline variance.
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
@@ -600,7 +624,7 @@ const zoneLabels: Record<string, { label: string; colorStyle: React.CSSPropertie
 };
 
 // ── Main Modal ───────────────────────────────────────────────────────────────
-export function WhyWeekModal({ week, weekNumber, weekStart, companyId, scenarioItems = [], viewMode, buffer, onReschedule, onNavigateWeek, onClose }: Props & { buffer?: number }) {
+export function WhyWeekModal({ week, weekNumber, weekStart, companyId, scenarioItems = [], viewMode, buffer, macroMemory, onReschedule, onNavigateWeek, onClose }: Props & { buffer?: number }) {
     const [hoveredSection, setHoveredSection] = useState<string | null>(null);
     const inflowGroups = groupBySection(week.breakdown.inflows);
     const outflowGroups = groupBySection(week.breakdown.outflows);
@@ -717,6 +741,7 @@ export function WhyWeekModal({ week, weekNumber, weekStart, companyId, scenarioI
                                 companyId={companyId} sourceWeekStart={weekStart} onReschedule={onReschedule}
                                 startOpen={section === "AR Receipts" && week.endCashExpected < (buffer ?? 0)}
                                 weekNumber={weekNumber}
+                                macroMemory={macroMemory}
                             />
                         ))
                     )}
@@ -751,6 +776,7 @@ export function WhyWeekModal({ week, weekNumber, weekStart, companyId, scenarioI
                                 companyId={companyId} sourceWeekStart={weekStart} onReschedule={onReschedule}
                                 startOpen={false}
                                 weekNumber={weekNumber}
+                                macroMemory={macroMemory}
                             />
                         ))
                     )}

@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
             companyNotes,
             cashFlowCategories,
             cashFlowEntries,
+            varianceLedger,
         ] = await Promise.all([
             prisma.cashSnapshot.findFirst({ where: { companyId: cid }, orderBy: { asOfDate: "desc" } }),
             prisma.cashAdjustment.findMany({ where: { companyId: cid } }),
@@ -65,6 +66,11 @@ export async function GET(req: NextRequest) {
             prisma.companyNote.findMany({ where: { companyId: cid } }),
             prisma.cashFlowCategory.findMany({ where: { companyId: cid }, orderBy: [{ direction: "asc" }, { sortOrder: "asc" }, { name: "asc" }] }),
             prisma.cashFlowEntry.findMany({ where: { companyId: cid }, include: { category: true } }),
+            prisma.baselineVarianceLedger.findMany({
+                where: { companyId: cid },
+                orderBy: { weekStart: "desc" },
+                take: 4, // last 4 weeks of variance
+            }),
         ]);
 
         if (!cashSnapshot) {
@@ -108,6 +114,29 @@ export async function GET(req: NextRequest) {
 
         const baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate);
         const hasBankBaseline = baseline.hasSufficientHistory;
+
+        // ── Apply Macro-Memory Variance Multipliers ─────────────────────
+        let varianceMultiplier = 1.0;
+        let averageVariancePct = 0;
+        let varianceMultiplierIn = 1.0;
+        let averageVariancePctIn = 0;
+
+        if (varianceLedger.length > 0) {
+            averageVariancePct = varianceLedger.reduce((sum, v) => sum + v.variancePct, 0) / varianceLedger.length;
+            // E.g., if actual is consistently 8% higher than projected (variancePct = 0.08), multiplier is 1.08.
+            varianceMultiplier = 1 + averageVariancePct;
+            
+            // Apply it only to the variable outflows
+            baseline.variableOutflowWeekly = baseline.variableOutflowWeekly * varianceMultiplier;
+
+            // Inflows
+            const inflowVariances = varianceLedger.filter(v => v.variancePctIn !== null);
+            if (inflowVariances.length > 0) {
+                averageVariancePctIn = inflowVariances.reduce((sum, v) => sum + v.variancePctIn!, 0) / inflowVariances.length;
+                varianceMultiplierIn = 1 + averageVariancePctIn;
+                baseline.variableInflowWeekly = baseline.variableInflowWeekly * varianceMultiplierIn;
+            }
+        }
 
         // ── Build customer/vendor lookup ────────────────────────────────
         const customerMap = new Map(customerProfiles.map(c => [c.customerName, c]));
@@ -546,6 +575,13 @@ export async function GET(req: NextRequest) {
                 name: c.name,
                 direction: c.direction,
             })),
+            macroMemory: {
+                varianceMultiplier,
+                averageVariancePct,
+                varianceMultiplierIn,
+                averageVariancePctIn,
+                weeksTracked: varianceLedger.length,
+            },
             zoneBoundary,
             lastUpdated: cashSnapshot.createdAt,
             onboardingCompleted: company.onboardingCompleted,

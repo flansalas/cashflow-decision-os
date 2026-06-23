@@ -142,6 +142,73 @@ export async function POST(req: NextRequest) {
             return { snapshot };
         });
 
+        // ── Macro-Memory: Grade Baseline Variance ───────────────────────
+        if (priorWeekForecast && priorWeekForecast.breakdownJson) {
+            try {
+                const weekStart = new Date(priorWeekForecast.weekStart);
+                const weekEnd = new Date(priorWeekForecast.weekEnd);
+                
+                // 1. Get Projected Baseline from prior week forecast
+                const breakdown = JSON.parse(priorWeekForecast.breakdownJson);
+                
+                const baselineOutflowItem = breakdown.outflows?.find((item: any) => item.sourceType === "baseline");
+                const projectedOutflow = baselineOutflowItem ? baselineOutflowItem.amountExpected : 0;
+
+                const baselineInflowItem = breakdown.inflows?.find((item: any) => item.sourceType === "baseline");
+                const projectedInflow = baselineInflowItem ? baselineInflowItem.amountExpected : 0;
+
+                // 2. Get Actual Bank Txs for that week
+                const bankTxs = await prisma.bankTransaction.findMany({
+                    where: {
+                        companyId,
+                        txDate: { gte: weekStart, lte: weekEnd },
+                    }
+                });
+
+                if (bankTxs.length > 0 && (projectedOutflow > 0 || projectedInflow > 0)) {
+                    // Filter out recurring patterns
+                    const patterns = await prisma.recurringPattern.findMany({
+                        where: { companyId, isIncluded: true }
+                    });
+                    const recurringKeys = new Set(
+                        patterns.map(p => p.merchantKey.toUpperCase().trim())
+                    );
+
+                    let actualOutflow = 0;
+                    let actualInflow = 0;
+
+                    for (const tx of bankTxs) {
+                        const key = tx.description.toUpperCase().trim();
+                        if (recurringKeys.has(key)) continue;
+
+                        if (tx.direction === "outflow") {
+                            actualOutflow += tx.amount;
+                        } else if (tx.direction === "inflow") {
+                            actualInflow += tx.amount;
+                        }
+                    }
+
+                    const variancePct = projectedOutflow > 0 ? (actualOutflow - projectedOutflow) / projectedOutflow : 0;
+                    const variancePctIn = projectedInflow > 0 ? (actualInflow - projectedInflow) / projectedInflow : null;
+
+                    await prisma.baselineVarianceLedger.create({
+                        data: {
+                            companyId,
+                            weekStart,
+                            projectedOutflow,
+                            actualOutflow,
+                            variancePct,
+                            projectedInflow: projectedInflow > 0 ? projectedInflow : null,
+                            actualInflow: projectedInflow > 0 ? actualInflow : null,
+                            variancePctIn,
+                        }
+                    });
+                }
+            } catch (err) {
+                console.warn("Failed to grade baseline variance:", err);
+            }
+        }
+
         // ── Attempt ForecastCheckpoint (non-blocking) ─────────────────────
         // Checkpoint failure must NEVER block the core rollover response.
         let checkpoint = null;

@@ -54,6 +54,10 @@ interface DetectedPattern {
     lastSeen: string;
     nextExpectedDate: string;
     category: string;
+    isUpdate?: boolean;
+    existingId?: string;
+    oldAmount?: number;
+    oldCadence?: string;
 }
 
 interface ReviewPattern extends DetectedPattern {
@@ -284,9 +288,18 @@ function PatternCard({
 
                 {/* Amount */}
                 <div className="text-right shrink-0">
-                    <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>${Math.round(pattern.typicalAmount).toLocaleString()}</p>
-                    {pattern.amountStdDev > 0 && (
-                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>±${Math.round(pattern.amountStdDev).toLocaleString()}</p>
+                    {pattern.isUpdate && pattern.oldAmount !== undefined ? (
+                        <div className="flex flex-col items-end">
+                            <span className="text-[10px] text-slate-400 line-through">Was ${Math.round(pattern.oldAmount).toLocaleString()}</span>
+                            <span className="text-sm font-bold text-amber-600">Now ${Math.round(pattern.typicalAmount).toLocaleString()}</span>
+                        </div>
+                    ) : (
+                        <>
+                            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>${Math.round(pattern.typicalAmount).toLocaleString()}</p>
+                            {pattern.amountStdDev > 0 && (
+                                <p className="text-xs" style={{ color: "var(--text-muted)" }}>±${Math.round(pattern.amountStdDev).toLocaleString()}</p>
+                            )}
+                        </>
                     )}
                 </div>
 
@@ -489,15 +502,18 @@ export function BankUploadStep({ companyId, onDone }: Props) {
             if (!r.ok) throw new Error(d.error ?? "Detection failed");
 
             const suggestions: DetectedPattern[] = d.suggestions ?? [];
+            const updateSuggestions: DetectedPattern[] = d.updateSuggestions ?? [];
+            
+            const allSuggestions = [...suggestions, ...updateSuggestions];
 
-            if (suggestions.length === 0) {
+            if (allSuggestions.length === 0) {
                 // Nothing found — go straight to finish
                 onDone();
                 return;
             }
 
             // Convert to ReviewPattern with editable fields
-            setReviewPatterns(suggestions.map(p => ({
+            setReviewPatterns(allSuggestions.map(p => ({
                 ...p,
                 included: p.confidence !== "low",   // pre-check high/med confidence items
                 editedName: p.displayName,
@@ -531,6 +547,8 @@ export function BankUploadStep({ companyId, onDone }: Props) {
                 nextExpectedDate: p.editedDate || p.nextExpectedDate,
                 category: p.category,
                 isCritical: p.isCritical,
+                isUpdate: p.isUpdate,
+                existingId: p.existingId,
             }));
 
         if (approved.length === 0) {
@@ -797,16 +815,38 @@ export function BankUploadStep({ companyId, onDone }: Props) {
                     </div>
 
                     {/* Pattern cards */}
-                    <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar pr-1">
-                        {reviewPatterns.map((p, i) => (
-                            <PatternCard
-                                key={p.merchantKey}
-                                pattern={p}
-                                onChange={updated =>
-                                    setReviewPatterns(ps => ps.map((x, idx) => idx === i ? updated : x))
-                                }
-                            />
-                        ))}
+                    <div className="space-y-6 max-h-96 overflow-y-auto custom-scrollbar pr-1">
+                        {/* Updates Section */}
+                        {reviewPatterns.filter(p => p.isUpdate).length > 0 && (
+                            <div className="space-y-2">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-600 px-1">Updates to Existing Commitments</h4>
+                                {reviewPatterns.map((p, i) => p.isUpdate ? (
+                                    <PatternCard
+                                        key={p.merchantKey}
+                                        pattern={p}
+                                        onChange={updated =>
+                                            setReviewPatterns(ps => ps.map((x, idx) => idx === i ? updated : x))
+                                        }
+                                    />
+                                ) : null)}
+                            </div>
+                        )}
+
+                        {/* New Section */}
+                        {reviewPatterns.filter(p => !p.isUpdate).length > 0 && (
+                            <div className="space-y-2">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 px-1">New Commitments Detected</h4>
+                                {reviewPatterns.map((p, i) => !p.isUpdate ? (
+                                    <PatternCard
+                                        key={p.merchantKey}
+                                        pattern={p}
+                                        onChange={updated =>
+                                            setReviewPatterns(ps => ps.map((x, idx) => idx === i ? updated : x))
+                                        }
+                                    />
+                                ) : null)}
+                            </div>
+                        )}
                     </div>
 
                     {patternError && (

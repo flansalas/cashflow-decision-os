@@ -43,6 +43,7 @@ model Company {
   cashFlowCategories  CashFlowCategory[]
   cashFlowEntries     CashFlowEntry[]
   forecastCheckpoints ForecastCheckpoint[]
+  baselineVarianceLedgers BaselineVarianceLedger[]
 }
 
 model CompanyNote {
@@ -428,4 +429,28 @@ model ForecastCheckpoint {
 
   company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   cashSnapshot CashSnapshot @relation(fields: [cashSnapshotId], references: [id], onDelete: Cascade)
+}
+
+// ────────────────────────────────────────────────
+// MACRO-MEMORY / BASELINE VARIANCE
+// ────────────────────────────────────────────────
+
+model BaselineVarianceLedger {
+  id               String   @id @default(uuid())
+  companyId        String
+  weekStart        DateTime // The week that was predicted
+  projectedOutflow Float    // What the baseline math said would happen
+  actualOutflow    Float    // What actually happened in the bank (excluding recurring)
+  variancePct      Float    // (Actual - Projected) / Projected
+
+  // [NEW] Inflow Tracking
+  projectedInflow  Float?
+  actualInflow     Float?
+  variancePctIn    Float?
+
+  createdAt        DateTime @default(now())
+
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, weekStart])
 }

@@ -144,8 +144,9 @@ export function detectPatterns(
     for (const [key, data] of groups) {
         if (data.dates.length < MIN_OCCURRENCES) continue;
 
-        // Skip already-known recurring patterns
-        if (existingMerchantKeys.has(key)) continue;
+        // We no longer skip existing patterns here.
+        // The API route will cross-reference with DB to determine if it's a NEW vs UPDATE suggestion.
+        // if (existingMerchantKeys.has(key)) continue;
 
         // Sort dates ascending
         data.dates.sort((a, b) => a.getTime() - b.getTime());
