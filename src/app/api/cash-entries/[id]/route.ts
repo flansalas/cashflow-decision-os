@@ -10,14 +10,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     let targetDate: Date | undefined;
     if (body.weekNumber !== undefined) {
-        const today = new Date();
-        const monday = new Date();
-        const day = today.getDay();
-        const diff = (day === 0 ? -6 : 1 - day);
-        monday.setDate(today.getDate() + diff);
-        monday.setHours(0, 0, 0, 0);
-        targetDate = new Date(monday);
-        targetDate.setDate(targetDate.getDate() + (body.weekNumber - 1) * 7);
+        // Compute current Monday in UTC (matches forecast.ts getMonday logic)
+        const now = new Date();
+        const utcDay = now.getUTCDay();
+        const utcDiff = (utcDay === 0 ? -6 : 1 - utcDay);
+        const mondayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + utcDiff);
+        targetDate = new Date(mondayMs + (body.weekNumber - 1) * 7 * 24 * 60 * 60 * 1000);
     }
 
     try {
