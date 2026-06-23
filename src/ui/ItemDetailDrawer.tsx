@@ -440,8 +440,8 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
                         </p>
                     </div>
                 ) : (
-                    item.effectiveWeek !== null && (
-                        <div className="flex gap-2">
+                    <div className="flex gap-2">
+                        {item.effectiveWeek !== null && (
                             <div className="flex-1">
                                 <button
                                     onClick={handleParkInBacklog}
@@ -460,26 +460,26 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
                                     Removes from 13-week math
                                 </p>
                             </div>
-                            <div className="flex-1">
-                                <button
-                                    onClick={handleExclude}
-                                    disabled={parking || excluding}
-                                    className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 shadow-sm"
-                                    style={{
-                                        color: "#e11d48",
-                                        borderColor: "rgba(225,29,72,0.2)",
-                                        background: "rgba(225,29,72,0.04)",
-                                    }}
-                                >
-                                    <EyeOff className="w-3.5 h-3.5" />
-                                    <span>{excluding ? "Excluding…" : "Exclude Permanently"}</span>
-                                </button>
-                                <p className="text-center text-[10px] mt-1.5" style={{ color: "var(--text-faint)" }}>
-                                    Hides entirely (recoverable)
-                                </p>
-                            </div>
+                        )}
+                        <div className="flex-1">
+                            <button
+                                onClick={handleExclude}
+                                disabled={parking || excluding}
+                                className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 shadow-sm"
+                                style={{
+                                    color: "#e11d48",
+                                    borderColor: "rgba(225,29,72,0.2)",
+                                    background: "rgba(225,29,72,0.04)",
+                                }}
+                            >
+                                <EyeOff className="w-3.5 h-3.5" />
+                                <span>{excluding ? "Excluding…" : "Exclude Permanently"}</span>
+                            </button>
+                            <p className="text-center text-[10px] mt-1.5" style={{ color: "var(--text-faint)" }}>
+                                Hides entirely (recoverable)
+                            </p>
                         </div>
-                    )
+                    </div>
                 )}
             </div>
         </div>
