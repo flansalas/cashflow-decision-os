@@ -4,18 +4,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
 
+/** Mirrors forecast.ts getMonday — returns UTC-midnight Monday for a given date. */
+function getMondayUTC(d: Date): Date {
+    const day = d.getUTCDay();
+    const diff = (day === 0 ? -6 : 1 - day);
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + diff));
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
     const body = await req.json();
 
     let targetDate: Date | undefined;
     if (body.weekNumber !== undefined) {
-        // Compute current Monday in UTC (matches forecast.ts getMonday logic)
-        const now = new Date();
-        const utcDay = now.getUTCDay();
-        const utcDiff = (utcDay === 0 ? -6 : 1 - utcDay);
-        const mondayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + utcDiff);
-        targetDate = new Date(mondayMs + (body.weekNumber - 1) * 7 * 24 * 60 * 60 * 1000);
+        // Use the same Monday the forecast uses: getMonday(cashSnapshot.asOfDate)
+        // First find the entry to get companyId, then look up the snapshot
+        const entry = await prisma.cashFlowEntry.findUnique({ where: { id }, select: { companyId: true } });
+        const snapshot = entry
+            ? await prisma.cashSnapshot.findFirst({ where: { companyId: entry.companyId }, orderBy: { asOfDate: "desc" } })
+            : null;
+        const baseMonday = snapshot ? getMondayUTC(new Date(snapshot.asOfDate)) : getMondayUTC(new Date());
+        targetDate = new Date(baseMonday.getTime() + (body.weekNumber - 1) * 7 * 24 * 60 * 60 * 1000);
     }
 
     try {
