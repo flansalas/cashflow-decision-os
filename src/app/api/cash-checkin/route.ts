@@ -60,6 +60,14 @@ export async function POST(req: NextRequest) {
     }
 
     const snapshotDate = asOfDate ? new Date(asOfDate) : new Date();
+    const isSaturday = snapshotDate.getUTCDay() === 6;
+    let warningMsg = null;
+    if (!isSaturday) {
+        warningMsg = "Rolling the week requires your bank balance as of Saturday night. Using today's balance will skew your variance analysis.";
+    }
+    
+    let bankDataMissing = false;
+    let finalBreakdownJson = priorWeekForecast?.breakdownJson || null;
 
     try {
         // ── Core rollover transaction ─────────────────────────────────────
@@ -165,7 +173,12 @@ export async function POST(req: NextRequest) {
                     }
                 });
 
-                if (bankTxs.length > 0 && (projectedOutflow > 0 || projectedInflow > 0)) {
+                if (bankTxs.length === 0) {
+                    bankDataMissing = true;
+                    if (!warningMsg) warningMsg = "Bank data is missing for the rolled week. Variance logic will run with lower confidence.";
+                }
+
+                if (!bankDataMissing && (projectedOutflow > 0 || projectedInflow > 0)) {
                     // Filter out recurring patterns
                     const patterns = await prisma.recurringPattern.findMany({
                         where: { companyId, isIncluded: true }
@@ -209,6 +222,52 @@ export async function POST(req: NextRequest) {
             }
         }
 
+        if (priorWeekForecast && bankDataMissing) {
+            const unexplainedGap = bankBalance - priorWeekForecast.endCashExpected;
+            try {
+                const breakdown = JSON.parse(finalBreakdownJson || "{}");
+                
+                if (breakdown.inflows) {
+                    breakdown.inflows = breakdown.inflows.map((item: any) => ({
+                        ...item,
+                        confidence: "low",
+                        evidenceStatus: "unverified",
+                        explanation: "Resolved, but no bank deposit found."
+                    }));
+                }
+                if (breakdown.outflows) {
+                    breakdown.outflows = breakdown.outflows.map((item: any) => ({
+                        ...item,
+                        confidence: "low",
+                        evidenceStatus: "unverified",
+                        explanation: "Resolved, but no bank withdrawal found."
+                    }));
+                }
+
+                if (Math.abs(unexplainedGap) > 0.01) {
+                    const lineItem = {
+                        label: "Uncategorized Activity (Unverified)",
+                        amount: Math.abs(unexplainedGap),
+                        type: "manual",
+                        sourceType: "manual",
+                        confidence: "low",
+                        evidenceStatus: "unverified",
+                        explanation: "Unexplained variance to match user cash balance."
+                    };
+                    if (unexplainedGap > 0) {
+                        breakdown.inflows = breakdown.inflows || [];
+                        breakdown.inflows.push(lineItem);
+                    } else {
+                        breakdown.outflows = breakdown.outflows || [];
+                        breakdown.outflows.push(lineItem);
+                    }
+                }
+                finalBreakdownJson = JSON.stringify(breakdown);
+            } catch (e) {
+                console.warn("Failed to update breakdown JSON for unverified gap", e);
+            }
+        }
+
         // ── Attempt ForecastCheckpoint (non-blocking) ─────────────────────
         // Checkpoint failure must NEVER block the core rollover response.
         let checkpoint = null;
@@ -225,7 +284,7 @@ export async function POST(req: NextRequest) {
                         data: {
                             companyId,
                             cashSnapshotId: coreResult.snapshot.id,
-                            snapshotSource: "client_observed_v1",
+                            snapshotSource: (bankDataMissing || !isSaturday) ? "client_observed_unverified" : "client_observed_v1",
                             forecastVersionHash: priorWeekForecast.forecastVersionHash || null,
                             generatedAt: priorWeekForecast.generatedAt ? new Date(priorWeekForecast.generatedAt) : null,
                             weekStart: new Date(priorWeekForecast.weekStart),
@@ -233,7 +292,7 @@ export async function POST(req: NextRequest) {
                             endCashExpected: priorWeekForecast.endCashExpected,
                             inflowsExpected: priorWeekForecast.inflowsExpected,
                             outflowsExpected: priorWeekForecast.outflowsExpected,
-                            breakdownJson: priorWeekForecast.breakdownJson || null,
+                            breakdownJson: finalBreakdownJson,
                         }
                     });
                 } catch (cpError) {
@@ -254,7 +313,8 @@ export async function POST(req: NextRequest) {
             ok: true, 
             snapshotId: coreResult.snapshot.id, 
             asOfDate: coreResult.snapshot.asOfDate,
-            checkpoint 
+            checkpoint,
+            warning: warningMsg
         });
     } catch (error) {
         console.error("Cash check-in error:", error);
