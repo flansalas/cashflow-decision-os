@@ -58,6 +58,7 @@ Allowed:
 - propose implementation plan
 - identify files likely needed
 - define acceptance criteria
+- execute THINK_TANK_PROTOCOL.md reasoning before planning when activated via /think-tank or /think-tank-light
 
 Not allowed:
 - edit files
