@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Inbox, Upload, X, TrendingUp } from "lucide-react";
+import { CheckCircle2, Inbox, Upload, X, TrendingUp, Landmark, AlertTriangle, ShieldCheck, ShieldAlert } from "lucide-react";
 import { VarianceDriverPanel } from "@/ui/VarianceDriverPanel";
 import type { VarianceDriverResult } from "@/services/variance-drivers";
 import { ARAPUploadStep } from "@/ui/ARAPUploadStep";
+import { BankUploadStep } from "@/ui/BankUploadStep";
 
 export type TriageItem = {
     id: string;
@@ -51,11 +52,22 @@ export function UpdateBalanceDialog({
     onCancel,
 }: Props) {
     const todayISO = new Date().toISOString().slice(0, 10);
-    const [step, setStep] = useState<"upload" | "balance" | "triage" | "summary">("upload");
+    const [step, setStep] = useState<"upload" | "bank" | "balance" | "preview" | "triage" | "summary">("upload");
     const [balance, setBalance] = useState(currentBalance.toString());
     const [asOfDate, setAsOfDate] = useState(todayISO);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Bank upload tracking (UI context)
+    const [bankUploaded, setBankUploaded] = useState(false);
+    const [bankSkipped, setBankSkipped] = useState(false);
+    const [arapUploaded, setArapUploaded] = useState(false);
+    // Controls whether BankUploadStep is revealed in the bank step
+    const [showBankUploadWidget, setShowBankUploadWidget] = useState(false);
+    // API-backed bank row presence for the closing week — used for preview verification
+    const [bankDataDetected, setBankDataDetected] = useState<boolean | null>(null);
+    const [bankDataRowCount, setBankDataRowCount] = useState<number | null>(null);
+    const [bankStatusLoading, setBankStatusLoading] = useState(false);
 
     // Triage state
     const [triageItems, setTriageItems] = useState<TriageItem[]>([]);
@@ -249,26 +261,103 @@ export function UpdateBalanceDialog({
             </button>
             
             <div className="px-8 pt-8 pb-4 border-b border-slate-100/60 bg-white z-0">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-lg border bg-blue-50 text-blue-600 border-blue-100 italic">Roll Protocol • Step 1</span>
-                <h2 className="text-2xl font-bold mt-3 tracking-tight" style={{ color: "var(--text-primary)" }}>Refresh QuickBooks Data</h2>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-lg border bg-blue-50 text-blue-600 border-blue-100 italic">Roll Protocol • Step 1 of 4</span>
+                <h2 className="text-2xl font-bold mt-3 tracking-tight" style={{ color: "var(--text-primary)" }}>Refresh AR &amp; AP Data</h2>
                 <p className="text-[13px] mt-1.5" style={{ color: "var(--text-muted)" }}>
-                    Upload your latest AR and AP data to ensure your triage is based on reality.
+                    Upload your latest AR and AP aging reports to ensure your triage is based on reality.
                 </p>
             </div>
             
             <div className="flex-1 overflow-y-auto px-8 py-6 custom-scrollbar bg-slate-50/50">
-                <ARAPUploadStep companyId={companyId} onDone={() => setStep("balance")} />
+                <ARAPUploadStep companyId={companyId} onDone={() => { setArapUploaded(true); setStep("bank"); }} />
             </div>
             
             <div className="px-8 py-4 border-t border-slate-100/60 bg-white flex justify-end">
                 <button
-                    onClick={() => setStep("balance")}
+                    onClick={() => setStep("bank")}
                     className="px-5 py-2 rounded-xl text-sm font-medium transition-colors border shadow-sm"
                     style={{ background: "var(--bg-surface)", color: "var(--text-primary)", borderColor: "var(--border-default)" }}
                 >
-                    Skip Data Refresh — Go to Balance Update
+                    Skip AR/AP — Continue to Bank Transactions
                 </button>
             </div>
+        </div>
+    );
+
+    if (step === "bank") return shell(
+        <div className="flex flex-col max-h-[85vh]">
+            <button
+                onClick={onCancel}
+                className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 transition-colors z-10"
+                style={{ color: "var(--text-secondary)" }}
+            >
+                <X className="w-5 h-5" />
+            </button>
+
+            <div className="px-8 pt-8 pb-4 border-b border-slate-100/60 bg-white z-0">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-lg border bg-indigo-50 text-indigo-600 border-indigo-100 italic">Roll Protocol • Step 2 of 4</span>
+                <h2 className="text-2xl font-bold mt-3 tracking-tight" style={{ color: "var(--text-primary)" }}>Upload Bank Transactions</h2>
+                <p className="text-[13px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+                    Upload your bank statement for the week being closed. This allows the app to verify your forecast and teach Macro-Memory from actual results.
+                </p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-8 py-6 custom-scrollbar bg-slate-50/50">
+                {!showBankUploadWidget ? (
+                    // ── Intro prompt — not yet chosen ──────────────────────────────
+                    <div className="space-y-4">
+                        <div className="rounded-xl border p-4 bg-indigo-50/60 border-indigo-100 space-y-2">
+                            <div className="flex items-start gap-3">
+                                <Landmark className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Why bank transactions matter</p>
+                                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                                        When bank transactions are present, your weekly roll is saved as <strong>Verified</strong> and Macro-Memory can learn from actual vs. forecast variance. Without them, the roll is saved as <strong>Unverified</strong> and no learning occurs.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setShowBankUploadWidget(true)}
+                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all active:scale-95 shadow-lg shadow-indigo-200"
+                            style={{ background: "var(--color-primary)" }}
+                        >
+                            <Landmark className="w-4 h-4 inline mr-2" />
+                            Upload Bank Transactions
+                        </button>
+                        <button
+                            onClick={() => { setBankSkipped(true); setBankUploaded(false); setShowBankUploadWidget(false); setStep("balance"); }}
+                            className="w-full py-2.5 rounded-xl text-sm font-medium border transition-colors"
+                            style={{ background: "var(--bg-raised)", color: "var(--text-secondary)", borderColor: "var(--border-default)" }}
+                        >
+                            Skip bank transactions — roll will be unverified
+                        </button>
+                    </div>
+                ) : (
+                    // ── BankUploadStep revealed after user clicks upload ────────────
+                    <BankUploadStep
+                        companyId={companyId}
+                        onDone={() => {
+                            setBankUploaded(true);
+                            setBankSkipped(false);
+                            setShowBankUploadWidget(false);
+                            setStep("balance");
+                        }}
+                    />
+                )}
+            </div>
+
+            {!showBankUploadWidget && (
+                <div className="px-8 py-4 border-t border-slate-100/60 bg-white flex justify-start">
+                    <button
+                        onClick={() => setStep("upload")}
+                        className="px-4 py-2 rounded-xl text-sm font-medium border transition-colors"
+                        style={{ background: "var(--bg-surface)", color: "var(--text-muted)", borderColor: "var(--border-default)" }}
+                    >
+                        ← Back to AR/AP
+                    </button>
+                </div>
+            )}
         </div>
     );
 
@@ -392,10 +481,38 @@ export function UpdateBalanceDialog({
             </div>
 
             <div className="px-7 pb-7 flex items-center gap-3">
-                <button id="confirm-balance-update-btn" onClick={handleSave} disabled={saving || triageLoading || !isValid}
+                <button
+                    id="confirm-balance-update-btn"
+                    onClick={async () => {
+                        if (!isValid) return;
+                        setBankStatusLoading(true);
+                        try {
+                            const params = new URLSearchParams({ companyId });
+                            if (priorWeekData?.weekStart) params.append("weekStart", priorWeekData.weekStart);
+                            if (priorWeekData?.weekEnd) params.append("weekEnd", priorWeekData.weekEnd);
+                            const res = await fetch(`/api/upload/bank/status?${params}`);
+                            if (res.ok) {
+                                const data = await res.json();
+                                setBankDataDetected(data.hasData);
+                                setBankDataRowCount(data.rowCount);
+                            } else {
+                                setBankDataDetected(false);
+                                setBankDataRowCount(0);
+                            }
+                        } catch {
+                            // Non-blocking: if check fails, conservatively treat as not detected
+                            setBankDataDetected(false);
+                            setBankDataRowCount(0);
+                        } finally {
+                            setBankStatusLoading(false);
+                            setStep("preview");
+                        }
+                    }}
+                    disabled={!isValid || bankStatusLoading}
                     className="flex-1 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all active:scale-95 shadow-lg shadow-indigo-200"
-                    style={{ background: "var(--color-primary)" }}>
-                    {saving || triageLoading ? "Rolling Forecast…" : "✓ Confirm & Roll Forecast →"}
+                    style={{ background: "var(--color-primary)" }}
+                >
+                    {bankStatusLoading ? "Checking bank data\u2026" : "Review \u0026 Confirm Roll \u2192"}
                 </button>
                 <button onClick={onCancel}
                     className="px-5 py-3 rounded-xl text-sm font-medium border transition-colors hover:text-white"
@@ -403,6 +520,149 @@ export function UpdateBalanceDialog({
             </div>
         </>
     );
+
+    // ── Pre-Roll Preview Step ─────────────────────────────────────────────────
+    if (step === "preview") {
+        const weekLabel = priorWeekData?.weekStart && priorWeekData?.weekEnd
+            ? `${new Date(priorWeekData.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(priorWeekData.weekEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+            : asOfDate;
+        const variance = priorWeekData?.endCashExpected != null
+            ? (parsedBalance + adjTotal) - priorWeekData.endCashExpected
+            : null;
+        const isVerified = bankDataDetected === true;
+
+        return shell(
+            <div className="flex flex-col max-h-[85vh]">
+                <button
+                    onClick={onCancel}
+                    className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 transition-colors z-10"
+                    style={{ color: "var(--text-secondary)" }}
+                >
+                    <X className="w-5 h-5" />
+                </button>
+
+                <div className="px-8 pt-8 pb-4 border-b border-slate-100/60 bg-white z-0">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-lg border bg-emerald-50 text-emerald-600 border-emerald-100 italic">Roll Protocol • Step 4 of 4</span>
+                    <h2 className="text-2xl font-bold mt-3 tracking-tight" style={{ color: "var(--text-primary)" }}>Pre-Roll Preview</h2>
+                    <p className="text-[13px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+                        Review the roll details below before advancing the week.
+                    </p>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-8 py-5 custom-scrollbar bg-slate-50/50 space-y-4">
+                    {/* Week summary row */}
+                    <div className="rounded-xl border p-4 space-y-3" style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)" }}>
+                        <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: "var(--text-faint)" }}>Week Closing</p>
+                        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{weekLabel}</p>
+
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-xs">
+                                    <span style={{ color: "var(--text-muted)" }}>AR / AP Upload</span>
+                                    <span className={arapUploaded ? "text-emerald-600 font-semibold" : "text-amber-600 font-semibold"}>
+                                        {arapUploaded ? "✓ Uploaded" : "○ Skipped"}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                    <span style={{ color: "var(--text-muted)" }}>Bank Transactions</span>
+                                    <span className={bankDataDetected ? "text-emerald-600 font-semibold" : "text-amber-600 font-semibold"}>
+                                        {bankDataDetected
+                                            ? `✓ Detected${bankDataRowCount != null ? ` (${bankDataRowCount} rows)` : ""}`
+                                            : "⚠ Not Detected for Closing Week"}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-xs">
+                                    <span style={{ color: "var(--text-muted)" }}>Ending Bank Balance</span>
+                                    <span className="font-financial font-bold" style={{ color: "var(--text-primary)" }}>{fmt(parsedBalance + adjTotal)}</span>
+                                </div>
+                                {priorWeekData?.endCashExpected != null && (
+                                    <div className="flex justify-between text-xs">
+                                        <span style={{ color: "var(--text-muted)" }}>Forecast Expected Cash</span>
+                                        <span className="font-financial font-bold" style={{ color: "var(--text-primary)" }}>{fmt(priorWeekData.endCashExpected)}</span>
+                                    </div>
+                                )}
+                                {variance != null && (
+                                    <div className="flex justify-between text-xs">
+                                        <span style={{ color: "var(--text-muted)" }}>Variance</span>
+                                        <span className={`font-financial font-bold ${variance >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                                            {variance >= 0 ? "+" : ""}{fmt(variance)}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Verification status */}
+                    <div className={`rounded-xl border p-4 flex items-start gap-3 ${
+                        isVerified ? "bg-emerald-50/60 border-emerald-100" : "bg-amber-50/60 border-amber-200"
+                    }`}>
+                        {isVerified
+                            ? <ShieldCheck className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+                            : <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />}
+                        <div>
+                            <p className={`text-sm font-bold ${isVerified ? "text-emerald-700" : "text-amber-700"}`}>
+                                {isVerified ? "Verified with bank transactions" : "Unverified — bank transactions missing"}
+                            </p>
+                            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                                {isVerified
+                                    ? "Baseline Variance Ledger will be created. Macro-Memory will learn from this week."
+                                    : "Baseline Variance Ledger will NOT be created. Macro-Memory will not learn from this week."}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Warning block if bank skipped */}
+                    {!isVerified && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                            <div className="flex items-start gap-2">
+                                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                                    Bank transactions were not uploaded. This roll can continue, but it will be saved as unverified. Macro-Memory will not learn from this week unless bank transactions are uploaded before the roll or a future reprocess feature is added.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => { setShowBankUploadWidget(false); setStep("bank"); }}
+                                className="w-full py-2 rounded-xl text-sm font-semibold border transition-colors"
+                                style={{ background: "var(--bg-surface)", color: "var(--color-primary)", borderColor: "var(--color-primary)" }}
+                            >
+                                Upload Bank Transactions Now
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="px-8 py-4 border-t border-slate-100/60 bg-white flex items-center gap-3">
+                    <button onClick={() => setStep("balance")}
+                        className="px-4 py-3 rounded-xl text-sm font-medium border transition-colors"
+                        style={{ color: "var(--text-muted)", borderColor: "var(--border-default)", background: "var(--bg-raised)" }}
+                    >← Back</button>
+
+                    <button
+                        id="advance-week-confirm-btn"
+                        onClick={handleSave}
+                        disabled={saving || triageLoading || !isValid}
+                        className="flex-1 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all active:scale-95 shadow-lg shadow-indigo-200"
+                        style={{ background: isVerified ? "var(--color-positive)" : "var(--color-primary)" }}
+                    >
+                        {saving || triageLoading
+                            ? "Rolling Forecast…"
+                            : isVerified
+                                ? "✓ Advance Week (Verified) →"
+                                : "Continue Without Bank Data →"}
+                    </button>
+
+                    <button onClick={onCancel}
+                        className="px-4 py-3 rounded-xl text-sm font-medium border transition-colors"
+                        style={{ color: "var(--text-muted)", borderColor: "var(--border-default)", background: "var(--bg-raised)" }}
+                    >Cancel</button>
+                </div>
+            </div>
+        );
+    }
 
     if (step === "triage") {
         const totalAmount = triageItems.reduce((s, i) => s + i.amount, 0);

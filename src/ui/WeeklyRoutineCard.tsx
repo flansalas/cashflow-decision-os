@@ -99,15 +99,22 @@ export function WeeklyRoutineCard() {
 
                     <ArrowRight className="w-3 h-3 text-slate-300 flex-shrink-0 hidden sm:block" />
 
+                    <span className="group flex items-baseline gap-1.5">
+                        <span className="text-xs font-semibold text-slate-800">2. Upload Bank Activity</span>
+                        <span className="text-[10px] text-slate-400 hidden md:inline">Bank transactions</span>
+                    </span>
+
+                    <ArrowRight className="w-3 h-3 text-slate-300 flex-shrink-0 hidden sm:block" />
+
                     <a href="/recurring" className="group flex items-baseline gap-1.5 hover:opacity-80 transition-opacity">
-                        <span className="text-xs font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">2. Verify Recurring Cash</span>
+                        <span className="text-xs font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">3. Verify Recurring Cash</span>
                         <span className="text-[10px] text-slate-400 hidden md:inline">Recurring cash</span>
                     </a>
 
                     <ArrowRight className="w-3 h-3 text-slate-300 flex-shrink-0 hidden sm:block" />
 
                     <a href="/cash-adjustments" className="group flex items-baseline gap-1.5 hover:opacity-80 transition-opacity">
-                        <span className="text-xs font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">3. Add One-Time Adjustments</span>
+                        <span className="text-xs font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">4. Add One-Time Adjustments</span>
                         <span className="text-[10px] text-slate-400 hidden md:inline">One-time items</span>
                     </a>
 
