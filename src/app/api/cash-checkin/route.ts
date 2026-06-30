@@ -92,7 +92,22 @@ export async function POST(req: NextRequest) {
                 });
             }
 
-            // ── Roll forward recurring patterns (including payroll) ─────────────
+            // ── Capture and Roll forward recurring patterns (including payroll) ─────────────
+            const preRollMutationSnapshot = {
+                recurringPatterns: [] as Array<{
+                    id: string;
+                    displayName: string;
+                    previousNextExpectedDate: string;
+                    newNextExpectedDate: string;
+                    cadence: string;
+                }>,
+                assumptions: [] as Array<{
+                    id: string;
+                    previousPayrollNextDate: string;
+                    newPayrollNextDate: string;
+                }>
+            };
+
             const patterns = await tx.recurringPattern.findMany({
                 where: { companyId }
             });
@@ -101,6 +116,14 @@ export async function POST(req: NextRequest) {
                 if (!p.nextExpectedDate) continue;
                 const rolled = rollDate(p.nextExpectedDate, snapshotDate, p.cadence);
                 if (rolled.getTime() !== p.nextExpectedDate.getTime()) {
+                    preRollMutationSnapshot.recurringPatterns.push({
+                        id: p.id,
+                        displayName: p.displayName,
+                        previousNextExpectedDate: p.nextExpectedDate.toISOString(),
+                        newNextExpectedDate: rolled.toISOString(),
+                        cadence: p.cadence
+                    });
+
                     await tx.recurringPattern.update({
                         where: { id: p.id },
                         data: { nextExpectedDate: rolled }
@@ -116,6 +139,12 @@ export async function POST(req: NextRequest) {
             if (assumptions?.payrollNextDate) {
                 const rolled = rollDate(assumptions.payrollNextDate, snapshotDate, assumptions.payrollCadence || "biweekly");
                 if (rolled.getTime() !== assumptions.payrollNextDate.getTime()) {
+                    preRollMutationSnapshot.assumptions.push({
+                        id: assumptions.id,
+                        previousPayrollNextDate: assumptions.payrollNextDate.toISOString(),
+                        newPayrollNextDate: rolled.toISOString()
+                    });
+
                     await tx.assumption.update({
                         where: { id: assumptions.id },
                         data: { payrollNextDate: rolled }
@@ -142,7 +171,12 @@ export async function POST(req: NextRequest) {
                     action: "UPDATE_BALANCE",
                     source: "user_ui",
                     inputText: `Updated bank balance to $${bankBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
-                    diffJson: JSON.stringify({ bankBalance, asOfDate: snapshotDate.toISOString(), adjustmentsCount: adjustments.length }),
+                    diffJson: JSON.stringify({
+                        bankBalance,
+                        asOfDate: snapshotDate.toISOString(),
+                        adjustmentsCount: adjustments.length,
+                        preRollMutationSnapshot
+                    }),
                     forecastVersionHashAfter: "pending", 
                 }
             });

@@ -306,6 +306,8 @@ async function rollback(opts: any) {
         recordsToDelete.ledger = ledger;
     }
 
+    let preRollMutationSnapshot: any = null;
+
     if (changeLogId) {
         const changeLog = await prisma.changeLog.findUnique({ where: { id: changeLogId } });
         if (!changeLog || changeLog.companyId !== companyId) {
@@ -313,6 +315,37 @@ async function rollback(opts: any) {
             process.exit(1);
         }
         recordsToDelete.changeLog = changeLog;
+
+        try {
+            const parsed = JSON.parse(changeLog.diffJson);
+            if (parsed.preRollMutationSnapshot) {
+                preRollMutationSnapshot = parsed.preRollMutationSnapshot;
+            }
+        } catch (e) {
+            // Ignored, fallback to warning
+        }
+    }
+
+    if (preRollMutationSnapshot) {
+        console.log("=== PRE-ROLL MUTATION SNAPSHOT DETECTED ===");
+        console.log("The following database mutations will be reverted:");
+        if (preRollMutationSnapshot.recurringPatterns && preRollMutationSnapshot.recurringPatterns.length > 0) {
+            console.log("Recurring Patterns to revert:");
+            preRollMutationSnapshot.recurringPatterns.forEach((rp: any) => {
+                console.log(`  - ${rp.displayName} (ID: ${rp.id}): nextExpectedDate ${rp.newNextExpectedDate} -> ${rp.previousNextExpectedDate}`);
+            });
+        }
+        if (preRollMutationSnapshot.assumptions && preRollMutationSnapshot.assumptions.length > 0) {
+            console.log("Assumptions to revert:");
+            preRollMutationSnapshot.assumptions.forEach((a: any) => {
+                console.log(`  - Assumption (ID: ${a.id}): payrollNextDate ${a.newPayrollNextDate} -> ${a.previousPayrollNextDate}`);
+            });
+        }
+    } else {
+        console.warn("\nWARNING: No preRollMutationSnapshot found in ChangeLog diffJson.");
+        console.warn("This rollback will perform a SOFT ROLLBACK ONLY.");
+        console.warn("RecurringPattern nextExpectedDates and Assumption payrollNextDates CANNOT be safely restored.");
+        console.warn("Soft rollback will only delete the main roll records.\n");
     }
 
     console.log("Records to delete:", JSON.stringify(recordsToDelete, null, 2));
@@ -332,7 +365,35 @@ async function rollback(opts: any) {
 
         console.log("Executing rollback...");
 
-        // Order is important
+        // 1. Revert shifted dates from snapshot if present
+        if (preRollMutationSnapshot) {
+            if (preRollMutationSnapshot.recurringPatterns) {
+                for (const rp of preRollMutationSnapshot.recurringPatterns) {
+                    const currentPattern = await prisma.recurringPattern.findUnique({ where: { id: rp.id } });
+                    if (currentPattern && currentPattern.companyId === companyId) {
+                        await prisma.recurringPattern.update({
+                            where: { id: rp.id },
+                            data: { nextExpectedDate: new Date(rp.previousNextExpectedDate) }
+                        });
+                        console.log(`Reverted recurring pattern: ${rp.displayName}`);
+                    }
+                }
+            }
+            if (preRollMutationSnapshot.assumptions) {
+                for (const a of preRollMutationSnapshot.assumptions) {
+                    const currentAssumption = await prisma.assumption.findUnique({ where: { id: a.id } });
+                    if (currentAssumption && currentAssumption.companyId === companyId) {
+                        await prisma.assumption.update({
+                            where: { id: a.id },
+                            data: { payrollNextDate: new Date(a.previousPayrollNextDate) }
+                        });
+                        console.log(`Reverted payroll assumptions (ID: ${a.id})`);
+                    }
+                }
+            }
+        }
+
+        // 2. Delete the record targets
         if (ledgerId) await prisma.baselineVarianceLedger.delete({ where: { id: ledgerId } });
         if (changeLogId) await prisma.changeLog.delete({ where: { id: changeLogId } });
         // Deleting CashSnapshot cascades to ForecastCheckpoint
@@ -344,7 +405,8 @@ async function rollback(opts: any) {
             companyId,
             command: "rollback",
             timestamp: new Date().toISOString(),
-            deletedRecords: recordsToDelete
+            deletedRecords: recordsToDelete,
+            revertedMutations: preRollMutationSnapshot
         };
         writeAudit(companyId, "rollback", auditData);
 
