@@ -44,6 +44,7 @@ model Company {
   cashFlowEntries     CashFlowEntry[]
   forecastCheckpoints ForecastCheckpoint[]
   baselineVarianceLedgers BaselineVarianceLedger[]
+  executionPlans      ExecutionPlan[]
 }
 
 model CompanyNote {
@@ -453,4 +454,34 @@ model BaselineVarianceLedger {
   company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId, weekStart])
+}
+
+// ────────────────────────────────────────────────
+// EXECUTION PLAN
+// ────────────────────────────────────────────────
+
+model ExecutionPlan {
+  id                  String    @id @default(uuid())
+  companyId           String
+  weekStart           DateTime
+  weekEnd             DateTime
+  status              String    // "approved" | "superseded" | "executed"
+  version             Int       @default(1)
+  planHash            String
+  
+  // JSONB payload of the exact items
+  itemsJson           Json      
+  // JSONB payload of the summary totals
+  summaryJson         Json      
+
+  createdAt           DateTime  @default(now())
+  approvedAt          DateTime  @default(now())
+  supersededAt        DateTime?
+  supersededByPlanId  String?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, weekStart, status])
+  @@index([companyId, weekStart, version])
+  @@index([companyId, status])
 }

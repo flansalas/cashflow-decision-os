@@ -2,8 +2,8 @@
 // Sections: Approved to Pay | Collection Targets | Hold List
 "use client";
 
-import { useMemo, useState } from "react";
-import { Printer, CheckCircle, Phone, Lock, RefreshCw, Zap, Eye, EyeOff } from "lucide-react";
+import { useMemo, useState, useEffect, useCallback } from "react";
+import { Printer, CheckCircle, Phone, Lock, RefreshCw, Zap, Eye, EyeOff, Save, AlertTriangle } from "lucide-react";
 import type { WeekBreakdown, WeekBreakdownItem } from "@/domain/types";
 import type { GridItem } from "./ARAPCard";
 
@@ -13,7 +13,31 @@ interface WeekMeta {
     weekEnd: string;
 }
 
+interface ExecutionPlanItem {
+    sourceType: "ar" | "ap" | "recurring" | "manual" | "scenario" | "adjustment" | "other";
+    sourceId: string | null;
+    label: string;
+    counterparty?: string;
+    amount: number;
+    direction: "in" | "out";
+    plannedDate?: string;
+    action: "collect" | "pay" | "hold" | "skip" | "monitor";
+}
+
+interface SavedPlan {
+    id: string;
+    planHash: string;
+    status: string;
+    approvedAt: string;
+    summaryJson: {
+        totalCollect: number;
+        totalPay: number;
+        totalAutoOutflows: number;
+    };
+}
+
 interface Props {
+    companyId: string;
     weeks: WeekMeta[];
     invoices: GridItem[];
     bills: GridItem[];
@@ -227,9 +251,11 @@ function ItemRow({ item, isHold, originalDue }: RowProps) {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────
-export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakdown, onClose }: Props) {
+export function ExecutionPlanModal({ companyId, weeks, invoices, bills, openingCash, breakdown, onClose }: Props) {
     const [activeTab, setActiveTab] = useState<"all" | "ar" | "ap">("all");
     const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
+    const [savedPlan, setSavedPlan] = useState<SavedPlan | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
     
     const toggleExclude = (id: string) => {
         setExcludedIds(prev => {
@@ -324,6 +350,124 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
         };
     }, [invoices, bills, week1, breakdown, excludedIds]);
 
+    // ── Generate Plan Payload & Hash ───────────────────────────────────────
+    const { itemsJson, summaryJson, currentPlanHash } = useMemo(() => {
+        const items: ExecutionPlanItem[] = [];
+
+        for (const item of approvedToPay) {
+            items.push({
+                sourceType: "ap", sourceId: item.id, label: item.label,
+                counterparty: item.vendorName, amount: item.amountOpen, direction: "out",
+                plannedDate: item.overrideDate || item.dueDate || undefined, action: "pay"
+            });
+        }
+        for (const item of collectionTargets) {
+            items.push({
+                sourceType: "ar", sourceId: item.id, label: item.label,
+                counterparty: item.customerName, amount: item.amountOpen, direction: "in",
+                plannedDate: item.overrideDate || item.dueDate || undefined, action: "collect"
+            });
+        }
+        for (const { item } of holdItems) {
+            items.push({
+                sourceType: item.kind === "ar" ? "ar" : "ap", sourceId: item.id, label: item.label,
+                counterparty: item.kind === "ar" ? item.customerName : item.vendorName, amount: item.amountOpen,
+                direction: item.kind === "ar" ? "in" : "out", plannedDate: item.overrideDate || undefined, action: "hold"
+            });
+        }
+        for (const item of manualOutflows) {
+            if (excludedIds.has(item.sourceId || item.label)) continue;
+            items.push({
+                sourceType: item.sourceType === "manual" ? "manual" : "recurring", sourceId: item.sourceId || null,
+                label: item.label, amount: item.amount, direction: "out", action: "pay"
+            });
+        }
+        for (const item of manualInflows) {
+            if (excludedIds.has(item.sourceId || item.label)) continue;
+            items.push({
+                sourceType: item.sourceType === "manual" ? "manual" : "other", sourceId: item.sourceId || null,
+                label: item.label, amount: item.amount, direction: "in", action: "collect"
+            });
+        }
+        for (const item of automatedOutflows) {
+            if (excludedIds.has(item.sourceId || item.label)) continue;
+            items.push({
+                sourceType: "recurring", sourceId: item.sourceId || null,
+                label: item.label, amount: item.amount, direction: "out", action: "monitor"
+            });
+        }
+
+        // Canonical Sort for Hash
+        const sorted = [...items].sort((a, b) => {
+            if (a.sourceType !== b.sourceType) return a.sourceType.localeCompare(b.sourceType);
+            const idA = a.sourceId || ""; const idB = b.sourceId || "";
+            if (idA !== idB) return idA.localeCompare(idB);
+            if (a.action !== b.action) return a.action.localeCompare(b.action);
+            const dateA = a.plannedDate || ""; const dateB = b.plannedDate || "";
+            if (dateA !== dateB) return dateA.localeCompare(dateB);
+            return Math.abs(a.amount) - Math.abs(b.amount);
+        });
+
+        // Generate Hash String
+        const hashStr = sorted.map(i => `${i.sourceType}:${i.sourceId || ""}:${i.action}:${i.plannedDate || ""}:${Math.abs(i.amount).toFixed(2)}`).join("|");
+        let hash = 0;
+        for (let i = 0; i < hashStr.length; i++) {
+            hash = ((hash << 5) - hash) + hashStr.charCodeAt(i);
+            hash |= 0;
+        }
+        const currentPlanHash = hash.toString(16);
+
+        const summaryJson = {
+            totalCollect, totalPay, totalAutoOutflows,
+            expectedEndingCash: openingCash + totalCollect - totalPay - totalAutoOutflows
+        };
+
+        return { itemsJson: sorted, summaryJson, currentPlanHash };
+    }, [approvedToPay, collectionTargets, holdItems, manualOutflows, manualInflows, automatedOutflows, totalCollect, totalPay, totalAutoOutflows, openingCash, excludedIds]);
+
+    // ── Fetch Existing Plan ────────────────────────────────────────────────
+    useEffect(() => {
+        if (!companyId) return;
+        fetch(`/api/execution-plan?companyId=${companyId}&weekStart=${week1.weekStart}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.plan) {
+                    setSavedPlan(data.plan);
+                }
+            })
+            .catch(console.error);
+    }, [invoices, week1.weekStart]);
+
+    // ── Approve Plan ───────────────────────────────────────────────────────
+    const handleApprove = useCallback(async () => {
+        if (!companyId) return;
+        setIsSaving(true);
+        try {
+            const res = await fetch("/api/execution-plan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    companyId,
+                    weekStart: week1.weekStart,
+                    weekEnd: week1.weekEnd,
+                    planHash: currentPlanHash,
+                    itemsJson,
+                    summaryJson
+                })
+            });
+            const data = await res.json();
+            if (data.plan) {
+                setSavedPlan(data.plan);
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsSaving(false);
+        }
+    }, [invoices, week1, currentPlanHash, itemsJson, summaryJson]);
+
+    const isOutOfSync = savedPlan && savedPlan.planHash !== currentPlanHash;
+
     const showAR = activeTab === "all" || activeTab === "ar";
     const showAP = activeTab === "all" || activeTab === "ap";
 
@@ -378,7 +522,6 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                     <div className="flex items-center gap-3">
 
 
-                        {/* Tab filter */}
                         <div id="execution-plan-tabs" className="flex rounded-lg overflow-hidden border text-[11px] font-semibold" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
                             {(["all", "ar", "ap"] as const).map(tab => (
                                 <button
@@ -396,12 +539,27 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                             ))}
                         </div>
 
+                        {savedPlan && !isOutOfSync && (
+                            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
+                                <CheckCircle className="w-4 h-4" /> Approved
+                            </span>
+                        )}
+
                         <button
-                            onClick={() => window.print()}
-                            className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold"
+                            onClick={handleApprove}
+                            disabled={isSaving || (!isOutOfSync && !!savedPlan)}
+                            className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold disabled:opacity-50"
                             style={{ background: "#2563eb", color: "#fff" }}
                         >
-                            <Printer className="w-4 h-4" /> Print / Save PDF
+                            <Save className="w-4 h-4" /> {isSaving ? "Saving..." : "Approve Plan"}
+                        </button>
+
+                        <button
+                            onClick={() => window.print()}
+                            className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-slate-800 transition-colors"
+                            style={{ color: "#fff", background: "rgba(255,255,255,0.1)" }}
+                        >
+                            <Printer className="w-4 h-4" /> Print
                         </button>
 
                         <button
@@ -441,11 +599,33 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                                     </p>
                                 </div>
                                 <div style={{ textAlign: "right" }}>
-                                    <p style={{ fontSize: "10px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em" }}>Generated</p>
-                                    <p style={{ fontSize: "11px", color: "#475569", fontWeight: 500 }}>{printDate}</p>
+                                    {savedPlan && !isOutOfSync ? (
+                                        <>
+                                            <p style={{ fontSize: "10px", color: "#059669", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>✓ Approved Plan</p>
+                                            <p style={{ fontSize: "11px", color: "#475569", fontWeight: 500 }}>{new Date(savedPlan.approvedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p style={{ fontSize: "10px", color: "#dc2626", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Draft / Unapproved</p>
+                                            <p style={{ fontSize: "11px", color: "#475569", fontWeight: 500 }}>{printDate}</p>
+                                        </>
+                                    )}
                                     <p style={{ fontSize: "10px", color: "#dc2626", fontWeight: 700, marginTop: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Confidential · Internal Use Only</p>
                                 </div>
                             </div>
+
+                            {isOutOfSync && (
+                                <div className="no-print" style={{ marginTop: "16px", padding: "12px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                                    <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+                                    <div>
+                                        <p style={{ fontSize: "13px", fontWeight: 700, color: "#991b1b", margin: 0 }}>Current forecast differs from the approved plan.</p>
+                                        <p style={{ fontSize: "12px", color: "#7f1d1d", marginTop: "2px", marginBottom: "8px" }}>Grid adjustments were made after this plan was approved.</p>
+                                        <button onClick={handleApprove} disabled={isSaving} style={{ background: "#dc2626", color: "#fff", padding: "6px 12px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: "none", cursor: "pointer" }}>
+                                            {isSaving ? "Saving..." : "Re-Approve Plan"}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Summary band */}
                             <div style={{
