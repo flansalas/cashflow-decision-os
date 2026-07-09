@@ -22,9 +22,10 @@ export async function POST(req: NextRequest) {
         amount?: number;
         effectiveDate?: string;
         metaJson?: string;
+        reason?: string; // Optional user-supplied reason for the override
     };
 
-    const { companyId, type, targetType: rawTargetType, targetId, amount, effectiveDate, metaJson } = body;
+    const { companyId, type, targetType: rawTargetType, targetId, amount, effectiveDate, metaJson, reason } = body;
 
     if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
     if (!VALID_TYPES.includes(type)) return NextResponse.json({ error: "Invalid override type" }, { status: 400 });
@@ -90,6 +91,18 @@ export async function POST(req: NextRequest) {
         }
     }
 
+    // Merge reason into metaJson if provided
+    let finalMetaJson = metaJson ?? null;
+    if (reason) {
+        try {
+            const existing = finalMetaJson ? JSON.parse(finalMetaJson) : {};
+            existing.reason = reason;
+            finalMetaJson = JSON.stringify(existing);
+        } catch {
+            finalMetaJson = JSON.stringify({ reason });
+        }
+    }
+
     const created = await prisma.override.create({
         data: {
             id: uuidv4(),
@@ -99,7 +112,7 @@ export async function POST(req: NextRequest) {
             targetId: targetId ?? null,
             amount: amount ?? null,
             effectiveDate: effectiveDate ? new Date(effectiveDate) : null,
-            metaJson: metaJson ?? null,
+            metaJson: finalMetaJson,
             status: "active",
         },
     });
@@ -140,7 +153,8 @@ export async function POST(req: NextRequest) {
             fieldChanged,
             oldValue,
             newValue,
-            reasoning: "User override via drawer"
+            reasoning: "User override via drawer",
+            reason: reason ?? null,
         });
     } catch (e) {
         console.error("Audit log failed for POST override:", e);

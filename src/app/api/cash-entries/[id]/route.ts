@@ -28,6 +28,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     try {
+        const { logAuditEvent } = await import("@/services/audit");
+
+        const oldEntry = await prisma.cashFlowEntry.findUnique({
+            where: { id },
+            include: { category: true }
+        });
+
         const updated = await prisma.cashFlowEntry.update({
             where: { id },
             data: {
@@ -39,6 +46,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             },
             include: { category: true },
         });
+
+        if (oldEntry) {
+            const oldVal = oldEntry.category.direction === "inflow" ? oldEntry.amount : -oldEntry.amount;
+            const newVal = updated.category.direction === "inflow" ? updated.amount : -updated.amount;
+            const impact = newVal - oldVal;
+
+            if (impact !== 0 || body.label || targetDate) {
+                await logAuditEvent({
+                    companyId: updated.companyId,
+                    targetId: id,
+                    targetType: "forecast_week" as any,
+                    action: `Updated Manual Entry`,
+                    source: "user",
+                    fieldChanged: "amount",
+                    oldValue: oldVal,
+                    newValue: newVal,
+                    reasoning: updated.label
+                });
+            }
+        }
+
         return NextResponse.json({ ...updated, weekNumber: body.weekNumber });
     } catch (error) {
         console.error("Update entry error:", error);
@@ -50,7 +78,29 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const { id } = await params;
 
     try {
+        const { logAuditEvent } = await import("@/services/audit");
+
+        const entry = await prisma.cashFlowEntry.findUnique({
+            where: { id },
+            include: { category: true }
+        });
+
         await prisma.cashFlowEntry.delete({ where: { id } });
+
+        if (entry) {
+            await logAuditEvent({
+                companyId: entry.companyId,
+                targetId: id,
+                targetType: "forecast_week" as any,
+                action: `Deleted Manual Entry`,
+                source: "user",
+                fieldChanged: "amount",
+                oldValue: entry.category.direction === "inflow" ? entry.amount : -entry.amount,
+                newValue: 0,
+                reasoning: entry.label
+            });
+        }
+
         return NextResponse.json({ ok: true });
     } catch (error) {
         console.error("Delete entry error:", error);

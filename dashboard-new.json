@@ -1,0 +1,335 @@
+{
+  "snapshotDate": "2026-06-13T12:00:00.000Z",
+  "startingCash": 5000,
+  "hasBankBaseline": false,
+  "baseline": {
+    "inflow": 0,
+    "outflow": 0,
+    "inflowBand": 0.3,
+    "outflowBand": 0.2,
+    "note": "Baseline uses placeholder defaults — Only 0 weeks of transaction history (need 6)"
+  },
+  "forecast": {
+    "weeks": [
+      {
+        "weekNumber": 1,
+        "weekStart": "2026-06-08T00:00:00.000Z",
+        "weekEnd": "2026-06-14T00:00:00.000Z",
+        "startCash": 5000,
+        "inflowsExpected": 0,
+        "outflowsExpected": 0,
+        "endCashExpected": 5000,
+        "inflowsBest": 0,
+        "outflowsBest": 0,
+        "endCashBest": 5000,
+        "inflowsWorst": 0,
+        "outflowsWorst": 0,
+        "endCashWorst": 5000,
+        "zone": "uncertain",
+        "confidenceScore": 75,
+        "breakdown": {
+          "inflows": [],
+          "outflows": []
+        },
+        "worstCaseDriver": null
+      },
+      {
+        "weekNumber": 2,
+        "weekStart": "2026-06-15T00:00:00.000Z",
+        "weekEnd": "2026-06-21T00:00:00.000Z",
+        "startCash": 5000,
+        "inflowsExpected": 0,
+        "outflowsExpected": 0,
+        "endCashExpected": 5000,
+        "inflowsBest": 0,
+        "outflowsBest": 0,
+        "endCashBest": 5000,
+        "inflowsWorst": 0,
+        "outflowsWorst": 0,
+        "endCashWorst": 5000,
+        "zone": "uncertain",
+        "confidenceScore": 75,
+        "breakdown": {
+          "inflows": [],
+          "outflows": []
+        },
+        "worstCaseDriver": null
+      },
+      {
+        "weekNumber": 3,
+        "weekStart": "2026-06-22T00:00:00.000Z",
+        "weekEnd": "2026-06-28T00:00:00.000Z",
+        "startCash": 5000,
+        "inflowsExpected": 0,
+        "outflowsExpected": 0,
+        "endCashExpected": 5000,
+        "inflowsBest": 0,
+        "outflowsBest": 0,
+        "endCashBest": 5000,
+        "inflowsWorst": 0,
+        "outflowsWorst": 0,
+        "endCashWorst": 5000,
+        "zone": "uncertain",
+        "confidenceScore": 75,
+        "breakdown": {
+          "inflows": [],
+          "outflows": []
+        },
+        "worstCaseDriver": null
+      },
+      {
+        "weekNumber": 4,
+        "weekStart": "2026-06-29T00:00:00.000Z",
+        "weekEnd": "2026-07-05T00:00:00.000Z",
+        "startCash": 5000,
+        "inflowsExpected": 0,
+        "outflowsExpected": 0,
+        "endCashExpected": 5000,
+        "inflowsBest": 0,
+        "outflowsBest": 0,
+        "endCashBest": 5000,
+        "inflowsWorst": 0,
+        "outflowsWorst": 0,
+        "endCashWorst": 5000,
+        "zone": "uncertain",
+        "confidenceScore": 75,
+        "breakdown": {
+          "inflows": [],
+          "outflows": []
+        },
+        "worstCaseDriver": null
+      },
+      {
+        "weekNumber": 5,
+        "weekStart": "2026-07-06T00:00:00.000Z",
+        "weekEnd": "2026-07-12T00:00:00.000Z",
+        "startCash": 5000,
+        "inflowsExpected": 0,
+        "outflowsExpected": 0,
+        "endCashExpected": 5000,
+        "inflowsBest": 0,
+        "outflowsBest": 0,
+        "endCashBest": 5000,
+        "inflowsWorst": 0,
+        "outflowsWorst": 0,
+        "endCashWorst": 5000,
+        "zone": "uncertain",
+        "confidenceScore": 75,
+        "breakdown": {
+          "inflows": [],
+          "outflows": []
+        },
+        "worstCaseDriver": null
+      },
+      {
+        "weekNumber": 6,
+        "weekStart": "2026-07-13T00:00:00.000Z",
+        "weekEnd": "2026-07-19T00:00:00.000Z",
+        "startCash": 5000,
+        "inflowsExpected": 0,
+        "outflowsExpected": 0,
+        "endCashExpected": 5000,
+        "inflowsBest": 0,
+        "outflowsBest": 0,
+        "endCashBest": 5000,
+        "inflowsWorst": 0,
+        "outflowsWorst": 0,
+        "endCashWorst": 5000,
+        "zone": "uncertain",
+        "confidenceScore": 75,
+        "breakdown": {
+          "inflows": [],
+          "outflows": []
+        },
+        "worstCaseDriver": null
+      },
+      {
+        "weekNumber": 7,
+        "weekStart": "2026-07-20T00:00:00.000Z",
+        "weekEnd": "2026-07-26T00:00:00.000Z",
+        "startCash": 5000,
+        "inflowsExpected": 0,
+        "outflowsExpected": 0,
+        "endCashExpected": 5000,
+        "inflowsBest": 0,
+        "outflowsBest": 0,
+        "endCashBest": 5000,
+        "inflowsWorst": 0,
+        "outflowsWorst": 0,
+        "endCashWorst": 5000,
+        "zone": "uncertain",
+        "confidenceScore": 75,
+        "breakdown": {
+          "inflows": [],
+          "outflows": []
+        },
+        "worstCaseDriver": null
+      },
+      {
+        "weekNumber": 8,
+        "weekStart": "2026-07-27T00:00:00.000Z",
+        "weekEnd": "2026-08-02T00:00:00.000Z",
+        "startCash": 5000,
+        "inflowsExpected": 0,
+        "outflowsExpected": 0,
+        "endCashExpected": 5000,
+        "inflowsBest": 0,
+        "outflowsBest": 0,
+        "endCashBest": 5000,
+        "inflowsWorst": 0,
+        "outflowsWorst": 0,
+        "endCashWorst": 5000,
+        "zone": "uncertain",
+        "confidenceScore": 75,
+        "breakdown": {
+          "inflows": [],
+          "outflows": []
+        },
+        "worstCaseDriver": null
+      },
+      {
+        "weekNumber": 9,
+        "weekStart": "2026-08-03T00:00:00.000Z",
+        "weekEnd": "2026-08-09T00:00:00.000Z",
+        "startCash": 5000,
+        "inflowsExpected": 0,
+        "outflowsExpected": 0,
+        "endCashExpected": 5000,
+        "inflowsBest": 0,
+        "outflowsBest": 0,
+        "endCashBest": 5000,
+        "inflowsWorst": 0,
+        "outflowsWorst": 0,
+        "endCashWorst": 5000,
+        "zone": "uncertain",
+        "confidenceScore": 75,
+        "breakdown": {
+          "inflows": [],
+          "outflows": []
+        },
+        "worstCaseDriver": null
+      },
+      {
+        "weekNumber": 10,
+        "weekStart": "2026-08-10T00:00:00.000Z",
+        "weekEnd": "2026-08-16T00:00:00.000Z",
+        "startCash": 5000,
+        "inflowsExpected": 0,
+        "outflowsExpected": 0,
+        "endCashExpected": 5000,
+        "inflowsBest": 0,
+        "outflowsBest": 0,
+        "endCashBest": 5000,
+        "inflowsWorst": 0,
+        "outflowsWorst": 0,
+        "endCashWorst": 5000,
+        "zone": "uncertain",
+        "confidenceScore": 75,
+        "breakdown": {
+          "inflows": [],
+          "outflows": []
+        },
+        "worstCaseDriver": null
+      },
+      {
+        "weekNumber": 11,
+        "weekStart": "2026-08-17T00:00:00.000Z",
+        "weekEnd": "2026-08-23T00:00:00.000Z",
+        "startCash": 5000,
+        "inflowsExpected": 0,
+        "outflowsExpected": 0,
+        "endCashExpected": 5000,
+        "inflowsBest": 0,
+        "outflowsBest": 0,
+        "endCashBest": 5000,
+        "inflowsWorst": 0,
+        "outflowsWorst": 0,
+        "endCashWorst": 5000,
+        "zone": "uncertain",
+        "confidenceScore": 75,
+        "breakdown": {
+          "inflows": [],
+          "outflows": []
+        },
+        "worstCaseDriver": null
+      },
+      {
+        "weekNumber": 12,
+        "weekStart": "2026-08-24T00:00:00.000Z",
+        "weekEnd": "2026-08-30T00:00:00.000Z",
+        "startCash": 5000,
+        "inflowsExpected": 0,
+        "outflowsExpected": 0,
+        "endCashExpected": 5000,
+        "inflowsBest": 0,
+        "outflowsBest": 0,
+        "endCashBest": 5000,
+        "inflowsWorst": 0,
+        "outflowsWorst": 0,
+        "endCashWorst": 5000,
+        "zone": "uncertain",
+        "confidenceScore": 75,
+        "breakdown": {
+          "inflows": [],
+          "outflows": []
+        },
+        "worstCaseDriver": null
+      },
+      {
+        "weekNumber": 13,
+        "weekStart": "2026-08-31T00:00:00.000Z",
+        "weekEnd": "2026-09-06T00:00:00.000Z",
+        "startCash": 5000,
+        "inflowsExpected": 0,
+        "outflowsExpected": 0,
+        "endCashExpected": 5000,
+        "inflowsBest": 0,
+        "outflowsBest": 0,
+        "endCashBest": 5000,
+        "inflowsWorst": 0,
+        "outflowsWorst": 0,
+        "endCashWorst": 5000,
+        "zone": "uncertain",
+        "confidenceScore": 75,
+        "breakdown": {
+          "inflows": [],
+          "outflows": []
+        },
+        "worstCaseDriver": null
+      }
+    ],
+    "constraintWeek": 1,
+    "worstCaseConstraintWeek": 1,
+    "expectedRunOutWeek": null,
+    "worstCaseRunOutWeek": null,
+    "lowestExpectedBalance": 5000,
+    "lowestWorstBalance": 5000,
+    "forecastVersionHash": "jkxvcf"
+  },
+  "anomalies": [],
+  "confidence": {
+    "score": 65,
+    "label": "med",
+    "reasons": [
+      "No bank data — variable outflow/inflow uses placeholder defaults",
+      "AR refresh date unknown",
+      "Payroll not configured and not detected — outflows may be understated"
+    ]
+  },
+  "quality": {
+    "gate": "red",
+    "reasons": [
+      "Payroll is not configured and no historical pattern was detected",
+      "AR refresh date unknown",
+      "AP refresh date unknown"
+    ],
+    "redReasons": [
+      "Payroll is not configured and no historical pattern was detected"
+    ],
+    "yellowReasons": [
+      "AR refresh date unknown",
+      "AP refresh date unknown"
+    ]
+  },
+  "actions": []
+}

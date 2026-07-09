@@ -1,0 +1,32 @@
+{
+  "companyId": "4feb3d21-eede-4b1e-a32b-b62a3ba92d9f",
+  "command": "execute",
+  "timestamp": "2026-06-30T15:35:20.172Z",
+  "executionStartedAt": "2026-06-30T15:35:18.413Z",
+  "apiResult": {
+    "ok": true,
+    "snapshotId": "3d5cf019-3f40-48d8-9225-e199768245b2",
+    "asOfDate": "2026-04-11T00:00:00.000Z",
+    "checkpoint": {
+      "id": "40fd863c-03b7-403f-92ea-2f89e8e37145",
+      "companyId": "4feb3d21-eede-4b1e-a32b-b62a3ba92d9f",
+      "cashSnapshotId": "3d5cf019-3f40-48d8-9225-e199768245b2",
+      "snapshotSource": "client_observed_v1",
+      "forecastVersionHash": null,
+      "generatedAt": null,
+      "weekStart": "2026-04-06T00:00:00.000Z",
+      "weekEnd": "2026-04-12T00:00:00.000Z",
+      "endCashExpected": 6000,
+      "inflowsExpected": 0,
+      "outflowsExpected": 7000,
+      "breakdownJson": null,
+      "createdAt": "2026-06-30T15:35:19.892Z"
+    },
+    "warning": null
+  },
+  "createdRecords": {
+    "snapshotId": "3d5cf019-3f40-48d8-9225-e199768245b2",
+    "checkpointId": "40fd863c-03b7-403f-92ea-2f89e8e37145",
+    "changeLogId": "51dfede3-38bb-400d-abf3-7f8990a3e4bb"
+  }
+}

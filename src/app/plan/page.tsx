@@ -12,7 +12,7 @@ import { ForecastActionsView } from "@/ui/ForecastActionsView";
 import { ForecastSummaryGrid } from "@/ui/ForecastSummaryGrid";
 import { ActionsPanel } from "@/ui/ActionsPanel";
 import { WeeklyRoutineCard } from "@/ui/WeeklyRoutineCard";
-import { WhyWeekModal } from "@/ui/WhyWeekModal";
+import { WeekDrawer } from "@/ui/WeekDrawer";
 import { OnboardingWizard } from "@/ui/OnboardingWizard";
 import { ScenarioBuilder, type ScenarioItem } from "@/ui/ScenarioBuilder";
 import { ForecastBarView } from "@/ui/ForecastBarView";
@@ -27,7 +27,7 @@ import type { BusinessCashState, DataQualityGateResult } from "@/domain/types";
 interface DashboardData {
     company: { id: string; name: string; isDemo: boolean };
     businessCashState: BusinessCashState;
-    dataQualityGate: DataQualityGateResult;
+    dataQualityGate: DataQualityGateResult | null;
     cash: {
         bankBalance: number;
         adjustmentsTotal: number;
@@ -131,9 +131,21 @@ interface DashboardData {
         averageVariancePctIn: number;
         weeksTracked: number;
     };
+    executionPlan?: {
+        id: string;
+        version: number;
+        createdAt: string;
+        approvedBy: string | null;
+        planForecast?: any;
+    } | null;
+    postApprovalChanges?: Array<{
+        id: string;
+        createdAt: string;
+        details: any;
+    }>;
 }
 
-function DashboardContent() {
+function PlanContent() {
     const searchParams = useSearchParams();
     const urlCompanyId = searchParams.get("companyId");
     const [companyId, setCompanyId] = useState<string | null>(null);
@@ -375,6 +387,11 @@ function DashboardContent() {
                         lowestExpected={data.forecast.lowestExpectedBalance}
                         lowestWorst={data.forecast.lowestWorstBalance}
                         zoneBoundary={data.zoneBoundary}
+                        expectedEndingCash={data.forecast.weeks[0]?.endCashExpected}
+                        executionPlan={data.executionPlan}
+                        postApprovalChanges={data.postApprovalChanges}
+                        forecastStateJson={data.forecast}
+                        onPlanApproved={() => fetchDashboard(effectiveCompanyId)}
                     />
                 </div>
             </div>
@@ -392,13 +409,10 @@ function DashboardContent() {
                         <div className="px-6 py-2 border-b bg-slate-50/50 flex flex-wrap items-center justify-between gap-4 rounded-t-2xl" style={{ borderColor: 'var(--border-subtle)' }}>
                             <div className="flex items-center gap-3">
                                 {/* Unified View Segmented Control */}
-                                <div className="flex items-center p-1 bg-white border shadow-sm rounded-[10px]" style={{ borderColor: "var(--border-subtle)" }}>
+                                <div className="flex items-center gap-2 p-1 bg-white border shadow-sm rounded-[10px]" style={{ borderColor: "var(--border-subtle)" }}>
                                     {([
                                         { id: "chart",   icon: <LineChart className="w-3.5 h-3.5" />, label: "Chart",   title: "Trend over time" },
                                         { id: "actions", icon: <Target className="w-3.5 h-3.5" />, label: "Actions", title: "Card views + Inline fixes" },
-                                        { id: "runway",  icon: <PlaneTakeoff className="w-3.5 h-3.5" />, label: "Runway",  title: "Health strip" },
-                                        { id: "bar",   icon: <BarChart3 className="w-3.5 h-3.5" />, label: "Cash Flow",  title: "Inflow vs Outflow grid" },
-                                        { id: "pulse", icon: <AlignEndHorizontal className="w-3.5 h-3.5" />, label: "Waterfall", title: "Pacing details" },
                                     ] as const).map(v => (
                                         <button
                                             key={v.id}
@@ -412,6 +426,27 @@ function DashboardContent() {
                                             {v.icon} <span className="hidden md:inline">{v.label}</span>
                                         </button>
                                     ))}
+                                    
+                                    <div className="relative flex items-center">
+                                        <select
+                                            value={["chart", "actions"].includes(forecastView) ? "more" : forecastView}
+                                            onChange={(e) => {
+                                                if (e.target.value !== "more") {
+                                                    setForecastView(e.target.value as any);
+                                                }
+                                            }}
+                                            className="appearance-none bg-transparent pl-3 pr-8 py-1.5 rounded-[6px] text-xs font-bold transition-all focus:outline-none cursor-pointer"
+                                            style={!["chart", "actions"].includes(forecastView) 
+                                                ? { background: "var(--color-primary)", color: "#ffffff", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }
+                                                : { color: "var(--text-muted)" }}
+                                        >
+                                            <option value="more" disabled>More Views...</option>
+                                            <option value="runway">Runway (Health strip)</option>
+                                            <option value="bar">Cash Flow (Inflow vs Outflow grid)</option>
+                                            <option value="pulse">Waterfall (Pacing details)</option>
+                                        </select>
+                                        <ChevronDown className="w-3 h-3 absolute right-2 pointer-events-none" style={{ color: !["chart", "actions"].includes(forecastView) ? "#fff" : "var(--text-muted)" }} />
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -432,6 +467,7 @@ function DashboardContent() {
                             {forecastView === "chart" && (
                                 <ForecastChart
                                     weeks={data.forecast.weeks}
+                                    planWeeks={data.executionPlan?.planForecast?.weeks}
                                     buffer={data.assumptions.bufferMin}
                                     constraintWeek={data.forecast.constraintWeek}
                                     scenarioItems={scenarioItems}
@@ -621,7 +657,7 @@ function DashboardContent() {
             {selectedWeekNumber !== null && (() => {
                 const selectedWeek = data.forecast.weeks[selectedWeekNumber - 1];
                 return selectedWeek ? (
-                    <WhyWeekModal
+                    <WeekDrawer
                         week={selectedWeek}
                         weekNumber={selectedWeekNumber}
                         weekStart={selectedWeek.weekStart}
@@ -668,7 +704,7 @@ function DashboardContent() {
     );
 }
 
-export default function DashboardPage() {
+export default function PlanPage() {
     return (
         <Suspense fallback={
             <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
@@ -676,7 +712,7 @@ export default function DashboardPage() {
             </div>
         }>
             <SpotlightProvider>
-                <DashboardContent />
+                <PlanContent />
                 <NebulaOverlay />
             </SpotlightProvider>
         </Suspense>

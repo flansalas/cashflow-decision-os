@@ -1,6 +1,7 @@
 // ui/ForecastChart.tsx – Recharts line chart with best/worst band + buffer line + scenario overlay
 "use client";
 
+import { useState } from "react";
 import {
     ResponsiveContainer,
     Line,
@@ -31,6 +32,7 @@ interface WeekData {
 
 interface Props {
     weeks: WeekData[];
+    planWeeks?: WeekData[];
     buffer: number;
     constraintWeek: number | null;
     scenarioItems?: ScenarioItem[];
@@ -53,8 +55,9 @@ function formatDate(dateStr: string): string {
     return (d.getUTCMonth() + 1) + "/" + d.getUTCDate();
 }
 
-export function ForecastChart({ weeks, buffer, constraintWeek, scenarioItems = [], onWeekClick }: Props) {
+export function ForecastChart({ weeks, planWeeks, buffer, constraintWeek, scenarioItems = [], onWeekClick }: Props) {
     const hasScenario = scenarioItems.length > 0;
+    const [comparePlan, setComparePlan] = useState(false);
 
     // Build per-week net scenario delta (positive = more cash, negative = less cash)
     const scenarioDeltaByWeek = new Map<number, number>();
@@ -66,22 +69,36 @@ export function ForecastChart({ weeks, buffer, constraintWeek, scenarioItems = [
 
     // Build chart data, with running scenario totals
     let runningScenarioCash = 0;
-    const chartData = weeks.map(w => {
-        const dateLabel = formatDate(w.weekEnd);
+    const chartData = weeks.map((w, idx) => {
+        const dateLabel = formatDate(w.weekEnd); // Keeps existing axis label alignment
+        
+        const startCashBest = idx === 0 ? w.startCash : weeks[idx - 1].endCashBest;
+        const startCashWorst = idx === 0 ? w.startCash : weeks[idx - 1].endCashWorst;
+
+        const currentScenarioCashForStart = runningScenarioCash;
         const weekDelta = scenarioDeltaByWeek.get(w.weekNumber) ?? 0;
         runningScenarioCash += weekDelta;
-        const scenarioEnd = hasScenario ? Math.round(w.endCashExpected + runningScenarioCash) : undefined;
+        
+        const scenarioStart = hasScenario ? Math.round(w.startCash + currentScenarioCashForStart) : undefined;
+        
+        let planExpected: number | undefined;
+        if (planWeeks && planWeeks[idx]) {
+            // Plot plan beginning cash instead of plan end cash for chart parity
+            planExpected = Math.round(planWeeks[idx].startCash);
+        }
+
         return {
             name: dateLabel,
             weekNum: `Week ${w.weekNumber}`,
-            opening: w.startCash,
+            opening: Math.round(w.startCash),
             inflow: w.inflowsExpected,
             outflow: w.outflowsExpected,
-            expected: Math.round(w.endCashExpected),
+            expected: Math.round(w.startCash), // Main series now plots beginning cash
+            expectedEnd: Math.round(w.endCashExpected),
             best: Math.round(w.endCashBest),
             worst: Math.round(w.endCashWorst),
-            scenario: scenarioEnd,
-            scenarioDelta: weekDelta !== 0 ? weekDelta : undefined,
+            scenarioEndCash: hasScenario ? Math.round(w.startCash + runningScenarioCash) : undefined,
+            planExpected,
             zone: w.zone,
             bandHigh: w.zone !== "committed" ? Math.round(w.endCashBest) : undefined,
             bandLow: w.zone !== "committed" ? Math.round(w.endCashWorst) : undefined,
@@ -95,7 +112,6 @@ export function ForecastChart({ weeks, buffer, constraintWeek, scenarioItems = [
     const CustomTooltip = ({ active, payload, label }: any) => {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
-            const scenarioDelta = data.scenarioDelta;
             return (
                 <div className="rounded-2xl p-5 shadow-2xl min-w-[280px] border border-white/20 backdrop-blur-md" style={{ background: "rgba(15, 23, 42, 0.95)", color: "white" }}>
                     <div className="flex justify-between items-end mb-4 border-b border-white/10 pb-3">
@@ -127,11 +143,15 @@ export function ForecastChart({ weeks, buffer, constraintWeek, scenarioItems = [
                         </div>
                     </div>
 
-                    {/* Terminal Balance */}
+                    {/* Balances */}
                     <div className="pt-3 border-t border-white/10 space-y-2.5">
                         <div className="flex justify-between items-center">
-                            <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-200">Terminal Cash</span>
+                            <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-200">Beginning Cash</span>
                             <span className="text-lg font-black font-financial text-white">{fmt(data.expected)}</span>
+                        </div>
+                        <div className="flex justify-between items-center opacity-80">
+                            <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-300">Expected End</span>
+                            <span className="text-sm font-medium font-financial text-slate-300">{fmt(data.expectedEnd)}</span>
                         </div>
                         
                         {(data.best !== data.expected || data.worst !== data.expected) && (
@@ -144,16 +164,6 @@ export function ForecastChart({ weeks, buffer, constraintWeek, scenarioItems = [
                                     <p className="text-[9px] uppercase font-bold tracking-widest text-rose-500 mb-0.5">Worst</p>
                                     <p className="text-[11px] font-financial font-bold text-rose-200">{fmt(data.worst)}</p>
                                 </div>
-                            </div>
-                        )}
-
-                        {hasScenario && data.scenario !== undefined && (
-                            <div className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400 flex items-center gap-1.5"><Zap className="w-3 h-3" /> Simulation</span>
-                                    <span className="text-xs font-black font-financial text-amber-200">{fmt(data.scenario)}</span>
-                                </div>
-                                <p className="text-[9px] text-amber-500/60 leading-none">Scenario impact: {scenarioDelta > 0 ? "+" : ""}{fmt(scenarioDelta)}</p>
                             </div>
                         )}
                     </div>
@@ -172,8 +182,16 @@ export function ForecastChart({ weeks, buffer, constraintWeek, scenarioItems = [
                     </span>
                 </div>
             )}
-            <div className="w-full flex-1" style={{ minHeight: 400 }}>
-                <ResponsiveContainer width="100%" height={400}>
+            <div className="w-full h-full flex flex-col relative group">
+            {planWeeks && planWeeks.length > 0 && (
+                <div className="absolute top-0 right-0 z-10 flex items-center gap-2 bg-white/90 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 cursor-pointer flex items-center gap-2">
+                        <input type="checkbox" checked={comparePlan} onChange={e => setComparePlan(e.target.checked)} className="accent-indigo-500" />
+                        Compare to Approved Plan
+                    </label>
+                </div>
+            )}
+            <ResponsiveContainer width="100%" height={400}>
                     <ComposedChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                         <XAxis

@@ -623,8 +623,8 @@ const zoneLabels: Record<string, { label: string; colorStyle: React.CSSPropertie
     uncertain: { label: "Uncertain", colorStyle: { background: "rgba(107,114,128,0.05)", color: "#4b5563", borderColor: "rgba(107,114,128,0.2)" } },
 };
 
-// ── Main Modal ───────────────────────────────────────────────────────────────
-export function WhyWeekModal({ week, weekNumber, weekStart, companyId, scenarioItems = [], viewMode, buffer, macroMemory, onReschedule, onNavigateWeek, onClose }: Props & { buffer?: number }) {
+// ── Main Drawer ───────────────────────────────────────────────────────────────
+export function WeekDrawer({ week, weekNumber, weekStart, companyId, scenarioItems = [], viewMode, buffer, macroMemory, onReschedule, onNavigateWeek, onClose }: Props & { buffer?: number }) {
     const [hoveredSection, setHoveredSection] = useState<string | null>(null);
     const inflowGroups = groupBySection(week.breakdown.inflows);
     const outflowGroups = groupBySection(week.breakdown.outflows);
@@ -651,8 +651,8 @@ export function WhyWeekModal({ week, weekNumber, weekStart, companyId, scenarioI
     const zoneInfo = zoneLabels[week.zone] ?? zoneLabels.uncertain;
 
     return (
-        <div className="fixed inset-0 z-50 flex justify-end p-0 modal-overlay-enter" style={{ background: "rgba(15, 23, 42, 0.4)", backdropFilter: "blur(8px)" }}>
-            <div className="border-l h-full w-full max-w-2xl overflow-y-auto drawer-enter shadow-2xl" style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)" }}>
+        <div className="fixed inset-y-0 right-0 z-50 flex pointer-events-none p-0 drawer-enter">
+            <div className="border-l h-full w-[36rem] max-w-[90vw] overflow-y-auto shadow-2xl pointer-events-auto" style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)" }}>
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-8 py-6 border-b sticky top-0 z-10 backdrop-blur-md bg-white/95" style={{ borderColor: "var(--border-subtle)" }}>

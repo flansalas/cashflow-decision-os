@@ -1,0 +1,24 @@
+{
+  "companyId": "1a7b36f5-8fe0-4c2b-9336-8420846270b5",
+  "command": "rollback",
+  "timestamp": "2026-06-30T15:25:34.948Z",
+  "deletedRecords": {
+    "snapshot": {
+      "id": "a4c4fc9a-0fb5-4292-98f5-40b7e52eb845",
+      "companyId": "1a7b36f5-8fe0-4c2b-9336-8420846270b5",
+      "asOfDate": "2026-06-29T00:00:00.000Z",
+      "bankBalance": 273996,
+      "createdAt": "2026-06-30T14:52:51.399Z"
+    },
+    "changeLog": {
+      "id": "f33d85ed-d413-4e67-8185-2c49ac63cc8c",
+      "companyId": "1a7b36f5-8fe0-4c2b-9336-8420846270b5",
+      "timestamp": "2026-06-30T14:52:51.465Z",
+      "source": "user_ui",
+      "action": "UPDATE_BALANCE",
+      "inputText": "Updated bank balance to $273,996",
+      "diffJson": "{\"bankBalance\":273996,\"asOfDate\":\"2026-06-29T00:00:00.000Z\",\"adjustmentsCount\":0}",
+      "forecastVersionHashAfter": "pending"
+    }
+  }
+}

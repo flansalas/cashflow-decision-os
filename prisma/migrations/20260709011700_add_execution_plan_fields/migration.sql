@@ -1,0 +1,44 @@
+-- CreateTable
+CREATE TABLE "BaselineVarianceLedger" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT NOT NULL,
+    "weekStart" TIMESTAMP(3) NOT NULL,
+    "projectedOutflow" DOUBLE PRECISION NOT NULL,
+    "actualOutflow" DOUBLE PRECISION NOT NULL,
+    "variancePct" DOUBLE PRECISION NOT NULL,
+    "projectedInflow" DOUBLE PRECISION,
+    "actualInflow" DOUBLE PRECISION,
+    "variancePctIn" DOUBLE PRECISION,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BaselineVarianceLedger_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ExecutionPlan" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT NOT NULL,
+    "weekStart" TIMESTAMP(3) NOT NULL,
+    "version" INTEGER NOT NULL DEFAULT 1,
+    "status" TEXT NOT NULL DEFAULT 'approved',
+    "supersededAt" TIMESTAMP(3),
+    "supersededByPlanId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "approvedBy" TEXT,
+    "revisionReason" TEXT,
+    "forecastStateJson" TEXT,
+
+    CONSTRAINT "ExecutionPlan_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "BaselineVarianceLedger_companyId_weekStart_idx" ON "BaselineVarianceLedger"("companyId", "weekStart");
+
+-- CreateIndex
+CREATE INDEX "ExecutionPlan_companyId_weekStart_idx" ON "ExecutionPlan"("companyId", "weekStart");
+
+-- AddForeignKey
+ALTER TABLE "BaselineVarianceLedger" ADD CONSTRAINT "BaselineVarianceLedger_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ExecutionPlan" ADD CONSTRAINT "ExecutionPlan_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;

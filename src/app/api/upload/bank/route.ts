@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
+import { createImportBatch } from "@/services/payment-memory";
 
 interface NormalizedBankRow {
     date: string | null;
@@ -11,10 +12,11 @@ interface NormalizedBankRow {
 }
 
 export async function POST(req: NextRequest) {
-    const { companyId, rows, mappingJson } = await req.json() as {
+    const { companyId, rows, mappingJson, filename } = await req.json() as {
         companyId: string;
         rows: NormalizedBankRow[];
         mappingJson: Record<string, string>;
+        filename?: string;
     };
 
     if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
@@ -57,6 +59,23 @@ export async function POST(req: NextRequest) {
             await prisma.companyNote.create({ data: { companyId, noteText } });
         }
 
+        // Record ImportBatch
+        const bankRowDates = rows.map(r => r.date ? new Date(r.date) : null).filter(Boolean) as Date[];
+        const sourceDateStart = bankRowDates.length > 0 ? new Date(Math.min(...bankRowDates.map(d => d.getTime()))) : null;
+        const sourceDateEnd = bankRowDates.length > 0 ? new Date(Math.max(...bankRowDates.map(d => d.getTime()))) : null;
+        try {
+            await createImportBatch({
+                companyId,
+                importType: "bank",
+                filename: filename ?? "bank_import",
+                rowCount: rows.length,
+                acceptedCount: imported,
+                status: "success",
+                sourceDateStart,
+                sourceDateEnd,
+            });
+        } catch { /* non-blocking */ }
+
         return NextResponse.json({
             ok: true,
             imported,
@@ -66,6 +85,18 @@ export async function POST(req: NextRequest) {
         });
     } catch (error) {
         console.error("Bank upload error:", error);
+        // Record failed ImportBatch
+        try {
+            await createImportBatch({
+                companyId,
+                importType: "bank",
+                filename: filename ?? "bank_import",
+                rowCount: rows?.length ?? 0,
+                acceptedCount: 0,
+                status: "failed",
+                errorSummary: JSON.stringify([(error as Error).message ?? "Unknown error"]),
+            });
+        } catch { /* non-blocking */ }
         return NextResponse.json({ error: "Failed to import Bank data" }, { status: 500 });
     }
 }

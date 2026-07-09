@@ -5,7 +5,9 @@
 // is automatically picked up and the forecast rolls forward.
 
 import { NextRequest, NextResponse } from "next/server";
+import { resolveTenant } from "@/lib/tenant";
 import prisma from "@/db/prisma";
+import { assembleForecastData } from "@/services/forecast-assembly";
 
 /**
  * Rolls a date forward by the given cadence until it is >= the asOfDate.
@@ -34,7 +36,8 @@ function rollDate(startDate: Date, asOfDate: Date, cadence: string): Date {
 
 export async function POST(req: NextRequest) {
     const body = await req.json() as {
-        companyId: string;
+        companyId?: string;
+        executionPlanId?: string;
         bankBalance: number;
         asOfDate?: string;
         adjustments?: Array<{ type: string; amount: number; note: string | null }>;
@@ -50,7 +53,11 @@ export async function POST(req: NextRequest) {
         };
     };
 
-    const { companyId, bankBalance, asOfDate, adjustments = [], priorWeekForecast } = body;
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Missing or invalid company" }, { status: 401 });
+    const companyId = tenantId;
+
+    const { executionPlanId, bankBalance, asOfDate, adjustments = [], priorWeekForecast } = body;
 
     if (!companyId) {
         return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
@@ -165,7 +172,7 @@ export async function POST(req: NextRequest) {
                 data: { weekNumber: { decrement: 1 } }
             });
 
-            await tx.changeLog.create({
+            const changeLog = await tx.changeLog.create({
                 data: {
                     companyId,
                     action: "UPDATE_BALANCE",
@@ -181,7 +188,37 @@ export async function POST(req: NextRequest) {
                 }
             });
 
-            return { snapshot };
+            
+            // ── Mark ExecutionPlan as Reviewed inside the atomic transaction ───────
+            if (executionPlanId) {
+                await tx.executionPlan.update({
+                    where: { id: executionPlanId, companyId },
+                    data: {
+                        status: "executed",
+                        reviewedAt: new Date(),
+                        actualEndingCash: bankBalance // Fixed semantic: exactly the entered actual balance
+                    }
+                });
+            } else if (priorWeekForecast?.weekStart) {
+                // Fallback: find the latest plan for the rolled week
+                const plans = await tx.executionPlan.findMany({
+                    where: { companyId, weekStart: new Date(priorWeekForecast.weekStart) },
+                    orderBy: { version: 'desc' },
+                    take: 1
+                });
+                if (plans.length > 0) {
+                    await tx.executionPlan.update({
+                        where: { id: plans[0].id },
+                        data: {
+                            status: "executed",
+                            reviewedAt: new Date(),
+                            actualEndingCash: bankBalance // Fixed semantic
+                        }
+                    });
+                }
+            }
+
+            return { snapshot, changeLogId: changeLog.id };
         });
 
         // ── Macro-Memory: Grade Baseline Variance ───────────────────────
@@ -343,13 +380,29 @@ export async function POST(req: NextRequest) {
             }
         }
 
+        
+        // ── Post-roll hash generation (non-blocking) ──────────────────────
+        let postRollHashWarning = null;
+        try {
+            const assembly = await assembleForecastData(companyId);
+            const newHash = assembly.forecastResult.forecastVersionHash;
+            await prisma.changeLog.update({
+                where: { id: coreResult.changeLogId },
+                data: { forecastVersionHashAfter: newHash }
+            });
+        } catch (hashError) {
+            console.error("Post-roll hash generation failed (non-blocking):", hashError);
+            postRollHashWarning = "Failed to generate true post-roll hash; ChangeLog left as pending.";
+        }
+
         return NextResponse.json({ 
             ok: true, 
             snapshotId: coreResult.snapshot.id, 
             asOfDate: coreResult.snapshot.asOfDate,
             checkpoint,
-            warning: warningMsg
+            warning: postRollHashWarning || warningMsg
         });
+
     } catch (error) {
         console.error("Cash check-in error:", error);
         return NextResponse.json({ error: "Failed to save balance and adjustments" }, { status: 500 });

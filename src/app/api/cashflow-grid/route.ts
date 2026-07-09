@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
         assumptionRaw,
         overrides,
         recurringPatternsRaw,
+        executionPlan,
         bankTxs,
         cashFlowEntries,
     ] = await Promise.all([
@@ -45,6 +46,7 @@ export async function GET(req: NextRequest) {
         prisma.assumption.findFirst({ where: { companyId: cid } }),
         prisma.override.findMany({ where: { companyId: cid, status: "active" }, orderBy: { createdAt: "desc" } }),
         prisma.recurringPattern.findMany({ where: { companyId: cid } }),
+        prisma.executionPlan.findFirst({ where: { companyId: cid, status: "active" }, orderBy: { version: "desc" } }),
         // For baseline computation (mirrors dashboard API)
         prisma.bankTransaction.findMany({
             where: { companyId: cid, txDate: { gte: new Date(Date.now() - 84 * 86_400_000) } },
@@ -53,6 +55,25 @@ export async function GET(req: NextRequest) {
         // For manual cash flow entries (mirrors dashboard API)
         prisma.cashFlowEntry.findMany({ where: { companyId: cid }, include: { category: true } }),
     ]);
+
+    let executionPlanData = null;
+    if (executionPlan) {
+        let planForecast = null;
+        if (executionPlan.forecastStateJson) {
+            try {
+                planForecast = JSON.parse(executionPlan.forecastStateJson);
+            } catch (e) {
+                // Ignore parse errors
+            }
+        }
+        executionPlanData = {
+            id: executionPlan.id,
+            version: executionPlan.version,
+            createdAt: executionPlan.createdAt.toISOString(),
+            approvedBy: executionPlan.approvedBy,
+            planForecast
+        };
+    }
 
     if (!cashSnapshot) {
         return NextResponse.json({ error: "No cash snapshot found" }, { status: 400 });
@@ -359,6 +380,8 @@ export async function GET(req: NextRequest) {
         direction: rp.direction,
         category: rp.category,
         isIncluded: rp.isIncluded,
+        typicalAmount: rp.typicalAmount,
+        amountStdDev: rp.amountStdDev,
     }));
     const baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate);
 
@@ -516,6 +539,11 @@ export async function GET(req: NextRequest) {
                 ),
                 breakdown: w.breakdown,
             })),
+            input: forecastInput,
+            invoices: enrichedInvoices,
+            bills: enrichedBills,
+            recurring: forecastInput.recurring,
         },
+        executionPlan: executionPlanData,
     });
 }

@@ -9,11 +9,15 @@ export interface BankTxForBaseline {
     merchantKey: string;  // typically the description field from bank tx
 }
 
+import { normalizeDescription } from "./detectPatterns";
+
 export interface RecurringPatternForBaseline {
     merchantKey: string;
     direction: string;
     category: string;
     isIncluded: boolean;
+    typicalAmount: number;
+    amountStdDev: number;
 }
 
 export interface BaselineResult {
@@ -41,11 +45,15 @@ export function computeBaseline(
     }
 
     // Build set of recurring merchantKeys to exclude
-    const recurringKeys = new Set(
-        patterns
-            .filter(p => p.isIncluded && ["payroll", "rent", "loan", "card_payment"].includes(p.category))
-            .map(p => p.merchantKey.toUpperCase().trim())
-    );
+    // Using normalizeDescription for identity and allowing a 30% or 2*stddev bounds check
+    const excludedPatterns = patterns
+        .filter(p => p.isIncluded)
+        .map(p => ({
+            key: normalizeDescription(p.merchantKey || ""),
+            direction: p.direction,
+            minAmount: p.typicalAmount - Math.max(p.typicalAmount * 0.3, p.amountStdDev * 2),
+            maxAmount: p.typicalAmount + Math.max(p.typicalAmount * 0.3, p.amountStdDev * 2)
+        }));
 
     // Compute week boundaries: last WEEKS_TO_ANALYZE complete weeks before asOfDate
     const weekBuckets: { inflow: number; outflow: number }[] = [];
@@ -61,7 +69,16 @@ export function computeBaseline(
         for (const tx of txs) {
             if (tx.date < wStart || tx.date > wEnd) continue;
             // Exclude known recurring patterns
-            if (recurringKeys.has(tx.merchantKey.toUpperCase().trim())) continue;
+            const normalizedTxKey = normalizeDescription(tx.merchantKey || "");
+            const txDirection = tx.amount >= 0 ? "inflow" : "outflow";
+            const absAmount = Math.abs(tx.amount);
+            const isExcluded = excludedPatterns.some(p => 
+                p.key === normalizedTxKey &&
+                p.direction === txDirection &&
+                absAmount >= p.minAmount && 
+                absAmount <= p.maxAmount
+            );
+            if (isExcluded) continue;
 
             if (tx.amount > 0) {
                 inflowSum += tx.amount;
@@ -131,7 +148,7 @@ export function computeBaseline(
         weeksAnalyzed: activeWeeks.length,
         hasSufficientHistory: true,
         computedFrom: "bank_tx",
-        note: `Computed from ${activeWeeks.length} weeks of bank tx, excluding ${recurringKeys.size} recurring patterns`,
+        note: `Computed from ${activeWeeks.length} weeks of bank tx, excluding ${excludedPatterns.length} recurring patterns`,
     };
 }
 

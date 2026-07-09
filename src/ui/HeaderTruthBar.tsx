@@ -14,7 +14,7 @@ function fmt(n: number): string {
 
 interface Props {
     businessCashState: BusinessCashState;
-    dataQualityGate: DataQualityGateResult;
+    dataQualityGate: DataQualityGateResult | null;
     bankBalance: number;
     adjustmentsTotal: number;
     adjustedCash: number;
@@ -44,6 +44,20 @@ interface Props {
     lowestExpected?: number;
     lowestWorst?: number;
     zoneBoundary?: string;
+    expectedEndingCash?: number;
+    executionPlan?: {
+        id: string;
+        version: number;
+        createdAt: string;
+        approvedBy: string | null;
+    } | null;
+    postApprovalChanges?: Array<{
+        id: string;
+        createdAt: string;
+        details: any;
+    }>;
+    forecastStateJson?: any;
+    onPlanApproved?: () => void;
 }
 
 export function HeaderTruthBar({
@@ -51,11 +65,16 @@ export function HeaderTruthBar({
     confidence, lastUpdated, asOfDate, companyId,
     payroll, payrollPromptNeeded, adjustments, onUpdateBalanceClick, onBalanceUpdated,
     expectedRunOutWeek, worstCaseRunOutWeek, inflow30, outflow30, isCompact, companyName, isCompanyDemo,
-    onDrillIn, lowestExpected, lowestWorst, zoneBoundary
+    onDrillIn, lowestExpected, lowestWorst, zoneBoundary, expectedEndingCash,
+    executionPlan, postApprovalChanges = [], forecastStateJson, onPlanApproved
 }: Props) {
     const [showAdj, setShowAdj] = useState(false);
     const [showReasons, setShowReasons] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
+    
+    // Plan Approval
+    const [isApproving, setIsApproving] = useState(false);
+    const [showChangeSummary, setShowChangeSummary] = useState(false);
 
     // Edit Balance Popover
     const [editBalanceOpen, setEditBalanceOpen] = useState(false);
@@ -90,6 +109,26 @@ export function HeaderTruthBar({
             }
         } finally {
             setIsSavingBalance(false);
+        }
+    };
+
+    const handleApprovePlan = async () => {
+        setIsApproving(true);
+        try {
+            const res = await fetch("/api/execution-plan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    companyId,
+                    weekStart: forecastStateJson?.weeks?.[0]?.weekStart,
+                    forecastStateJson
+                }),
+            });
+            if (res.ok) {
+                onPlanApproved?.();
+            }
+        } finally {
+            setIsApproving(false);
         }
     };
 
@@ -175,11 +214,79 @@ export function HeaderTruthBar({
                         >
                             <Search className="w-3.5 h-3.5" />
                         </button>
+                        
+                        {/* Plan Approval Status */}
+                        {executionPlan ? (
+                            <div className="hidden lg:flex items-center gap-3 mr-2">
+                                {postApprovalChanges.length > 0 ? (
+                                    <>
+                                        <button 
+                                            onClick={() => setShowChangeSummary(!showChangeSummary)}
+                                            className="text-[10px] font-bold text-amber-600 hover:text-amber-700 hover:bg-amber-50 px-2 py-1 rounded transition-colors"
+                                        >
+                                            {postApprovalChanges.length} changes · ${Math.abs(postApprovalChanges.reduce((sum, c) => sum + (c.details.impact || 0), 0)).toLocaleString()}
+                                        </button>
+                                        <button 
+                                            onClick={handleApprovePlan}
+                                            disabled={isApproving}
+                                            className="btn-pill !py-1 px-4 text-[11px] font-bold tracking-wider !bg-white !text-slate-800 !border-slate-300 hover:!bg-slate-50 h-8 shadow-sm flex items-center disabled:opacity-50"
+                                        >
+                                            {isApproving ? "Approving..." : "Approve Revised"}
+                                        </button>
+                                    </>
+                                ) : (
+                                    <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1.5 px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100">
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        Approved {new Date(executionPlan.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                    </span>
+                                )}
+                            </div>
+                        ) : (
+                            <button 
+                                onClick={handleApprovePlan}
+                                disabled={isApproving}
+                                className="hidden lg:flex btn-pill !py-1 px-5 text-[11px] font-bold tracking-wider !bg-indigo-600 !text-white !border-indigo-600 hover:!bg-indigo-700 h-8 shadow-sm items-center disabled:opacity-50"
+                            >
+                                {isApproving ? "Approving..." : "Approve Plan"}
+                            </button>
+                        )}
 
                         <button onClick={onUpdateBalanceClick} className="btn-pill !py-1 px-5 text-[11px] uppercase font-bold tracking-widest !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-8 shadow-sm flex items-center">
                             <RotateCw className="w-3 h-3 mr-1.5" /> Reconcile
                         </button>
                     </div>
+
+                    {/* Change Summary Popover */}
+                    {showChangeSummary && postApprovalChanges.length > 0 && (
+                        <>
+                            <div className="fixed inset-0 z-[50]" onClick={() => setShowChangeSummary(false)} />
+                            <div className="absolute z-[60] top-[60px] right-6 w-96 max-h-[80vh] overflow-y-auto border rounded-xl p-5 shadow-2xl bg-white animate-in fade-in slide-in-from-top-2 border-slate-200 custom-scrollbar">
+                                <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+                                    <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Unapproved Changes</p>
+                                    <button onClick={() => setShowChangeSummary(false)} className="text-slate-400 hover:text-slate-700 transition">&times;</button>
+                                </div>
+                                <div className="space-y-3">
+                                    {postApprovalChanges.map(change => (
+                                        <div key={change.id} className="text-xs p-3 rounded-lg border border-slate-100 bg-slate-50 flex justify-between items-start">
+                                            <div className="flex flex-col gap-1 pr-4">
+                                                <span className="font-bold text-slate-700">
+                                                    {change.details.description || "Updated item"}
+                                                </span>
+                                                <span className="text-[10px] text-slate-400 uppercase tracking-wider">
+                                                    {new Date(change.createdAt).toLocaleString()}
+                                                </span>
+                                            </div>
+                                            {change.details.impact !== undefined && (
+                                                <span className={`font-financial font-bold whitespace-nowrap ${change.details.impact >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                                    {change.details.impact >= 0 ? "+" : "–"}{fmt(Math.abs(change.details.impact))}
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -208,7 +315,7 @@ export function HeaderTruthBar({
                 {/* Cash */}
                 <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/cash transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-4 xl:px-5 py-3'}`}>
                     <div className={`flex items-baseline w-full min-w-0 transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
-                        <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-10' : 'w-16'}`}>Cash</span>
+                        <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-10' : 'w-16'}`}>Beg. Cash</span>
                         <div className="flex flex-col items-start relative w-full min-w-0">
                             <span 
                                 onClick={() => setEditBalanceOpen(!editBalanceOpen)} 
@@ -219,12 +326,18 @@ export function HeaderTruthBar({
                             </span>
                             
                             {/* Adjusted/Muted details below */}
-                            {adjustmentsTotal !== 0 && (
-                                <button onClick={() => setShowAdj(!showAdj)} className={`font-medium text-slate-400 hover:text-slate-600 absolute flex items-center gap-1 opacity-80 group-hover/cash:opacity-100 transition-all duration-500 ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3'}`}>
-                                    <ListFilter className="w-2.5 h-2.5" />
-                                    Includes {fmt(adjustmentsTotal)} adj.
-                                </button>
-                            )}
+                            <div className={`font-medium text-slate-400 absolute flex items-center gap-2 transition-all duration-500 whitespace-nowrap ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3'}`}>
+                                {expectedEndingCash !== undefined && (
+                                    <span className="opacity-80 group-hover/cash:opacity-100 transition-opacity">Exp End: {fmt(expectedEndingCash)}</span>
+                                )}
+                                {expectedEndingCash !== undefined && adjustmentsTotal !== 0 && <span className="opacity-80">•</span>}
+                                {adjustmentsTotal !== 0 && (
+                                    <button onClick={() => setShowAdj(!showAdj)} className="hover:text-slate-600 flex items-center gap-1 opacity-80 group-hover/cash:opacity-100 transition-opacity">
+                                        <ListFilter className="w-2.5 h-2.5" />
+                                        Includes {fmt(adjustmentsTotal)} adj.
+                                    </button>
+                                )}
+                            </div>
                             
                             {/* Fast Reconcile Popover */}
                             {editBalanceOpen && (
@@ -356,19 +469,21 @@ export function HeaderTruthBar({
                         <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-12' : 'w-16'}`}>In (30d)</span>
                         <div className="flex flex-col items-start relative w-full min-w-0">
                             <span className={`font-black font-financial text-emerald-700 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-lg xl:text-xl 2xl:text-2xl'}`}>{fmt(inflow30)}</span>
-                            <button onClick={() => setShowReasons(!showReasons)} className={`font-medium text-slate-400 hover:text-slate-700 absolute flex items-center gap-1 opacity-80 group-hover/in:opacity-100 transition-all duration-500 whitespace-nowrap ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3'}`}>
-                                {dataQualityGate.gate === "green" ? (
-                                    <ShieldCheck className="w-2.5 h-2.5 text-emerald-500" />
-                                ) : (
-                                    <ShieldAlert className={`w-2.5 h-2.5 ${dataQualityGate.gate === "red" ? 'text-rose-500' : 'text-amber-500'}`} />
-                                )}
-                                {dataQualityGate.gate === "green" ? "Data: Verified" : dataQualityGate.gate === "yellow" ? "Data: Warning" : "Data: Action Needed"}
-                            </button>
+                            {dataQualityGate && (
+                                <button onClick={() => setShowReasons(!showReasons)} className={`font-medium text-slate-400 hover:text-slate-700 absolute flex items-center gap-1 opacity-80 group-hover/in:opacity-100 transition-all duration-500 whitespace-nowrap ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3'}`}>
+                                    {dataQualityGate.gate === "green" ? (
+                                        <ShieldCheck className="w-2.5 h-2.5 text-emerald-500" />
+                                    ) : (
+                                        <ShieldAlert className={`w-2.5 h-2.5 ${dataQualityGate.gate === "red" ? 'text-rose-500' : 'text-amber-500'}`} />
+                                    )}
+                                    {dataQualityGate.gate === "green" ? "Data: Verified" : dataQualityGate.gate === "yellow" ? "Data: Warning" : "Data: Action Needed"}
+                                </button>
+                            )}
 
                             {/* Confidence Reasons Popover */}
-                            {showReasons && (
+                            {showReasons && dataQualityGate && (
                                 <>
-                                    <div className="fixed inset-0 z-[50]" onClick={() => setShowReasons(false)} />
+                                    <div className="fixed inset-0 z-50" onClick={() => setShowReasons(false)} />
                                     <div className="absolute z-[60] top-full mt-4 w-80 border rounded-xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
                                         <div className="flex justify-between items-center mb-3">
                                             <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Data Quality Gate</p>

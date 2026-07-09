@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
     const targetDate = new Date(baseMonday.getTime() + (weekNumber - 1) * 7 * 24 * 60 * 60 * 1000);
 
     try {
+        const { logAuditEvent } = await import("@/services/audit");
         const created = await prisma.cashFlowEntry.create({
             data: {
                 id: uuidv4(),
@@ -73,6 +74,19 @@ export async function POST(req: NextRequest) {
             },
             include: { category: true },
         });
+
+        await logAuditEvent({
+            companyId,
+            targetId: created.id,
+            targetType: "forecast_week", // Use this or a new type for cash entry. Wait, logAuditEvent expects specific targetTypes. Let's use "cash_entry" if we can, or just cast to any.
+            action: `Added Manual Entry`,
+            source: "user",
+            fieldChanged: "amount",
+            oldValue: 0,
+            newValue: created.category.direction === "inflow" ? created.amount : -created.amount,
+            reasoning: created.label
+        });
+
         return NextResponse.json({ ...created, weekNumber });
     } catch (error) {
         console.error("Create entry error:", error);

@@ -66,6 +66,7 @@ interface GridData {
     forecast?: {
         weeks: Array<{
             weekNumber: number;
+            startCash: number;
             endCashExpected: number;
             inflowsExpected: number;
             outflowsExpected: number;
@@ -103,14 +104,11 @@ function CashflowContent() {
     const [showUpload, setShowUpload] = useState(false);
     const [showBankUpload, setShowBankUpload] = useState(false);
     const [showDataPicker, setShowDataPicker] = useState(false);
-    const [viewFilter, setViewFilter] = useState<"both" | "ar" | "ap">(mode ?? "both");
+    const viewFilter = "ap";
     // After the first successful load we do silent background refreshes
     // so the grid stays mounted and the user's scroll position is preserved.
     const hasLoadedRef = useRef(false);
-
-    useEffect(() => {
-        if (mode) setViewFilter(mode);
-    }, [mode]);
+    // mode is not used anymore as viewFilter is hardcoded
 
     // Open data-sources picker from sidebar event or ?open=data URL param
     useEffect(() => {
@@ -230,31 +228,7 @@ function CashflowContent() {
                             <ArrowLeft className="w-3 h-3" /> Dashboard
                         </a>
                         <span style={{ color: "var(--border-default)" }}>/</span>
-                        <span style={{ color: "var(--color-primary)" }} className="font-bold text-sm flex items-center gap-1"><Box className="w-4 h-4" /> AR/AP Ledger</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {/* View filter — ALL / AR / AP */}
-                        <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "var(--border-default)" }}>
-                            <button
-                                onClick={() => setViewFilter("both")}
-                                className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide"
-                                style={viewFilter === "both" ? { background: "var(--color-primary)", color: "#fff" } : { background: "var(--bg-raised)", color: "var(--text-muted)" }}
-                            >All</button>
-                            <button
-                                onClick={() => setViewFilter("ar")}
-                                className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide border-l"
-                                style={viewFilter === "ar"
-                                    ? { background: "rgba(5,150,105,0.10)", color: "#059669", borderColor: "var(--border-default)" }
-                                    : { background: "var(--bg-raised)", color: "var(--text-muted)", borderColor: "var(--border-default)" }}
-                            >AR</button>
-                            <button
-                                onClick={() => setViewFilter("ap")}
-                                className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide border-l"
-                                style={viewFilter === "ap"
-                                    ? { background: "rgba(225,29,72,0.10)", color: "#e11d48", borderColor: "var(--border-default)" }
-                                    : { background: "var(--bg-raised)", color: "var(--text-muted)", borderColor: "var(--border-default)" }}
-                            >AP</button>
-                        </div>
+                        <span style={{ color: "var(--color-primary)" }} className="font-bold text-sm flex items-center gap-1"><Box className="w-4 h-4" /> Accounts Payable</span>
                     </div>
                 </div>
             </header>
@@ -262,8 +236,8 @@ function CashflowContent() {
             <main className="max-w-[100rem] mx-auto px-4 py-6">
                 <CashflowGrid
                     weeks={data.weeks}
-                    invoices={viewFilter === "ap" ? [] : invoiceItems}
-                    bills={viewFilter === "ar" ? [] : billItems}
+                    invoices={[]}
+                    bills={billItems}
                     openingCash={data.openingCash}
                     weeklyRecurringOutflows={data.weeklyRecurringOutflows}
                     weeklyRecurringInflows={data.weeklyRecurringInflows}
@@ -354,7 +328,7 @@ function CashflowContent() {
     );
 }
 
-export default function CashflowPage() {
+export default function PayablesPage() {
     return (
         <Suspense fallback={
             <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg-base)" }}>

@@ -1,5 +1,5 @@
 // Cash Flow Decision OS – Prisma Schema
-// SQLite datasource, single-user local dev
+// PostgreSQL datasource
 
 generator client {
   provider = "prisma-client-js"
@@ -44,6 +44,10 @@ model Company {
   cashFlowEntries     CashFlowEntry[]
   forecastCheckpoints ForecastCheckpoint[]
   baselineVarianceLedgers BaselineVarianceLedger[]
+  executionPlans      ExecutionPlan[]
+  customerPaymentObservations CustomerPaymentObservation[]
+  vendorPaymentObservations   VendorPaymentObservation[]
+  importBatches               ImportBatch[]
 }
 
 model CompanyNote {
@@ -285,15 +289,18 @@ model Override {
 }
 
 // source: user_ui | command_box | system
+// diffJson contains: { targetId, targetType, entityType, entityId, fieldChanged,
+//   oldValue, newValue, reasoning, reason, approvedPlanVersion, source }
 model ChangeLog {
-  id                       String   @id @default(uuid())
-  companyId                String
-  timestamp                DateTime @default(now())
-  source                   String
-  action                   String
-  inputText                String?
-  diffJson                 String
-  forecastVersionHashAfter String
+  id                        String   @id @default(uuid())
+  companyId                 String
+  timestamp                 DateTime @default(now())
+  source                    String
+  action                    String
+  inputText                 String?
+  diffJson                  String
+  forecastVersionHashBefore String?
+  forecastVersionHashAfter  String
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
@@ -453,4 +460,112 @@ model BaselineVarianceLedger {
   company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId, weekStart])
+}
+
+// ────────────────────────────────────────────────
+// EXECUTION PLAN (WEEKLY PLAN)
+// ────────────────────────────────────────────────
+
+// status: approved | superseded | executed
+model ExecutionPlan {
+  id                 String   @id @default(uuid())
+  companyId          String
+  weekStart          DateTime
+  version            Int      @default(1)
+  status             String   @default("approved")
+  supersededAt       DateTime?
+  supersededByPlanId String?
+  createdAt          DateTime @default(now())
+
+  approvedBy         String?
+  revisionReason     String?
+  forecastStateJson  String?
+
+  reviewedAt         DateTime?
+  actualEndingCash   Float?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, weekStart])
+}
+
+// ────────────────────────────────────────────────
+// MEMORY HARDENING – PAYMENT BEHAVIOR
+// ────────────────────────────────────────────────
+
+// Append-only record of a verified customer payment event.
+// An observation is only written when payment is confirmed from an authoritative source.
+// paymentSource: ar_import | bank_match | manual_verified
+// Do NOT write an observation for a manually-moved expected date.
+model CustomerPaymentObservation {
+  id                  String    @id @default(uuid())
+  companyId           String
+  customerName        String
+  invoiceId           String?   // FK to ReceivableInvoice (optional, for joins)
+  invoiceNo           String?
+  dueDate             DateTime?
+  expectedPaymentDate DateTime? // Set at the time of import / override
+  actualPaymentDate   DateTime  // The verified actual payment date
+  daysEarlyOrLate     Int       // Negative = early, positive = late (vs dueDate)
+  amount              Float
+  paymentSource       String    // ar_import | bank_match | manual_verified
+  observedAt          DateTime  @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Prevent duplicate observations for the same invoice payment
+  @@unique([companyId, invoiceId, actualPaymentDate])
+  @@index([companyId, customerName])
+}
+
+// Append-only record of a verified vendor payment event.
+// paymentSource: ap_import | bank_match | manual_verified
+model VendorPaymentObservation {
+  id                 String    @id @default(uuid())
+  companyId          String
+  vendorName         String
+  billId             String?   // FK to PayableBill (optional)
+  billNo             String?
+  dueDate            DateTime?
+  plannedPaymentDate DateTime? // When we planned to pay it
+  actualPaymentDate  DateTime  // The verified actual payment date
+  daysEarlyOrLate    Int       // Negative = early, positive = late (vs dueDate)
+  amount             Float
+  paymentSource      String    // ap_import | bank_match | manual_verified
+  observedAt         DateTime  @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Prevent duplicate observations for the same bill payment
+  @@unique([companyId, billId, actualPaymentDate])
+  @@index([companyId, vendorName])
+}
+
+// ────────────────────────────────────────────────
+// MEMORY HARDENING – IMPORT BATCH TRACKING
+// ────────────────────────────────────────────────
+
+// importType: ar | ap | bank
+// status: success | partial | failed
+model ImportBatch {
+  id               String    @id @default(uuid())
+  companyId        String
+  importType       String    // ar | ap | bank
+  filename         String
+  uploadedBy       String?   // Clerk user ID if available
+  uploadedAt       DateTime  @default(now())
+  rowCount         Int
+  acceptedCount    Int       @default(0)
+  rejectedCount    Int       @default(0)
+  duplicateCount   Int       @default(0)
+  status           String    @default("success") // success | partial | failed
+  sourceDateStart  DateTime? // Earliest date in the imported data
+  sourceDateEnd    DateTime? // Latest date in the imported data
+  fileHash         String?   // SHA-256 of file bytes, for dedup detection
+  mappingProfileId String?   // FK to MappingProfile
+  errorSummary     String?   // JSON array of error messages
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, importType])
 }

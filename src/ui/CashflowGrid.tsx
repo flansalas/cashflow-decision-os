@@ -31,17 +31,20 @@ interface Props {
     highlightId?: string | null;
     onRefresh: () => void;
     onClearHighlight?: () => void;
+    executionPlan?: { id: string; version: number } | null;
     // Canonical forecast balances from the same engine as the Dashboard.
     // When provided, these override the client-side balance calculation so
     // the Ledger and Dashboard always tell the same story.
     forecastBalances?: Array<{
         weekNumber: number;
+        startCash: number;
         endCashExpected: number;
         inflowsExpected: number;
         outflowsExpected: number;
         projectedInflow: number; // baseline + manual entries beyond visible AR cards
         breakdown?: any;
     }>;
+    forecastStateJson?: any;
 }
 
 function fmt(n: number): string {
@@ -60,7 +63,7 @@ export function CashflowGrid({
     weeks, invoices, bills, openingCash,
     weeklyRecurringOutflows, weeklyRecurringInflows,
     companyId, highlightWeek, highlightId, onRefresh, onClearHighlight,
-    forecastBalances,
+    forecastBalances, executionPlan, forecastStateJson
 }: Props) {
     const router = useRouter();
     const [dropTargetWeek, setDropTargetWeek] = useState<number | null>(null);
@@ -246,12 +249,13 @@ export function CashflowGrid({
                 inflows: fb.inflowsExpected,
                 outflows: fb.outflowsExpected,
                 net: fb.inflowsExpected - fb.outflowsExpected,
+                startCash: fb.startCash,
                 balance: fb.endCashExpected,
                 projectedInflow: fb.projectedInflow,
             }));
         }
         // Client-side fallback (used if API doesn't return forecast yet)
-        const balances: { inflows: number; outflows: number; net: number; balance: number; projectedInflow: number }[] = [];
+        const balances: { inflows: number; outflows: number; net: number; startCash: number; balance: number; projectedInflow: number }[] = [];
         let running = openingCash;
         for (let w = 0; w < 13; w++) {
             const wn = w + 1;
@@ -263,8 +267,9 @@ export function CashflowGrid({
             const inflows = arTotal + recIn;
             const outflows = apTotal + recOut;
             const net = inflows - outflows;
+            const startCash = running;
             running += net;
-            balances.push({ inflows, outflows, net, balance: running, projectedInflow: 0 });
+            balances.push({ inflows, outflows, net, startCash, balance: running, projectedInflow: 0 });
         }
         return balances;
     }, [forecastBalances, byWeek, openingCash, weeklyRecurringOutflows, weeklyRecurringInflows]);
@@ -729,10 +734,10 @@ export function CashflowGrid({
                                     style={{ background: zone.bg, borderColor: zone.border }}>
                                     <span className="text-[11px] font-bold" style={{ color: "var(--text-muted)" }}>W{wk.weekNumber}</span>
                                     <span className="text-[8px] mt-0.5" style={{ color: "var(--text-faint)" }}>{new Date(wk.weekStart).toLocaleDateString("en-US", { timeZone: "UTC", month: "numeric", day: "numeric" })}</span>
-                                    <span className={`text-xs font-bold font-financial mt-1.5 ${bal.net >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                                        {bal.net >= 0 ? "+" : ""}{fmt(bal.net)}
+                                    <span className={`text-xs font-bold font-financial mt-1.5 ${bal.startCash >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                        {bal.startCash >= 0 ? "" : ""}{fmt(bal.startCash)}
                                     </span>
-                                    <span className={`text-[8px] font-financial mt-0.5 ${bal.balance < 0 ? "text-red-500" : "var(--text-muted)"}`}>{fmt(bal.balance)}</span>
+                                    <span className={`text-[8px] font-financial mt-0.5 ${bal.balance < 0 ? "text-red-500" : "var(--text-muted)"}`}>End: {fmt(bal.balance)}</span>
                                     <div className="flex gap-1 mt-1.5 flex-wrap justify-center">
                                         {items.ar.length > 0 && <span className="text-[7px] px-1 rounded" style={{ background: "rgba(16,185,129,0.15)", color: "#34d399" }}>{items.ar.length} AR</span>}
                                         {items.ap.length > 0 && <span className="text-[7px] px-1 rounded" style={{ background: "rgba(248,113,113,0.15)", color: "#f87171" }}>{items.ap.length} AP</span>}
@@ -900,9 +905,9 @@ export function CashflowGrid({
                                                 style={isDropTarget
                                                     ? { borderColor: "rgba(79,70,229,0.40)", background: "#f5f3ff", boxShadow: "inset 0 3px 0 var(--color-primary)" }
                                                     : {
-                                                    borderColor: bal.balance <= 0 ? "rgba(220,38,38,0.20)" : bal.balance < 10000 ? "rgba(217,119,6,0.15)" : "var(--border-subtle)",
-                                                    background: bal.balance <= 0 ? "#fef2f2" : bal.balance < 10000 ? "#fffbeb" : "var(--bg-surface)",
-                                                    boxShadow: bal.balance <= 0 ? "inset 0 3px 0 #dc2626" : bal.balance < 10000 ? "inset 0 3px 0 #f59e0b" : "inset 0 3px 0 #94a3b8",
+                                                    borderColor: bal.startCash <= 0 ? "rgba(220,38,38,0.20)" : bal.startCash < 10000 ? "rgba(217,119,6,0.15)" : "var(--border-subtle)",
+                                                    background: bal.startCash <= 0 ? "#fef2f2" : bal.startCash < 10000 ? "#fffbeb" : "var(--bg-surface)",
+                                                    boxShadow: bal.startCash <= 0 ? "inset 0 3px 0 #dc2626" : bal.startCash < 10000 ? "inset 0 3px 0 #f59e0b" : "inset 0 3px 0 #94a3b8",
                                                 }
                                                 }
                                             >
@@ -917,6 +922,11 @@ export function CashflowGrid({
                                                 ${isDropTarget ? "border-indigo-200" : "border-[var(--border-subtle)]"}`}
                                                 style={{ background: isDropTarget ? "#f5f3ff" : "var(--bg-raised)" }}
                                             >
+                                                <div className={`flex justify-between text-[11px] font-bold pt-1 mb-1 border-b pb-1`} style={{ borderColor: 'var(--border-subtle)' }}>
+                                                    <span className="text-[11px] font-bold" style={{ color: 'var(--text-primary)' }}>Beg. Cash</span>
+                                                    <span style={{ color: bal.startCash < 0 ? '#dc2626' : 'var(--text-primary)' }}>{bal.startCash < 0 ? "-" : ""}{fmt(Math.abs(bal.startCash))}</span>
+                                                </div>
+
                                                 <div className="flex justify-between text-[10px]">
                                                     <span style={{ color: 'var(--text-muted)' }}>In</span>
                                                     <span style={{ color: '#059669' }}>+{fmt(bal.inflows)}</span>
@@ -939,9 +949,9 @@ export function CashflowGrid({
                                                         {bal.net >= 0 ? "+" : ""}{fmt(bal.net)}
                                                     </span>
                                                 </div>
-                                                <div className={`flex justify-between text-[10px] font-bold pt-1`}>
-                                                    <span className="text-[10px] font-normal" style={{ color: 'var(--text-muted)' }}>Balance</span>
-                                                    <span style={{ color: bal.balance < 0 ? '#dc2626' : 'var(--text-primary)' }}>{bal.balance < 0 ? "-" : ""}{fmt(Math.abs(bal.balance))}</span>
+                                                <div className={`flex justify-between text-[10px] font-normal pt-1`}>
+                                                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Exp End</span>
+                                                    <span style={{ color: bal.balance < 0 ? '#dc2626' : 'var(--text-muted)' }}>{bal.balance < 0 ? "-" : ""}{fmt(Math.abs(bal.balance))}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -1046,6 +1056,10 @@ export function CashflowGrid({
                 openingCash={openingCash}
                 breakdown={forecastBalances?.[0]?.breakdown}
                 onClose={() => setShowPlan(false)}
+                executionPlan={executionPlan}
+                companyId={companyId}
+                forecastStateJson={forecastStateJson}
+                onApprove={onRefresh}
             />
         )}
 

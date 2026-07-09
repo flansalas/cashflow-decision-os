@@ -9,6 +9,7 @@ import {
     TrendingUp, TrendingDown, BarChart3, ChevronDown, ChevronRight,
     DollarSign, ArrowUpRight, ArrowDownLeft, Check, FolderPlus, Layers, CheckCircle
 } from "lucide-react";
+import { CashImpactTable } from "@/ui/CashImpactTable";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -415,96 +416,7 @@ function CategoryCard({ category, companyId, weeks, isHighlighted, highlightWeek
 
 // ── Net Impact Bar ─────────────────────────────────────────────────────
 
-function SurvivalRunway({ weeks, bufferMin }: { weeks: ForecastWeek[], bufferMin: number }) {
-    if (weeks.length === 0) return null;
 
-    const weeklyData = weeks.map(w => ({
-        weekNumber: w.weekNumber,
-        weekStart: w.weekStart,
-        endCash: w.endCashExpected,
-    }));
-
-    const maxCash = Math.max(...weeklyData.map(d => d.endCash), bufferMin * 2, 1);
-    const minCash = Math.min(...weeklyData.map(d => d.endCash), 0);
-    const range = maxCash - minCash;
-
-    return (
-        <div className="rounded-xl border overflow-hidden" style={{ background: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}>
-            <div className="px-5 py-3 border-b flex items-center justify-between" style={{ borderColor: "var(--border-subtle)" }}>
-                <div className="flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
-                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-                        13-Week Survival Runway
-                    </span>
-                    <span className="text-[10px] ml-2 px-1.5 py-0.5 rounded font-black uppercase tracking-widest border border-amber-200 bg-amber-50 text-amber-600">
-                        Buffer: {fmt(bufferMin)}
-                    </span>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-red-500 shadow-sm" />
-                        <span className="text-[10px] font-bold uppercase tracking-tight" style={{ color: "var(--text-muted)" }}>Danger</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-amber-400 shadow-sm" />
-                        <span className="text-[10px] font-bold uppercase tracking-tight" style={{ color: "var(--text-muted)" }}>Below Buffer</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm" />
-                        <span className="text-[10px] font-bold uppercase tracking-tight" style={{ color: "var(--text-muted)" }}>Healthy</span>
-                    </div>
-                </div>
-            </div>
-            <div className="px-5 pt-12 pb-5 flex gap-2 items-end relative" style={{ minHeight: "180px" }}>
-                {/* Risk Zone Backgrounds */}
-                <div className="absolute left-0 right-0 z-0 pointer-events-none" 
-                    style={{ 
-                        bottom: '35px', 
-                        height: `${Math.max(((Math.min(bufferMin, maxCash) - minCash) / range) * 90, 0)}%`,
-                        background: 'linear-gradient(to top, rgba(239, 68, 68, 0.04) 0%, rgba(245, 158, 11, 0.05) 100%)',
-                        borderTop: '1px solid rgba(245, 158, 11, 0.08)' 
-                    }} />
-
-                {/* Buffer Line */}
-                <div className="absolute left-0 right-0 border-t border-dashed z-20 pointer-events-none" 
-                    style={{ 
-                        bottom: `${((bufferMin - minCash) / range) * 90 + 35}px`, 
-                        borderColor: "rgba(245, 158, 11, 0.4)" 
-                    }} />
-
-                {weeklyData.map(d => {
-                    const heightPct = Math.max(((d.endCash - minCash) / range) * 90, 2);
-                    const isNegative = d.endCash < 0;
-                    const isBelowBuffer = d.endCash < bufferMin;
-                    
-                    let barColor = "rgba(16, 185, 129, 0.6)"; // Healthy
-                    if (isNegative) barColor = "rgba(239, 68, 68, 0.7)"; // Danger
-                    else if (isBelowBuffer) barColor = "rgba(245, 158, 11, 0.6)"; // Amber
-
-                    return (
-                        <div key={d.weekNumber} className="flex-1 flex flex-col items-center group relative h-full justify-end" title={`W${d.weekNumber}: ${fmt(d.endCash)}`}>
-                            {/* Amount Label */}
-                            <div className="absolute -top-6 text-center w-full transform -translate-y-1 transition-transform group-hover:-translate-y-2" style={{ bottom: `${heightPct + 35}px` }}>
-                                <span className={`text-[9px] font-black whitespace-nowrap px-1 rounded ${isNegative ? "text-red-600 bg-red-50/50" : isBelowBuffer ? "text-amber-600 bg-amber-50/50" : "text-emerald-700 bg-emerald-50/50"}`}>
-                                    {fmt(d.endCash)}
-                                </span>
-                            </div>
-                            
-                            {/* Bar */}
-                            <div className="w-full rounded-t-md transition-all group-hover:brightness-110 shadow-sm" 
-                                style={{ height: `${heightPct}%`, background: barColor, minHeight: "4px" }} />
-                                
-                            {/* Week Label */}
-                            <div className="mt-2 text-center pb-1">
-                                <span className="text-[10px] font-black uppercase tracking-tighter" style={{ color: "var(--text-muted)" }}>W{d.weekNumber}</span>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
 
 // ── Main Page ───────────────────────────────────────────────────────────
 
@@ -616,7 +528,7 @@ function CashAdjustmentsContent() {
 
             <main className="max-w-5xl mx-auto px-5 py-6 space-y-5">
                 {/* Survival Runway */}
-                <SurvivalRunway weeks={weeks} bufferMin={bufferMin} />
+                <CashImpactTable weeks={weeks} bufferMin={bufferMin} />
 
                 {/* Guidance Banner */}
                 <div

@@ -7,7 +7,7 @@ import { AppSidebar } from "./AppSidebar";
 const STORAGE_KEY = "cfdo_sidebar_collapsed";
 
 // Pages that should show the sidebar
-const SIDEBAR_ROUTES = ["/dashboard", "/cashflow", "/recurring", "/cash-adjustments"];
+const SIDEBAR_ROUTES = ["/plan", "/receivables", "/payables", "/recurring", "/cash-adjustments", "/scenarios", "/sources", "/settings", "/audit", "/dashboard", "/cashflow"];
 
 export function ClientShell({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();

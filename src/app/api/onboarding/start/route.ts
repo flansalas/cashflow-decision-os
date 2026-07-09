@@ -3,15 +3,22 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
+import { auth } from "@clerk/nextjs/server";
 
 export async function POST(req: NextRequest) {
     const { name } = await req.json() as { name?: string };
     const companyName = (name ?? "").trim() || "My Company";
 
     try {
+        const auth_result = await auth().catch(() => ({ orgId: null }));
+        const orgId = auth_result.orgId;
+
+        if (!orgId) {
+            return NextResponse.json({ error: "Active organization required for onboarding" }, { status: 400 });
+        }
         // Check if there's already an incomplete non-demo company
         const existing = await prisma.company.findFirst({
-            where: { isDemo: false, onboardingCompleted: false },
+            where: { isDemo: false, onboardingCompleted: false, clerkOrgId: orgId },
             orderBy: { createdAt: "desc" },
         });
 
@@ -31,6 +38,7 @@ export async function POST(req: NextRequest) {
                 isDemo: false,
                 onboardingCompleted: false,
                 onboardingStep: 0,
+                clerkOrgId: orgId,
             },
         });
 

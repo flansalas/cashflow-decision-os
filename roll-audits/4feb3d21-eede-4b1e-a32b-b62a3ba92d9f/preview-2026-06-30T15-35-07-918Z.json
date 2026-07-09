@@ -1,0 +1,44 @@
+{
+  "companyId": "4feb3d21-eede-4b1e-a32b-b62a3ba92d9f",
+  "command": "preview",
+  "timestamp": "2026-06-30T15:35:07.918Z",
+  "weekEnding": "2026-04-12T00:00:00.000Z",
+  "bankBalance": 20000,
+  "asOfDate": "2026-04-11",
+  "expectedCheckpointSource": "client_observed_unverified",
+  "bankDataMissing": true,
+  "warning": null,
+  "priorWeekForecast": {
+    "weekNumber": 1,
+    "weekStart": "2026-04-06T00:00:00.000Z",
+    "weekEnd": "2026-04-12T00:00:00.000Z",
+    "startCash": 13000,
+    "inflowsExpected": 0,
+    "outflowsExpected": 7000,
+    "endCashExpected": 6000,
+    "inflowsBest": 0,
+    "outflowsBest": 7000,
+    "endCashBest": 6000,
+    "inflowsWorst": 0,
+    "outflowsWorst": 7000,
+    "endCashWorst": 6000,
+    "zone": "committed",
+    "confidenceScore": 100,
+    "breakdown": {
+      "inflows": [],
+      "outflows": [
+        {
+          "label": "Payroll (Assumed)",
+          "amount": 7000,
+          "type": "committed",
+          "sourceType": "recurring",
+          "sourceId": "synthetic-payroll",
+          "confidence": "high",
+          "section": "Recurring Commitments"
+        }
+      ]
+    },
+    "worstCaseDriver": null
+  },
+  "expectedLedgerCreation": false
+}

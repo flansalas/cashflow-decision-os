@@ -1,0 +1,41 @@
+--- src/app/api/dashboard/route.ts
++++ src/app/api/dashboard/route.ts
+@@ -148,6 +148,31 @@
+         }));
+ 
++        const company = await prisma.company.findUnique({ where: { id: tenantId } });
++
+         return NextResponse.json({
++            companyId: tenantId,
++            company: {
++                id: tenantId,
++                name: company?.name || "Unknown Company",
++                isDemo: tenantId === "DEMO_COMPANY_001"
++            },
++            businessCashState: "SURVIVAL",
++            dataQualityGate: "PASS",
++            cash: {
++                bankBalance: cashSnapshot.bankBalance,
++                adjustmentsTotal: input.adjustmentsTotal,
++                adjustedOpeningCash: input.adjustedOpeningCash,
++                asOfDate: cashSnapshot.asOfDate,
++                adjustments: cashAdjustments.map(a => ({ id: a.id, type: a.type, amount: a.amount, note: a.note }))
++            },
++            assumptions: {
++                bufferMin: assumptions.bufferMin ?? 10000,
++                payrollCadence: assumptions.payrollCadence ?? "biweekly",
++                payrollAllInAmount: assumptions.payrollAllInAmount ?? null,
++                payrollNextDate: assumptions.payrollNextDate ?? null,
++                fixedWeeklyOutflow: assumptions.fixedWeeklyOutflow ?? 0,
++                projectionSafetyMargin: assumptions.projectionSafetyMargin ?? 1.0,
++            },
++            payroll: {
++                nextDate: payrollPattern?.nextDate || null,
++                amount: payrollPattern?.typicalAmount || 0,
++                confidence: "high",
++                source: "pattern"
++            },
++            macroMemory: "Context memory placeholder",
++            lastUpdated: new Date().toISOString(),
+             snapshotDate: cashSnapshot.asOfDate,
+             startingCash: input.adjustedOpeningCash,

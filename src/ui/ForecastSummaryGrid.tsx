@@ -171,7 +171,7 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                     className="px-5 py-4 border-b border-r sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.02)]"
                                     style={{ background: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}
                                 >
-                                    <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--text-primary)" }}>Final Cash Balance</span>
+                                    <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--text-primary)" }}>Beginning Cash</span>
                                 </th>
                                 {weeks.map((w: any) => (
                                     <th
@@ -179,7 +179,26 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                         className="px-3 py-4 border-b border-r text-right"
                                         style={{ background: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}
                                     >
-                                        <span className={`text-sm font-bold font-financial tracking-tight ${w.endCashExpected < 0 ? "text-rose-600" : "text-emerald-700"}`}>
+                                        <span className={`text-sm font-bold font-financial tracking-tight ${w.startCash < 0 ? "text-rose-600" : "text-slate-900"}`}>
+                                            {fmt(w.startCash)}
+                                        </span>
+                                    </th>
+                                ))}
+                            </tr>
+                            <tr>
+                                <th
+                                    className="px-5 py-2 border-b border-r sticky left-0 z-10"
+                                    style={{ background: "var(--bg-base)", borderColor: "var(--border-subtle)" }}
+                                >
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Expected Ending</span>
+                                </th>
+                                {weeks.map((w: any) => (
+                                    <th
+                                        key={w.weekNumber}
+                                        className="px-3 py-2 border-b border-r text-right"
+                                        style={{ background: "var(--bg-base)", borderColor: "var(--border-subtle)" }}
+                                    >
+                                        <span className={`text-xs font-medium font-financial tracking-tight ${w.endCashExpected < 0 ? "text-rose-500" : "text-slate-500"}`}>
                                             {fmt(w.endCashExpected)}
                                         </span>
                                     </th>

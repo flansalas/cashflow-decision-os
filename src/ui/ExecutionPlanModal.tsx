@@ -20,6 +20,10 @@ interface Props {
     openingCash: number;
     breakdown?: WeekBreakdown;
     onClose: () => void;
+    executionPlan?: { id: string; version: number, planForecast?: any } | null;
+    companyId?: string;
+    forecastStateJson?: any;
+    onApprove?: () => void;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -227,9 +231,43 @@ function ItemRow({ item, isHold, originalDue }: RowProps) {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────
-export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakdown, onClose }: Props) {
+export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakdown, onClose, executionPlan, companyId, forecastStateJson, onApprove }: Props) {
     const [activeTab, setActiveTab] = useState<"all" | "ar" | "ap">("all");
     const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
+    const [mode, setMode] = useState<"select" | "approved" | "live">("select");
+    const [isApproving, setIsApproving] = useState(false);
+
+    const handleApproveAndPrint = async () => {
+        setIsApproving(true);
+        try {
+            const res = await fetch("/api/execution-plan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    companyId,
+                    weekStart: forecastStateJson?.weeks?.[0]?.weekStart,
+                    forecastStateJson
+                }),
+            });
+            if (res.ok) {
+                onApprove?.();
+                setMode("live");
+                setTimeout(() => window.print(), 100);
+            }
+        } finally {
+            setIsApproving(false);
+        }
+    };
+
+    const isLive = mode === "live" || !executionPlan?.planForecast;
+    const planForecast = executionPlan?.planForecast;
+    
+    // Resolve which data to render
+    const activeWeeks = isLive ? weeks : planForecast?.weeks || weeks;
+    const activeInvoices = isLive ? invoices : planForecast?.invoices || invoices;
+    const activeBills = isLive ? bills : planForecast?.bills || bills;
+    const activeOpeningCash = isLive ? openingCash : planForecast?.input?.adjustedOpeningCash || openingCash;
+    const activeBreakdown = isLive ? breakdown : planForecast?.weeks?.[0]?.breakdown || breakdown;
     
     const toggleExclude = (id: string) => {
         setExcludedIds(prev => {
@@ -256,13 +294,13 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
         totalAutoOutflows
     } = useMemo(() => {
         // Active Week 1 items
-        const collectionTargets = invoices
-            .filter(i => i.effectiveWeek === 1)
-            .sort((a, b) => (b.daysPastDue ?? 0) - (a.daysPastDue ?? 0)); // most urgent first
+        const collectionTargets = activeInvoices
+            .filter((i: GridItem) => i.effectiveWeek === 1)
+            .sort((a: GridItem, b: GridItem) => (b.daysPastDue ?? 0) - (a.daysPastDue ?? 0)); // most urgent first
 
-        const approvedToPay = bills
-            .filter(b => b.effectiveWeek === 1)
-            .sort((a, b) => b.amountOpen - a.amountOpen); // largest first
+        const approvedToPay = activeBills
+            .filter((b: GridItem) => b.effectiveWeek === 1)
+            .sort((a: GridItem, b: GridItem) => b.amountOpen - a.amountOpen); // largest first
 
         // Hold list: items whose ORIGINAL due date falls in Week 1's window
         // but management has moved out of Week 1 (override set, effectiveWeek !== 1)
@@ -270,7 +308,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
         const w1End   = new Date(week1.weekEnd);
 
         const holdItems: { item: GridItem; originalDue: string | null }[] = [];
-        for (const item of [...invoices, ...bills]) {
+        for (const item of [...activeInvoices, ...activeBills]) {
             if (!item.overrideDate) continue;
             if (item.effectiveWeek === 1) continue; // it's IN week 1, not deferred
             const originalDue = item.dueDate;
@@ -286,8 +324,8 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
         const manualInflows: WeekBreakdownItem[] = [];
         const automatedOutflows: WeekBreakdownItem[] = [];
 
-        if (breakdown) {
-            for (const item of breakdown.outflows) {
+        if (activeBreakdown) {
+            for (const item of activeBreakdown.outflows) {
                 if (item.sourceType === "baseline" || item.sourceType === "assumption" || item.sourceType === "bill") continue;
                 if (item.sourceType === "manual") {
                     manualOutflows.push(item);
@@ -300,7 +338,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                     }
                 }
             }
-            for (const item of breakdown.inflows) {
+            for (const item of activeBreakdown.inflows) {
                 if (item.sourceType === "baseline" || item.sourceType === "invoice") continue;
                 if (item.sourceType === "manual") {
                     manualInflows.push(item);
@@ -308,12 +346,12 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
             }
         }
 
-        const baseTotalCollect = collectionTargets.reduce((s, i) => s + i.amountOpen, 0);
-        const baseTotalPay = approvedToPay.reduce((s, i) => s + i.amountOpen, 0);
+        const baseTotalCollect = collectionTargets.reduce((s: number, i: any) => s + i.amountOpen, 0);
+        const baseTotalPay = approvedToPay.reduce((s: number, i: any) => s + i.amountOpen, 0);
 
-        const mCollect = manualInflows.filter(i => !excludedIds.has(i.sourceId || i.label)).reduce((s, i) => s + i.amount, 0);
-        const mPay = manualOutflows.filter(i => !excludedIds.has(i.sourceId || i.label)).reduce((s, i) => s + i.amount, 0);
-        const aPay = automatedOutflows.filter(i => !excludedIds.has(i.sourceId || i.label)).reduce((s, i) => s + i.amount, 0);
+        const mCollect = manualInflows.filter((i: any) => !excludedIds.has(i.sourceId || i.label)).reduce((s: number, i: any) => s + i.amount, 0);
+        const mPay = manualOutflows.filter((i: any) => !excludedIds.has(i.sourceId || i.label)).reduce((s: number, i: any) => s + i.amount, 0);
+        const aPay = automatedOutflows.filter((i: any) => !excludedIds.has(i.sourceId || i.label)).reduce((s: number, i: any) => s + i.amount, 0);
 
         return { 
             approvedToPay, collectionTargets, holdItems,
@@ -322,10 +360,50 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
             totalPay: baseTotalPay + mPay,
             totalAutoOutflows: aPay
         };
-    }, [invoices, bills, week1, breakdown, excludedIds]);
+    }, [activeInvoices, activeBills, week1, activeBreakdown, excludedIds]);
 
     const showAR = activeTab === "all" || activeTab === "ar";
     const showAP = activeTab === "all" || activeTab === "ap";
+
+    if (mode === "select") {
+        return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md animate-in fade-in slide-in-from-bottom-4">
+                    <h2 className="text-lg font-bold text-slate-900 mb-4">Print Execution Plan</h2>
+                    {executionPlan ? (
+                        <div className="space-y-3">
+                            <button onClick={() => setMode("approved")} className="w-full text-left p-4 rounded-lg border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 transition-colors">
+                                <div className="font-bold text-slate-900">Print Approved Plan</div>
+                                <div className="text-xs text-slate-500">Version {executionPlan.version}</div>
+                            </button>
+                            <button onClick={() => setMode("live")} className="w-full text-left p-4 rounded-lg border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 transition-colors">
+                                <div className="font-bold text-slate-900">Print Current Live Forecast</div>
+                                <div className="text-xs text-slate-500">Not Approved</div>
+                            </button>
+                            <button onClick={() => handleApproveAndPrint()} disabled={isApproving} className="w-full text-left p-4 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 transition-colors">
+                                <div className="font-bold text-slate-900">{isApproving ? "Approving..." : "Approve & Print Revised Plan"}</div>
+                                <div className="text-xs text-slate-500">Creates a new version and resets drift</div>
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <button onClick={() => handleApproveAndPrint()} disabled={isApproving} className="w-full text-left p-4 rounded-lg border border-indigo-200 bg-indigo-50 hover:border-indigo-500 hover:bg-indigo-100 transition-colors">
+                                <div className="font-bold text-indigo-900">{isApproving ? "Approving..." : "Approve & Print Plan"}</div>
+                                <div className="text-xs text-indigo-700">Creates the initial baseline</div>
+                            </button>
+                            <button onClick={() => setMode("live")} className="w-full text-left p-4 rounded-lg border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 transition-colors">
+                                <div className="font-bold text-slate-900">Print Live Forecast Only</div>
+                                <div className="text-xs text-slate-500">Does not approve the plan</div>
+                            </button>
+                        </div>
+                    )}
+                    <button onClick={onClose} className="w-full mt-4 p-3 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-100 transition-colors text-center">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <>
@@ -370,7 +448,9 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                     <div className="flex items-center gap-3">
                         <Printer className="w-6 h-6 text-gray-400" />
                         <div>
-                            <p className="text-sm font-bold text-white">Week 1 Action Plan</p>
+                            <p className="text-sm font-bold text-white">
+                                {mode === "approved" ? `Approved Weekly Plan — Version ${executionPlan?.version}` : "Current Live Forecast — Not Approved"}
+                            </p>
                             <p className="text-xs" style={{ color: "#64748b" }}>Clerk execution handoff · {week1 ? `${fmtDate(week1.weekStart)} – ${fmtDate(week1.weekEnd)}` : ""}</p>
                         </div>
                     </div>
@@ -455,11 +535,11 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                                 marginTop: "20px",
                             }}>
                                 {[
-                                    { label: "Opening Cash", value: fmt(openingCash), color: "#0f172a" },
+                                    { label: "Opening Cash", value: fmt(activeOpeningCash), color: "#0f172a" },
                                     { label: "Target Collect", value: `+${fmt(totalCollect)}`, color: "#059669" },
                                     { label: "To Pay (Manual)", value: `−${fmt(totalPay)}`, color: "#dc2626" },
                                     { label: "Auto-Debits", value: `−${fmt(totalAutoOutflows)}`, color: "#f59e0b" },
-                                    { label: "Safe Buffer", value: fmt(openingCash + totalCollect - totalPay - totalAutoOutflows), color: (openingCash + totalCollect - totalPay - totalAutoOutflows) >= 0 ? "#0f172a" : "#dc2626" },
+                                    { label: "Safe Buffer", value: fmt(activeOpeningCash + totalCollect - totalPay - totalAutoOutflows), color: (activeOpeningCash + totalCollect - totalPay - totalAutoOutflows) >= 0 ? "#0f172a" : "#dc2626" },
                                 ].map(({ label, value, color }) => (
                                     <div key={label} style={{
                                         background: "#f1f5f9",
@@ -499,10 +579,10 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {approvedToPay.map(item => (
+                                                {approvedToPay.map((item: any) => (
                                                     <ItemRow key={item.id} item={item} />
                                                 ))}
-                                                {manualOutflows.map(item => {
+                                                {manualOutflows.map((item: any) => {
                                                     const id = item.sourceId || item.label;
                                                     return <NonLedgerRow key={item.label} item={item} isOutflow={true} isExcluded={excludedIds.has(id)} onToggleExclude={() => toggleExclude(id)} />;
                                                 })}
@@ -545,10 +625,10 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {collectionTargets.map(item => (
+                                            {collectionTargets.map((item: any) => (
                                                 <ItemRow key={item.id} item={item} />
                                             ))}
-                                            {manualInflows.map(item => {
+                                            {manualInflows.map((item: any) => {
                                                 const id = item.sourceId || item.label;
                                                 return <NonLedgerRow key={item.label} item={item} isOutflow={false} isExcluded={excludedIds.has(id)} onToggleExclude={() => toggleExclude(id)} />;
                                             })}
@@ -583,7 +663,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {automatedOutflows.map(item => {
+                                            {automatedOutflows.map((item: any) => {
                                                 const id = item.sourceId || item.label;
                                                 return <AutoDebitRow key={item.label} item={item} isExcluded={excludedIds.has(id)} onToggleExclude={() => toggleExclude(id)} />;
                                             })}

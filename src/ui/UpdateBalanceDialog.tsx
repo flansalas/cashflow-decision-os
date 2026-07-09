@@ -36,6 +36,7 @@ interface Props {
     currentBalance: number;
     currentAdjustments: Array<{ type: string; amount: number; note: string | null }>;
     companyId: string;
+    executionPlanId?: string;
     priorWeekData?: any;
     lastUpdated?: string | null;
     onSaved: () => void;
@@ -46,6 +47,8 @@ export function UpdateBalanceDialog({
     currentBalance,
     currentAdjustments,
     companyId,
+                    
+    executionPlanId,
     priorWeekData,
     lastUpdated,
     onSaved,
@@ -131,6 +134,7 @@ export function UpdateBalanceDialog({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     companyId,
+                    executionPlanId,
                     bankBalance: parsedBalance,
                     asOfDate,
                     adjustments: adjustments.map(({ id: _, ...rest }) => rest),

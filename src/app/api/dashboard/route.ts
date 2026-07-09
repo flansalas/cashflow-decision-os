@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
             prisma.baselineVarianceLedger.findMany({
                 where: { companyId: cid },
                 orderBy: { weekStart: "desc" },
-                take: 4, // last 4 weeks of variance
+                take: 8, // 8-week recency-weighted variance window
             }),
         ]);
 
@@ -110,30 +110,68 @@ export async function GET(req: NextRequest) {
             direction: rp.direction,
             category: rp.category,
             isIncluded: rp.isIncluded,
+            typicalAmount: rp.typicalAmount,
+            amountStdDev: rp.amountStdDev,
         }));
 
         const baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate);
         const hasBankBaseline = baseline.hasSufficientHistory;
 
-        // ── Apply Macro-Memory Variance Multipliers ─────────────────────
+        // ── Apply Macro-Memory Variance Multipliers (8-week recency-weighted) ─
+        //
+        // Weighting formula:
+        //   The N observations are ordered from most recent (index 0) to oldest.
+        //   Weight for observation i = 2^(N-1-i), giving a geometric decay.
+        //   So with 8 observations: weights = [128, 64, 32, 16, 8, 4, 2, 1]
+        //   This means the most recent week carries 128x the weight of the oldest.
+        //
+        //   Before computing the weighted mean, each variancePct is clipped at
+        //   ±75% to prevent a single abnormal week from dominating the multiplier.
+        //   (e.g., an equipment purchase that triples outflows one week)
+        //
+        //   When fewer than 8 observations exist, the weighting still applies to
+        //   however many observations are available. With 1 observation, only that
+        //   observation is used (weight = 1). With 4: weights = [8, 4, 2, 1].
+        //
+        //   The resulting multiplier is bounded to [0.5, 2.0] as a sanity rail.
+
         let varianceMultiplier = 1.0;
         let averageVariancePct = 0;
         let varianceMultiplierIn = 1.0;
         let averageVariancePctIn = 0;
 
         if (varianceLedger.length > 0) {
-            averageVariancePct = varianceLedger.reduce((sum, v) => sum + v.variancePct, 0) / varianceLedger.length;
-            // E.g., if actual is consistently 8% higher than projected (variancePct = 0.08), multiplier is 1.08.
-            varianceMultiplier = 1 + averageVariancePct;
-            
-            // Apply it only to the variable outflows
+            const CLIP = 0.75; // ±75% clip before weighting
+
+            // varianceLedger is ordered desc (most recent first)
+            const n = varianceLedger.length;
+            // weights[0] = most recent (highest weight)
+            const weights = varianceLedger.map((_, i) => Math.pow(2, n - 1 - i));
+            const sumWeights = weights.reduce((a, b) => a + b, 0);
+
+            // Outflow variance
+            let weightedSumOut = 0;
+            for (let i = 0; i < n; i++) {
+                const clipped = Math.max(-CLIP, Math.min(CLIP, varianceLedger[i].variancePct));
+                weightedSumOut += clipped * weights[i];
+            }
+            averageVariancePct = weightedSumOut / sumWeights;
+            varianceMultiplier = Math.max(0.5, Math.min(2.0, 1 + averageVariancePct));
             baseline.variableOutflowWeekly = baseline.variableOutflowWeekly * varianceMultiplier;
 
-            // Inflows
-            const inflowVariances = varianceLedger.filter(v => v.variancePctIn !== null);
-            if (inflowVariances.length > 0) {
-                averageVariancePctIn = inflowVariances.reduce((sum, v) => sum + v.variancePctIn!, 0) / inflowVariances.length;
-                varianceMultiplierIn = 1 + averageVariancePctIn;
+            // Inflow variance (same weighting, only on rows that have inflow data)
+            const inflowRows = varianceLedger
+                .map((v, i) => ({ v, w: weights[i] }))
+                .filter(({ v }) => v.variancePctIn !== null);
+            if (inflowRows.length > 0) {
+                const sumWIn = inflowRows.reduce((a, { w }) => a + w, 0);
+                let weightedSumIn = 0;
+                for (const { v, w } of inflowRows) {
+                    const clipped = Math.max(-CLIP, Math.min(CLIP, v.variancePctIn!));
+                    weightedSumIn += clipped * w;
+                }
+                averageVariancePctIn = weightedSumIn / sumWIn;
+                varianceMultiplierIn = Math.max(0.5, Math.min(2.0, 1 + averageVariancePctIn));
                 baseline.variableInflowWeekly = baseline.variableInflowWeekly * varianceMultiplierIn;
             }
         }

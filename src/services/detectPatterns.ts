@@ -25,7 +25,7 @@ export interface DetectedPattern {
 // ─── Normalization ───────────────────────────────────────────────────────────
 
 // Strip common bank noise from descriptions to get a consistent merchant key
-function normalizeDescription(raw: string): string {
+export function normalizeDescription(raw: string): string {
     let s = raw.trim().toUpperCase();
 
     // Remove leading/trailing transaction IDs like "POS #3948", ref numbers, etc.

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { UserButton, OrganizationSwitcher, useOrganizationList, useOrganization } from "@clerk/nextjs";
 import {
     Box, BarChart3, ListFilter, Repeat2, Layers, Settings2,
-    ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft, Database, History
+    ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft, Database, History, CheckCircle2
 } from "lucide-react";
 
 interface NavItem {
@@ -13,7 +13,7 @@ interface NavItem {
     label: string;
     href?: string;
     onClick?: () => void;
-    section: "workspace" | "admin";
+    section: "plan" | "manage" | "tools" | "control";
 }
 
 const STORAGE_KEY = "cfdo_sidebar_collapsed";
@@ -100,45 +100,64 @@ export function AppSidebar() {
     const navItems: NavItem[] = [
         {
             icon: <BarChart3 className="w-[18px] h-[18px]" />,
-            label: "Dashboard",
-            href: "/dashboard",
-            section: "workspace",
+            label: "Plan",
+            href: "/plan",
+            section: "plan",
+        },
+        {
+            icon: <CheckCircle2 className="w-[18px] h-[18px]" />,
+            label: "Weekly Review",
+            href: "/review",
+            section: "plan",
         },
         {
             icon: <ListFilter className="w-[18px] h-[18px]" />,
-            label: "AR / AP Ledger",
-            href: "/cashflow",
-            section: "workspace",
+            label: "Receivables",
+            href: "/receivables",
+            section: "manage",
+        },
+        {
+            icon: <ListFilter className="w-[18px] h-[18px]" />,
+            label: "Payables",
+            href: "/payables",
+            section: "manage",
         },
         {
             icon: <Repeat2 className="w-[18px] h-[18px]" />,
-            label: "Recurring Cash",
+            label: "Recurring",
             href: "/recurring",
-            section: "workspace",
+            section: "tools",
         },
         {
             icon: <Layers className="w-[18px] h-[18px]" />,
-            label: "One-Time Adjustments",
-            href: "/cash-adjustments",
-            section: "workspace",
+            label: "One-Time",
+            href: "/adjustments",
+            section: "tools",
+        },
+        {
+            icon: <Box className="w-[18px] h-[18px]" />,
+            label: "Scenarios",
+            href: "/scenarios",
+            section: "tools",
+        },
+        {
+            icon: <Database className="w-[18px] h-[18px]" />,
+            label: "Data Sources",
+            href: "/sources",
+            section: "tools",
         },
     ];
 
     // Admin items
-    navItems.push({
-        icon: <Database className="w-[18px] h-[18px]" />,
-        label: "Data Sources",
-        onClick: handleOpenData,
-        section: "admin",
-    });
+    // (Moved Data Sources to Tools)
 
     // Only show setup for non-demo
     if (!isDemo) {
         navItems.push({
             icon: <Settings2 className="w-[18px] h-[18px]" />,
-            label: "Setup",
-            onClick: handleOpenSetup,
-            section: "admin",
+            label: "Settings",
+            href: "/settings",
+            section: "control",
         });
     }
 
@@ -146,11 +165,13 @@ export function AppSidebar() {
         icon: <History className="w-[18px] h-[18px]" />,
         label: "Audit Log",
         href: "/audit",
-        section: "admin",
+        section: "control",
     });
 
-    const workspaceItems = navItems.filter(i => i.section === "workspace");
-    const adminItems = navItems.filter(i => i.section === "admin");
+    const planItems = navItems.filter(i => i.section === "plan");
+    const manageItems = navItems.filter(i => i.section === "manage");
+    const toolsItems = navItems.filter(i => i.section === "tools");
+    const controlItems = navItems.filter(i => i.section === "control");
 
     const isActive = (href?: string) => {
         if (!href) return false;
@@ -270,23 +291,32 @@ export function AppSidebar() {
                 </button>
             </div>
 
-            {/* Workspace nav */}
             <nav className="flex-1 flex flex-col px-2 pt-4 gap-1 overflow-y-auto">
                 {!collapsed && (
-                    <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-300 px-3 mb-2">Workspace</span>
+                    <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-300 px-3 mb-2">Plan</span>
                 )}
-                {workspaceItems.map(renderItem)}
+                {planItems.map(renderItem)}
+
+                {!collapsed && (
+                    <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-300 px-3 mb-2 mt-4">Manage Cash</span>
+                )}
+                {manageItems.map((item, idx) => renderItem(item, idx + planItems.length))}
+
+                {!collapsed && (
+                    <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-300 px-3 mb-2 mt-4">Tools</span>
+                )}
+                {toolsItems.map((item, idx) => renderItem(item, idx + planItems.length + manageItems.length))}
 
                 {/* Spacer */}
                 <div className="flex-1" />
 
-                {/* Admin section */}
-                {adminItems.length > 0 && (
+                {/* Control section */}
+                {controlItems.length > 0 && (
                     <>
                         {!collapsed && (
-                            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-300 px-3 mb-2 mt-4">Admin</span>
+                            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-300 px-3 mb-2 mt-4">Control</span>
                         )}
-                        {adminItems.map((item, idx) => renderItem(item, idx + workspaceItems.length))}
+                        {controlItems.map((item, idx) => renderItem(item, idx + planItems.length + manageItems.length + toolsItems.length))}
                     </>
                 )}
             </nav>
