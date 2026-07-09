@@ -40,6 +40,7 @@ model Company {
   forecastWeeks       ForecastWeek[]
   actionItems         ActionItem[]
   scenarioItems       ScenarioItem[]
+  stagedImportRows    StagedImportRow[]
   cashFlowCategories  CashFlowCategory[]
   cashFlowEntries     CashFlowEntry[]
   forecastCheckpoints ForecastCheckpoint[]
@@ -48,6 +49,8 @@ model Company {
   customerPaymentObservations CustomerPaymentObservation[]
   vendorPaymentObservations   VendorPaymentObservation[]
   importBatches               ImportBatch[]
+  importApplications          ImportApplication[]
+  importApplyChanges          ImportApplyChange[]
 }
 
 model CompanyNote {
@@ -301,6 +304,7 @@ model ChangeLog {
   diffJson                  String
   forecastVersionHashBefore String?
   forecastVersionHashAfter  String
+  userId                    String?
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
@@ -566,6 +570,95 @@ model ImportBatch {
   errorSummary     String?   // JSON array of error messages
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  stagedRows       StagedImportRow[]
+  application      ImportApplication?
 
   @@index([companyId, importType])
+}
+
+// ────────────────────────────────────────────────
+// SAFE DATA SOURCES – STAGED IMPORTS
+// ────────────────────────────────────────────────
+
+model StagedImportRow {
+  id                   String   @id @default(uuid())
+  companyId            String
+  importBatchId        String
+  importType           String   // ar | ap | bank
+  sourceRowNumber      Int
+  rawDataJson          String   // JSON string of the raw row
+  normalizedDataJson   String   // JSON string of the normalized parsed row
+  validationStatus     String   // valid | invalid
+  validationErrorsJson String?  // JSON array of error strings
+  conflictType         String   // new | exact_duplicate | changed_existing | possible_match | possible_duplicate | invalid
+  matchedRecordId      String?
+  fieldDifferencesJson String?  // JSON array of differences
+  proposedAction       String   // insert | update | skip | review
+
+  userDecision         String?  // accept_insert | accept_update | keep_existing | treat_as_new | skip | link_and_review
+  linkedRecordId       String?  // ID of the user-selected live record to link (e.g. for possible_match)
+  reviewedBy           String?
+  reviewedAt           DateTime?
+  reviewNote           String?
+
+  rollbackStatus       String?  // rolled_back | blocked
+  rollbackError        String?
+
+  applyStatus          String?  // inserted | updated | skipped | failed
+  appliedRecordId      String?
+  appliedAt            DateTime?
+  applyError           String?
+  createdAt            DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  batch   ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, importBatchId])
+}
+
+model ImportApplication {
+  id                 String   @id @default(cuid())
+  companyId          String
+  importBatchId      String   @unique
+  importType         String
+  appliedBy          String?
+  appliedAt          DateTime @default(now())
+  status             String   @default("applied") // applied | rolled_back
+  rolledBackAt       DateTime?
+  rolledBackBy       String?
+  forecastHashBeforeRollback String?
+  forecastHashAfterRollback  String?
+  rollbackEnrichmentError    String?
+
+  insertedCount      Int      @default(0)
+  updatedCount       Int      @default(0)
+  skippedCount       Int      @default(0)
+  failedCount        Int      @default(0)
+  forecastHashBefore String?
+  forecastHashAfter  String?
+  enrichmentError    String?
+  changeLogId        String?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  batch   ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+  changes ImportApplyChange[]
+}
+
+model ImportApplyChange {
+  id                  String   @id @default(uuid())
+  companyId           String
+  importApplicationId String
+  stagedRowId         String
+  entityType          String   // ar | ap | bank
+  entityId            String
+  operation           String   // insert | update
+  beforeJson          String?  // JSON
+  afterJson           String   // JSON
+  changedFieldsJson   String   // JSON containing keys that were modified by this application and their before/after values
+  createdAt           DateTime @default(now())
+
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  application ImportApplication @relation(fields: [importApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, importApplicationId])
 }

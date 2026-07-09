@@ -5,27 +5,19 @@
 //
 // Run with: npx tsx scripts/test-ingest.ts
 
-// Load .env before anything else
+// scripts/test-ingest.ts
 import { config } from "dotenv";
 import { resolve } from "path";
 config({ path: resolve(__dirname, "../.env") });
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import prisma from "../src/db/prisma";
 
 // Import services directly (same code that the API routes call)
 import { parseBuffer } from "../src/services/ingest/parseRows";
 import { prepareAR, normalizeARRows, arPreview } from "../src/services/ingest/ar";
 import { prepareAP, normalizeAPRows, apPreview } from "../src/services/ingest/ap";
-
-// Mirror src/db/prisma.ts adapter setup so we connect to the real dev.db
-const dbUrl = process.env.DATABASE_URL ?? "file:./dev.db";
-const filePath = dbUrl.replace(/^file:/, "");
-const absPath = resolve(join(__dirname, ".."), filePath);
-const adapter = new PrismaBetterSqlite3({ url: absPath });
-const prisma = new PrismaClient({ adapter });
 
 const TEST_CID = "test-ingest-script-001";
 const fixture = (f: string) => join(__dirname, "../fixtures", f);

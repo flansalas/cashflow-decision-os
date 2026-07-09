@@ -18,8 +18,8 @@ import prisma from "@/db/prisma";
 // Types
 // ────────────────────────────────────────────────
 
-export type PaymentObservationSource = "ar_import" | "bank_match" | "manual_verified";
-export type VendorObservationSource = "ap_import" | "bank_match" | "manual_verified";
+export type PaymentObservationSource = "ar_import" | "bank_match" | "manual_verified" | "manual_confirmed_date";
+export type VendorObservationSource = "ap_import" | "bank_match" | "manual_verified" | "manual_confirmed_date";
 
 export interface CustomerPaymentStats {
     customerName: string;

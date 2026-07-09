@@ -39,6 +39,11 @@ export interface LogEventParams {
     // Forecast hashes for before/after comparison
     forecastVersionHashBefore?: string | null;
     forecastVersionHashAfter?: string;
+
+    // Authenticated user ID (if available)
+    userId?: string | null;
+
+    overrideId?: string | null;
 }
 
 /**
@@ -72,6 +77,8 @@ export async function logAuditEvent(params: LogEventParams) {
 
         // Source
         source: params.source,
+        userId: params.userId ?? null,
+        overrideId: params.overrideId ?? null,
     });
 
     const oldStr = params.oldValue !== null && params.oldValue !== undefined ? String(params.oldValue) : "None";
@@ -90,6 +97,7 @@ export async function logAuditEvent(params: LogEventParams) {
             diffJson,
             forecastVersionHashBefore: params.forecastVersionHashBefore ?? null,
             forecastVersionHashAfter: params.forecastVersionHashAfter ?? "pending",
+            userId: params.userId ?? null,
         }
     });
 }

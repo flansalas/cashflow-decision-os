@@ -1,102 +1,175 @@
-// POST /api/upload/bank
-// Replace BankTransaction rows, save MappingProfile, record bank_refresh_at
-
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
 import { createImportBatch } from "@/services/payment-memory";
+
+import { resolveTenant } from "@/lib/tenant";
 
 interface NormalizedBankRow {
     date: string | null;
     description: string;
     amount: number;
+    _raw?: Record<string, string>;
 }
 
 export async function POST(req: NextRequest) {
-    const { companyId, rows, mappingJson, filename } = await req.json() as {
-        companyId: string;
+    const { rows, mappingJson, filename } = await req.json() as {
         rows: NormalizedBankRow[];
         mappingJson: Record<string, string>;
         filename?: string;
     };
 
-    if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Missing or invalid company" }, { status: 401 });
+    const companyId = tenantId;
+
     if (!rows?.length) return NextResponse.json({ error: "No rows to import" }, { status: 400 });
 
+    let userId = null;
     try {
-        // Simple strategy: delete existing bank tx for company and replace
-        await prisma.bankTransaction.deleteMany({ where: { companyId } });
+        const authResult = await auth();
+        userId = authResult?.userId ?? null;
+    } catch { /* safe fallback */ }
 
-        const txData = rows.map((row) => ({
-            companyId,
-            txDate: new Date(row.date!),
-            amount: Math.abs(row.amount),
-            description: row.description,
-            direction: row.amount > 0 ? "inflow" : "outflow",
-        }));
+    try {
+        let validCount = 0;
+        let invalidCount = 0;
+        let duplicateCount = 0;
 
-        await prisma.bankTransaction.createMany({
-            data: txData,
+        const existingTx = await prisma.bankTransaction.findMany({
+            where: { companyId },
+            select: { id: true, txDate: true, description: true, amount: true }
         });
+        const getBankFingerprint = (date: Date | string | null, desc: string, amt: number) => {
+            const d = date ? new Date(date).toISOString().slice(0, 10) : "";
+            const cleanDesc = (desc || "").toLowerCase().replace(/\s+/g, "");
+            return `${d}|||${cleanDesc}|||${amt}`;
+        };
+        const existingFingerprints = new Set(existingTx.map(tx => getBankFingerprint(tx.txDate, tx.description, tx.amount)));
+        const batchFingerprints = new Set<string>();
 
-        const imported = txData.length;
+        const stagedRowsData = rows.map((row, index) => {
+            const { _raw, ...normalizedObj } = row;
+            const rawDataJson = JSON.stringify(_raw || row);
+            const normalizedDataJson = JSON.stringify(normalizedObj);
 
-        // Persist mapping
-        await prisma.mappingProfile.upsert({
-            where: { companyId_kind: { companyId, kind: "bank" } },
-            update: { mappingJson: JSON.stringify(mappingJson) },
-            create: { companyId, kind: "bank", mappingJson: JSON.stringify(mappingJson) },
-        });
+            let validationErrors: string[] = [];
+            if (!row.date) validationErrors.push("Missing transaction date");
+            if (!row.description) validationErrors.push("Missing description");
+            if (row.amount == null || isNaN(row.amount)) validationErrors.push("Invalid amount");
 
-        // Record timestamp
-        const key = "bank_refresh_at";
-        const noteText = `${key}:${new Date().toISOString()}`;
-        const existingNote = await prisma.companyNote.findFirst({
-            where: { companyId, noteText: { startsWith: `${key}:` } },
-        });
-        if (existingNote) {
-            await prisma.companyNote.update({ where: { id: existingNote.id }, data: { noteText } });
-        } else {
-            await prisma.companyNote.create({ data: { companyId, noteText } });
-        }
+            const validationStatus = validationErrors.length > 0 ? "invalid" : "valid";
+            let conflictType = "new";
+            let proposedAction = "insert";
+            let matchedRecordId: string | null = null;
+            let fieldDifferencesJson: string | null = null;
 
-        // Record ImportBatch
-        const bankRowDates = rows.map(r => r.date ? new Date(r.date) : null).filter(Boolean) as Date[];
-        const sourceDateStart = bankRowDates.length > 0 ? new Date(Math.min(...bankRowDates.map(d => d.getTime()))) : null;
-        const sourceDateEnd = bankRowDates.length > 0 ? new Date(Math.max(...bankRowDates.map(d => d.getTime()))) : null;
-        try {
-            await createImportBatch({
+            if (validationStatus === "invalid") {
+                conflictType = "invalid";
+                proposedAction = "skip";
+            } else {
+                const fingerprint = getBankFingerprint(row.date, row.description, row.amount);
+
+                if (existingFingerprints.has(fingerprint) || batchFingerprints.has(fingerprint)) {
+                    conflictType = "exact_duplicate";
+                    proposedAction = "skip";
+                    const existing = existingTx.find(tx => getBankFingerprint(tx.txDate, tx.description, tx.amount) === fingerprint);
+                    if (existing) matchedRecordId = existing.id;
+                } else {
+                    const rowDate = new Date(row.date!).getTime();
+                    const nearMatch = existingTx.find(tx => {
+                        const txDate = tx.txDate.getTime();
+                        return tx.amount === row.amount && Math.abs(txDate - rowDate) <= 3 * 86400000;
+                    });
+                    if (nearMatch) {
+                        conflictType = "possible_duplicate";
+                        proposedAction = "review";
+                        matchedRecordId = nearMatch.id;
+                    }
+                }
+
+                batchFingerprints.add(fingerprint);
+            }
+
+            if (validationStatus === "invalid") invalidCount++;
+            else if (conflictType === "exact_duplicate") duplicateCount++;
+            else validCount++;
+
+            return {
                 companyId,
                 importType: "bank",
-                filename: filename ?? "bank_import",
-                rowCount: rows.length,
-                acceptedCount: imported,
-                status: "success",
-                sourceDateStart,
-                sourceDateEnd,
+                sourceRowNumber: index + 1,
+                rawDataJson,
+                normalizedDataJson,
+                validationStatus,
+                validationErrorsJson: validationErrors.length > 0 ? JSON.stringify(validationErrors) : null,
+                conflictType,
+                proposedAction,
+                matchedRecordId,
+                fieldDifferencesJson
+            };
+        });
+
+        const status = invalidCount > 0 ? "staged_with_errors" : "staged";
+
+        const batch = await prisma.$transaction(async (tx) => {
+            // Persist mapping profile
+            await tx.mappingProfile.upsert({
+                where: { companyId_kind: { companyId, kind: "bank" } },
+                update: { mappingJson: JSON.stringify(mappingJson) },
+                create: { companyId, kind: "bank", mappingJson: JSON.stringify(mappingJson) },
             });
-        } catch { /* non-blocking */ }
+
+            const newBatch = await tx.importBatch.create({
+                data: {
+                    companyId,
+                    importType: "bank",
+                    filename: filename ?? "bank_import",
+                    uploadedBy: userId,
+                    rowCount: rows.length,
+                    acceptedCount: validCount + duplicateCount,
+                    rejectedCount: invalidCount,
+                    duplicateCount,
+                    status
+                }
+            });
+
+            if (stagedRowsData.length > 0) {
+                await tx.stagedImportRow.createMany({
+                    data: stagedRowsData.map(r => ({ ...r, importBatchId: newBatch.id }))
+                });
+            }
+
+            return newBatch;
+        });
 
         return NextResponse.json({
             ok: true,
-            imported,
+            status: batch.status,
+            batchId: batch.id,
+            imported: 0,
             updated: 0,
-            deleted: 0,
-            total: imported
+            archived: 0,
+            total: 0
         });
-    } catch (error) {
-        console.error("Bank upload error:", error);
-        // Record failed ImportBatch
+    } catch (err: unknown) {
+        console.error("Bank confirm error:", err);
+
         try {
             await createImportBatch({
                 companyId,
                 importType: "bank",
                 filename: filename ?? "bank_import",
+                uploadedBy: userId,
                 rowCount: rows?.length ?? 0,
                 acceptedCount: 0,
                 status: "failed",
-                errorSummary: JSON.stringify([(error as Error).message ?? "Unknown error"]),
+                errorSummary: JSON.stringify([(err as Error).message ?? "Unknown error"]),
             });
-        } catch { /* non-blocking */ }
-        return NextResponse.json({ error: "Failed to import Bank data" }, { status: 500 });
+        } catch (batchErr) {
+            console.warn("Failed batch creation failed:", batchErr);
+        }
+
+        return NextResponse.json({ error: "Import failed" }, { status: 500 });
     }
 }

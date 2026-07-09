@@ -167,6 +167,7 @@ export interface NormalizedARRow {
     dueDate: string | null;
     status: string;
     daysPastDue: number | null;
+    _raw: Record<string, string>;
 }
 
 export interface NormalizedAPRow {
@@ -177,12 +178,14 @@ export interface NormalizedAPRow {
     dueDate: string | null;
     status: string;
     daysPastDue: number | null;
+    _raw: Record<string, string>;
 }
 
 export interface NormalizedBankRow {
     date: string | null;
     description: string;
     amount: number;
+    _raw: Record<string, string>;
 }
 
 
@@ -318,6 +321,7 @@ export function applyARMapping(
             dueDate: parseDate(row[mapping.dueDate ?? ""]),
             status: (row[mapping.status ?? ""] || "open").toLowerCase(),
             daysPastDue: parseInt2(row[mapping.daysPastDue ?? ""]),
+            _raw: row,
         };
     }).filter(r =>
         r.customerName &&
@@ -342,6 +346,7 @@ export function applyAPMapping(
             dueDate: parseDate(row[mapping.dueDate ?? ""]),
             status: (row[mapping.status ?? ""] || "open").toLowerCase(),
             daysPastDue: parseInt2(row[mapping.daysPastDue ?? ""]),
+            _raw: row,
         };
     }).filter(r =>
         r.vendorName &&
@@ -371,6 +376,7 @@ export function applyBankMapping(
             date: parseDate(row[mapping.date ?? ""]),
             description: row[mapping.description ?? ""] ?? "",
             amount: amt1,
+            _raw: row,
         };
     }).filter(r => r.date && r.description && r.amount !== 0);
 }

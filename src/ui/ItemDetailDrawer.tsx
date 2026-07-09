@@ -88,12 +88,15 @@ function AgingBar({ days }: { days: number | null | undefined }) {
 
 export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: Props) {
     const [targetWeek, setTargetWeek] = useState<number>(item.effectiveWeek ?? 1);
+    const [actualPaymentDate, setActualPaymentDate] = useState(new Date().toISOString().split('T')[0]);
     const [saving, setSaving] = useState(false);
     const [parking, setParking] = useState(false);
     const [excluding, setExcluding] = useState(false);
     const [restoring, setRestoring] = useState(false);
+    const [markingPaid, setMarkingPaid] = useState(false);
     const [undoing, setUndoing] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
+    const [reason, setReason] = useState("");
 
     const isAR = item.kind === "ar";
     const isOverridden = !!item.overrideDate;
@@ -119,7 +122,7 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
             await fetch("/api/overrides", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ companyId, type: overrideType, targetType, targetId: item.id, effectiveDate: dateStr }),
+                body: JSON.stringify({ companyId, type: overrideType, targetType, targetId: item.id, effectiveDate: dateStr, reason: reason || undefined }),
             });
             onMoved();
         } catch { /* ignore */ }
@@ -138,7 +141,7 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
             await fetch("/api/overrides", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ companyId, type: overrideType, targetType, targetId: item.id, effectiveDate: dateStr }),
+                body: JSON.stringify({ companyId, type: overrideType, targetType, targetId: item.id, effectiveDate: dateStr, reason: reason || undefined }),
             });
             onMoved();
             onClose();
@@ -154,7 +157,7 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
             await fetch("/api/overrides", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ companyId, type: "exclude", targetType, targetId: item.id }),
+                body: JSON.stringify({ companyId, type: "exclude", targetType, targetId: item.id, reason: reason || undefined }),
             });
             onMoved();
             onClose();
@@ -170,6 +173,29 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
             onClose();
         } catch { /* ignore */ }
         finally { setRestoring(false); }
+    };
+
+    const handleMarkPaid = async () => {
+        if (!actualPaymentDate) return;
+        setMarkingPaid(true);
+        try {
+            await fetch("/api/overrides", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    companyId,
+                    type: "mark_paid",
+                    targetType,
+                    targetId: item.id,
+                    reason: reason || undefined,
+                    actualPaymentDate,
+                    paymentSource: "manual_confirmed_date"
+                }),
+            });
+            onMoved();
+            onClose();
+        } catch { /* ignore */ }
+        finally { setMarkingPaid(false); }
     };
 
     const handleUndo = async () => {
@@ -243,17 +269,17 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
 
             {/* Body — scrollable */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
-                
+
                 {/* Tabs */}
                 <div className="flex border-b mb-2 mt-[-4px]" style={{ borderColor: "var(--border-subtle)" }}>
-                    <button 
+                    <button
                         onClick={() => setShowHistory(false)}
                         className={`pb-2 px-1 text-[11px] uppercase tracking-wider font-bold mr-6 transition-colors ${!showHistory ? 'border-b-[2px] text-slate-800' : 'text-slate-400 hover:text-slate-600 border-b-[2px] border-transparent'}`}
                         style={{ borderBottomColor: !showHistory ? "var(--color-primary)" : "transparent" }}
                     >
                         Details
                     </button>
-                    <button 
+                    <button
                         onClick={() => setShowHistory(true)}
                         className={`pb-2 px-1 text-[11px] uppercase tracking-wider font-bold transition-colors ${showHistory ? 'border-b-[2px] text-slate-800' : 'text-slate-400 hover:text-slate-600 border-b-[2px] border-transparent'}`}
                         style={{ borderBottomColor: showHistory ? "var(--color-primary)" : "transparent" }}
@@ -263,7 +289,7 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
                 </div>
 
                 {showHistory ? (
-                    <TransactionHistoryTimeline targetId={item.id} key={`${item.effectiveWeek}-${item.moveCount}-${item.isExcluded}`} />
+                    <TransactionHistoryTimeline targetId={item.id} companyId={companyId} key={`${item.effectiveWeek}-${item.moveCount}-${item.isExcluded}`} />
                 ) : (
                     <>
                         {/* ── Amount ────────────────────────────────────────────── */}
@@ -382,8 +408,16 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
                 {/* Move to week */}
                 <div>
                     <p className="text-[11px] uppercase tracking-widest font-bold mb-1.5" style={{ color: "var(--text-faint)" }}>
-                        Move to week
+                        Action
                     </p>
+                    <input
+                        type="text"
+                        value={reason}
+                        onChange={e => setReason(e.target.value)}
+                        placeholder="Reason (optional)"
+                        className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500 shadow-sm mb-2"
+                        style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}
+                    />
                     <select
                         value={targetWeek}
                         onChange={e => setTargetWeek(parseInt(e.target.value))}
@@ -418,6 +452,34 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
                         )}
                     </div>
                 </div>
+
+                {/* Mark Paid */}
+                {!item.isExcluded && (
+                    <div className="pt-2 border-t mt-2" style={{ borderColor: "var(--border-subtle)" }}>
+                        <p className="text-[11px] uppercase tracking-widest font-bold mb-1.5 text-emerald-600">
+                            Mark Paid
+                        </p>
+                        <input
+                            type="date"
+                            value={actualPaymentDate}
+                            onChange={e => setActualPaymentDate(e.target.value)}
+                            className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-500 shadow-sm mb-1.5"
+                            style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}
+                        />
+                        <button
+                            onClick={handleMarkPaid}
+                            disabled={markingPaid || !actualPaymentDate}
+                            className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 shadow-sm"
+                            style={{
+                                color: "var(--color-positive)",
+                                borderColor: "rgba(34,197,94,0.3)",
+                                background: "rgba(34,197,94,0.05)",
+                            }}
+                        >
+                            {markingPaid ? "Marking…" : "✓ Confirm Payment"}
+                        </button>
+                    </div>
+                )}
 
                 {/* Park in Backlog / Exclude */}
                 {item.isExcluded ? (

@@ -3,9 +3,9 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth, useOrganization } from "@clerk/nextjs";
-import { 
-    CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, ArrowRight, 
-    Calendar, Check, ShieldCheck, HelpCircle, FileText, ChevronDown 
+import {
+    CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, ArrowRight,
+    Calendar, Check, ShieldCheck, HelpCircle, FileText, ChevronDown
 } from "lucide-react";
 import { HelpBubble } from "@/ui/HelpBubble";
 import { UpdateBalanceDialog } from "@/ui/UpdateBalanceDialog";
@@ -35,12 +35,12 @@ function ReviewPageInner() {
     const searchParams = useSearchParams();
     const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
     const { isLoaded: isOrgLoaded, organization } = useOrganization();
-    
+
     const legacyCompanyId = (!isSignedIn && (searchParams.get("companyId") ?? (typeof window !== "undefined" ? localStorage.getItem("cfdo_company_id") : null))) || null;
     const companyId = isSignedIn && organization ? organization.id : legacyCompanyId;
 
     const [data, setData] = useState<any>(null);
-    
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showRoll, setShowRoll] = useState(false);
@@ -80,9 +80,9 @@ function ReviewPageInner() {
     if (!data) return null;
 
     const historicalOptions = data.historical.map((h: any) => h.weekStart);
-    
+
     const activeData = viewHistorical ? data.historical.find((h: any) => h.weekStart === viewHistorical) : data.active;
-    
+
     useEffect(() => {
         if (isHistorical && activeData?.checkpoint?.id) {
             setDriverLoading(true);
@@ -95,7 +95,7 @@ function ReviewPageInner() {
             setDriverData(null);
         }
     }, [viewHistorical, activeData?.checkpoint?.id]);
-    
+
     // Determine adaptive columns
     const hasOriginal = !!activeData.originalPlan;
     const hasRevised = !!activeData.revisedPlan;
@@ -162,7 +162,7 @@ function ReviewPageInner() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <select 
+                        <select
                             className="text-sm border-slate-200 rounded-lg shadow-sm"
                             value={viewHistorical || ""}
                             onChange={e => setViewHistorical(e.target.value || null)}
@@ -173,7 +173,7 @@ function ReviewPageInner() {
                             ))}
                         </select>
                         {!isHistorical && (
-                            <button 
+                            <button
                                 onClick={() => setShowRoll(true)}
                                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors flex items-center gap-2"
                             >
@@ -250,7 +250,7 @@ function ReviewPageInner() {
                         </div>
                     </div>
                 )}
-                
+
                 {/* Post-Approval Changes */}
                 {!isHistorical && activeData.changes && activeData.changes.length > 0 && (
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -263,25 +263,28 @@ function ReviewPageInner() {
                                     <div>
                                         <p className="text-sm font-medium text-slate-800">{c.action}</p>
                                         <p className="text-xs text-slate-500">
-                                            {c.entityType} {c.entityId} — {new Date(c.timestamp).toLocaleString()}
+                                            {c.source} — {new Date(c.timestamp).toLocaleString()}
                                         </p>
+                                        {c.reason && (
+                                            <p className="text-sm italic text-slate-600 mt-1">Reason: {c.reason}</p>
+                                        )}
                                     </div>
-                                    <div className="text-sm font-financial text-slate-600">
-                                        {c.detailsJson}
+                                    <div className="text-sm text-slate-600">
+                                        {c.inputText}
                                     </div>
                                 </li>
                             ))}
                         </ul>
                     </div>
                 )}
-                
+
                 {/* Backlog Triage for Active Review */}
                 {!isHistorical && data?.backlog && (
                     <div className="mt-8">
-                        <BacklogTriage 
-                            companyId={companyId!} 
-                            backlog={data.backlog} 
-                            weeks={data?.active?.latestForecast ? [data.active.latestForecast] : []} 
+                        <BacklogTriage
+                            companyId={companyId!}
+                            backlog={data.backlog}
+                            weeks={data?.active?.latestForecast ? [data.active.latestForecast] : []}
                             onScheduled={loadData}
                         />
                     </div>

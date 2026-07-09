@@ -1,7 +1,9 @@
 // app/api/overrides/route.ts – POST: create a new override
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
 import { v4 as uuidv4 } from "uuid";
+import { recordCustomerPaymentObservation, recordVendorPaymentObservation, PaymentObservationSource, VendorObservationSource } from "@/services/payment-memory";
 
 const VALID_TYPES = [
     "partial_payment", "mark_paid", "delay_due_date",
@@ -23,9 +25,11 @@ export async function POST(req: NextRequest) {
         effectiveDate?: string;
         metaJson?: string;
         reason?: string; // Optional user-supplied reason for the override
+        actualPaymentDate?: string;
+        paymentSource?: string;
     };
 
-    const { companyId, type, targetType: rawTargetType, targetId, amount, effectiveDate, metaJson, reason } = body;
+    const { companyId, type, targetType: rawTargetType, targetId, amount, effectiveDate, metaJson, reason, actualPaymentDate, paymentSource } = body;
 
     if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
     if (!VALID_TYPES.includes(type)) return NextResponse.json({ error: "Invalid override type" }, { status: 400 });
@@ -44,8 +48,8 @@ export async function POST(req: NextRequest) {
     let oldValue: string | number | null = null;
 
     if (existingOverrides.length > 0) {
-        const exactMatch = existingOverrides.find(o => 
-            (o.amount === (amount ?? null)) && 
+        const exactMatch = existingOverrides.find(o =>
+            (o.amount === (amount ?? null)) &&
             (o.effectiveDate?.getTime() === (effectiveDate ? new Date(effectiveDate).getTime() : undefined))
         );
         if (exactMatch) {
@@ -140,27 +144,78 @@ export async function POST(req: NextRequest) {
         actionDesc = `Excluded Permanently`;
         fieldChanged = "status";
         newValue = "excluded";
+    } else if (type === "mark_paid") {
+        actionDesc = `Marked Paid`;
+        fieldChanged = "status";
+        newValue = "paid";
+
+        // Record the payment observation for memory hardening
+        // Only if actualPaymentDate was explicitly provided
+        if (targetId && actualPaymentDate) {
+            if (targetType === "receivable_invoice") {
+                const inv = await prisma.receivableInvoice.findUnique({ where: { id: targetId } });
+                if (inv) {
+                    await recordCustomerPaymentObservation({
+                        companyId,
+                        customerName: inv.customerName,
+                        invoiceId: inv.id,
+                        invoiceNo: inv.invoiceNo,
+                        dueDate: inv.dueDate,
+                        expectedPaymentDate: oldValue ? new Date(oldValue as string) : null,
+                        actualPaymentDate: new Date(actualPaymentDate),
+                        amount: inv.amountOpen,
+                        paymentSource: (paymentSource && ["ar_import", "bank_match", "manual_verified", "manual_confirmed_date"].includes(paymentSource) ? paymentSource : "manual_confirmed_date") as PaymentObservationSource,
+                    });
+                }
+            } else if (targetType === "payable_bill") {
+                const bill = await prisma.payableBill.findUnique({ where: { id: targetId } });
+                if (bill) {
+                    await recordVendorPaymentObservation({
+                        companyId,
+                        vendorName: bill.vendorName,
+                        billId: bill.id,
+                        billNo: bill.billNo,
+                        dueDate: bill.dueDate,
+                        plannedPaymentDate: oldValue ? new Date(oldValue as string) : null,
+                        actualPaymentDate: new Date(actualPaymentDate),
+                        amount: bill.amountOpen,
+                        paymentSource: (paymentSource && ["ap_import", "bank_match", "manual_verified", "manual_confirmed_date"].includes(paymentSource) ? paymentSource : "manual_confirmed_date") as VendorObservationSource,
+                    });
+                }
+            }
+        }
     }
 
+    // Resolve authenticated user for audit
+    let userId = null;
+    try {
+        const authResult = await auth();
+        userId = authResult?.userId ?? null;
+    } catch { /* safe fallback */ }
+
+    let changeLogId = null;
     try {
         const { logAuditEvent } = await import("@/services/audit");
-        await logAuditEvent({
+        const logResult = await logAuditEvent({
             companyId,
             targetId: targetId || "unknown",
             targetType: rawTargetType as any,
             action: actionDesc,
             source: "user",
+            userId,
             fieldChanged,
             oldValue,
             newValue,
             reasoning: "User override via drawer",
             reason: reason ?? null,
+            overrideId: created.id
         });
+        changeLogId = logResult.id;
     } catch (e) {
         console.error("Audit log failed for POST override:", e);
     }
 
-    return NextResponse.json({ id: created.id, ok: true });
+    return NextResponse.json({ id: created.id, changeLogId, ok: true });
 }
 
 export async function DELETE(req: NextRequest) {
@@ -181,10 +236,10 @@ export async function DELETE(req: NextRequest) {
     });
 
     await prisma.override.updateMany({
-        where: { 
-            targetId, 
+        where: {
+            targetId,
             type: { in: types },
-            status: "active" 
+            status: "active"
         },
         data: { status: "archived" },
     });
@@ -199,10 +254,16 @@ export async function DELETE(req: NextRequest) {
             oldValue = "excluded";
         }
 
+        let userId = null;
+        try {
+            const authResult = await auth();
+            userId = authResult?.userId ?? null;
+        } catch {}
+
         try {
             const { logAuditEvent } = await import("@/services/audit");
-            const mappedTargetType = existing.targetType === "receivable_invoice" ? "invoice" : 
-                                     existing.targetType === "payable_bill" ? "bill" : 
+            const mappedTargetType = existing.targetType === "receivable_invoice" ? "invoice" :
+                                     existing.targetType === "payable_bill" ? "bill" :
                                      existing.targetType;
             await logAuditEvent({
                 companyId: existing.companyId,
@@ -210,6 +271,7 @@ export async function DELETE(req: NextRequest) {
                 targetType: mappedTargetType as any,
                 action: `Removed ${existing.type.replace(/_/g, ' ')}`,
                 source: "user",
+                userId,
                 fieldChanged: "override",
                 oldValue,
                 newValue: "removed",

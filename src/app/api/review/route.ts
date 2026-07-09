@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
 import { assembleForecastData } from "@/services/forecast-assembly";
+import { getAuditReason } from "@/utils/audit-helpers";
 import { resolveTenant } from "@/lib/tenant";
 
 
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
         let originalPlan = plans.length > 0 ? plans[0] : null;
         let revisedPlan = plans.length > 1 ? plans[plans.length - 1] : null;
 
-        
+
         // Get Cash state
         const [cashSnapshot, adjustments] = await Promise.all([
             prisma.cashSnapshot.findFirst({ where: { companyId }, orderBy: { asOfDate: "desc" } }),
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
         };
         const lastUpdated = cashSnapshot?.asOfDate ? cashSnapshot.asOfDate.toISOString() : null;
 
-        
+
 
         // Get Live Forecast
         const forecast = await assembleForecastData(companyId);
@@ -46,8 +47,8 @@ export async function GET(req: NextRequest) {
 
         // Get Historical Reviews (last 13 weeks)
         const historicalPlans = await prisma.executionPlan.findMany({
-            where: { 
-                companyId, 
+            where: {
+                companyId,
                 reviewedAt: { not: null },
                 weekStart: { lt: currentWeekStart }
             },
@@ -81,13 +82,17 @@ export async function GET(req: NextRequest) {
         let changes: any[] = [];
         const latestPlanDate = revisedPlan ? revisedPlan.createdAt : (originalPlan ? originalPlan.createdAt : null);
         if (latestPlanDate) {
-            changes = await prisma.changeLog.findMany({
-                where: { 
-                    companyId, 
+            const rawChanges = await prisma.changeLog.findMany({
+                where: {
+                    companyId,
                     timestamp: { gte: latestPlanDate }
                 },
                 orderBy: { timestamp: 'asc' }
             });
+            changes = rawChanges.map(c => ({
+                ...c,
+                reason: getAuditReason(c)
+            }));
         }
 
         return NextResponse.json({

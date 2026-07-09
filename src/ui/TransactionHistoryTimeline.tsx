@@ -12,6 +12,8 @@ export interface AuditEvent {
     oldValue: string | number | null;
     newValue: string | number | null;
     reasoning: string | null;
+    reason: string | null;
+    overrideId: string | null;
 }
 
 function SourceIcon({ source }: { source: AuditEvent["source"] }) {
@@ -56,9 +58,12 @@ function formatValue(key: string, val: string | number | null): string {
     return val;
 }
 
-export function TransactionHistoryTimeline({ targetId }: { targetId: string }) {
+export function TransactionHistoryTimeline({ targetId, companyId }: { targetId: string, companyId?: string }) {
     const [events, setEvents] = useState<AuditEvent[]>([]);
     const [loading, setLoading] = useState(true);
+    const [editingEventId, setEditingEventId] = useState<string | null>(null);
+    const [editReasonText, setEditReasonText] = useState("");
+    const [savingReason, setSavingReason] = useState(false);
 
     useEffect(() => {
         async function fetchEvents() {
@@ -77,6 +82,29 @@ export function TransactionHistoryTimeline({ targetId }: { targetId: string }) {
         fetchEvents();
     }, [targetId]);
 
+    const handleSaveReason = async (evt: AuditEvent) => {
+        if (!evt.overrideId || !companyId) return;
+        setSavingReason(true);
+        try {
+            const res = await fetch("/api/overrides/reason", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    companyId,
+                    overrideId: evt.overrideId,
+                    changeLogId: evt.id,
+                    reason: editReasonText
+                })
+            });
+            if (res.ok) {
+                setEvents(events.map(e => e.id === evt.id ? { ...e, reason: editReasonText } : e));
+            }
+        } finally {
+            setSavingReason(false);
+            setEditingEventId(null);
+        }
+    };
+
     if (loading) {
         return <div className="text-center py-4 text-xs text-slate-500">Loading history...</div>;
     }
@@ -88,7 +116,7 @@ export function TransactionHistoryTimeline({ targetId }: { targetId: string }) {
     return (
         <div className="relative pt-2 pb-6">
             <div className="absolute left-3 top-4 bottom-8 w-px bg-slate-200" />
-            
+
             <div className="space-y-6">
                 {events.map((evt) => (
                     <div key={evt.id} className="relative pl-10 pr-2">
@@ -107,7 +135,7 @@ export function TransactionHistoryTimeline({ targetId }: { targetId: string }) {
                                     {new Date(evt.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                 </div>
                             </div>
-                            
+
                             <div className="text-xs mb-2" style={{ color: "var(--text-secondary)" }}>
                                 By <SourceLabel source={evt.source} />
                             </div>
@@ -132,8 +160,48 @@ export function TransactionHistoryTimeline({ targetId }: { targetId: string }) {
 
                             {/* Reasoning */}
                             {evt.reasoning && (
-                                <div className="text-[11px] italic text-slate-500 flex items-center gap-1.5 mt-2 bg-white inline-flex px-2 py-1 rounded border border-slate-100">
-                                    <span>“{evt.reasoning}”</span>
+                                <div className="text-[11px] italic text-slate-500 flex flex-col gap-1.5 mt-2 bg-white px-2 py-1.5 rounded border border-slate-100">
+                                    <div className="flex items-center justify-between">
+                                        <span>“{evt.reasoning}”</span>
+                                        {evt.overrideId && companyId && !editingEventId && (
+                                            <button
+                                                onClick={() => { setEditingEventId(evt.id); setEditReasonText(evt.reason || ""); }}
+                                                className="text-indigo-500 hover:text-indigo-700 underline ml-2"
+                                            >
+                                                Edit Reason
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {editingEventId === evt.id ? (
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                            <input
+                                                type="text"
+                                                value={editReasonText}
+                                                onChange={e => setEditReasonText(e.target.value)}
+                                                placeholder="Enter new reason..."
+                                                className="flex-1 border rounded px-2 py-1 focus:outline-none focus:border-indigo-500 text-slate-700 bg-slate-50"
+                                            />
+                                            <button
+                                                onClick={() => handleSaveReason(evt)}
+                                                disabled={savingReason}
+                                                className="bg-indigo-50 px-2 py-1 rounded text-indigo-700 font-semibold border border-indigo-200 disabled:opacity-50 hover:bg-indigo-100"
+                                            >
+                                                {savingReason ? "…" : "Save"}
+                                            </button>
+                                            <button
+                                                onClick={() => setEditingEventId(null)}
+                                                disabled={savingReason}
+                                                className="bg-slate-50 px-2 py-1 rounded text-slate-600 font-semibold border border-slate-200 hover:bg-slate-100"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    ) : evt.reason ? (
+                                        <div className="font-medium text-slate-700 flex items-center gap-1 mt-0.5">
+                                            <span className="text-slate-400 font-normal">User Reason:</span> {evt.reason}
+                                        </div>
+                                    ) : null}
                                 </div>
                             )}
                         </div>

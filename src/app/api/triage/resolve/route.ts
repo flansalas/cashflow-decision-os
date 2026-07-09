@@ -6,7 +6,10 @@
 //   { id, kind: "ar"|"ap", action: "dismiss" }                         → no change (user acknowledges, leaves in backlog)
 
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
+import { recordCustomerPaymentObservation, recordVendorPaymentObservation } from "@/services/payment-memory";
+import { logAuditEvent } from "@/services/audit";
 
 type TriageAction = {
     id: string;
@@ -28,6 +31,12 @@ export async function POST(req: NextRequest) {
     let snoozed = 0;
     let markedPaid = 0;
 
+    let userId = null;
+    try {
+        const authResult = await auth();
+        userId = authResult?.userId ?? null;
+    } catch {}
+
     for (const a of actions) {
         if (a.action === "dismiss") {
             // Nothing to do — item stays open, user has acknowledged it
@@ -41,6 +50,7 @@ export async function POST(req: NextRequest) {
                 where: { companyId, targetId: a.id, type: "mark_paid", status: "active" },
                 data: { status: "superseded" },
             });
+            const effectiveDate = new Date();
             await prisma.override.create({
                 data: {
                     companyId,
@@ -48,9 +58,56 @@ export async function POST(req: NextRequest) {
                     targetType: a.kind === "ar" ? "receivable_invoice" : "payable_bill",
                     type: "mark_paid",
                     status: "active",
-                    effectiveDate: new Date(),
+                    effectiveDate,
                 },
             });
+
+            // Observations & Audit
+            if (a.kind === "ar") {
+                const inv = await prisma.receivableInvoice.findUnique({ where: { id: a.id } });
+                if (inv) {
+                    await recordCustomerPaymentObservation({
+                        companyId,
+                        customerName: inv.customerName,
+                        invoiceId: inv.id,
+                        invoiceNo: inv.invoiceNo,
+                        dueDate: inv.dueDate,
+                        expectedPaymentDate: null,
+                        actualPaymentDate: effectiveDate,
+                        amount: inv.amountOpen,
+                        paymentSource: "manual_verified",
+                    });
+                }
+            } else {
+                const bill = await prisma.payableBill.findUnique({ where: { id: a.id } });
+                if (bill) {
+                    await recordVendorPaymentObservation({
+                        companyId,
+                        vendorName: bill.vendorName,
+                        billId: bill.id,
+                        billNo: bill.billNo,
+                        dueDate: bill.dueDate,
+                        plannedPaymentDate: null,
+                        actualPaymentDate: effectiveDate,
+                        amount: bill.amountOpen,
+                        paymentSource: "manual_verified",
+                    });
+                }
+            }
+
+            await logAuditEvent({
+                companyId,
+                targetId: a.id,
+                targetType: a.kind === "ar" ? "invoice" : "bill",
+                action: "Marked Paid",
+                source: "user",
+                userId,
+                fieldChanged: "status",
+                oldValue: "open",
+                newValue: "paid",
+                reasoning: "User resolved triage backlog",
+            });
+
             markedPaid++;
             resolved++;
         }
@@ -76,6 +133,20 @@ export async function POST(req: NextRequest) {
                     effectiveDate: newDate,
                 },
             });
+
+            await logAuditEvent({
+                companyId,
+                targetId: a.id,
+                targetType: a.kind === "ar" ? "invoice" : "bill",
+                action: a.kind === "ar" ? "Expected Date Moved" : "Due Date Delayed",
+                source: "user",
+                userId,
+                fieldChanged: a.kind === "ar" ? "expectedDate" : "effectiveDate",
+                oldValue: "slipped",
+                newValue: newDate.toISOString(),
+                reasoning: "User snoozed triage backlog",
+            });
+
             snoozed++;
             resolved++;
         }

@@ -40,6 +40,8 @@ export async function GET(req: NextRequest) {
                 oldValue: diff.oldValue ?? null,
                 newValue: diff.newValue ?? null,
                 reasoning: diff.reasoning ?? null,
+                reason: diff.reason ?? null,
+                overrideId: diff.overrideId ?? null,
             };
         });
 
