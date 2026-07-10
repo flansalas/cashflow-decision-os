@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
 
 /**
@@ -7,15 +7,30 @@ import prisma from "@/db/prisma";
  *
  * Flow:
  * 1. Active Clerk org → strict clerkOrgId lookup (authenticated SaaS mode)
- * 2. Explicit `companyId` URL param → direct lookup (unauthenticated legacy mode)
- * 3. No match → null (no fallback to "most recent company" — prevents tenant data leaks)
+ * 2. Authenticated but no active org → fallback to first organization membership
+ * 3. Authenticated but no memberships → null (prevent silent fallback to demo)
+ * 4. Explicit `companyId` URL param → direct lookup (unauthenticated legacy mode)
+ * 5. No match → null (no fallback to "most recent company" — prevents tenant data leaks)
  */
 export async function resolveTenant(req?: NextRequest): Promise<string | null> {
     let orgId: string | null = null;
+    let userId: string | null = null;
 
     try {
         const auth_result = await auth();
+        userId = auth_result.userId ?? null;
         orgId = auth_result.orgId ?? null;
+
+        // If authenticated but no active organization is selected in Clerk,
+        // fallback to their first organization membership to ensure they
+        // don't drop into unauthenticated demo mode.
+        if (userId && !orgId) {
+            const client = await clerkClient();
+            const memberships = await client.users.getOrganizationMembershipList({ userId });
+            if (memberships.data.length > 0) {
+                orgId = memberships.data[0].organization.id;
+            }
+        }
     } catch {
         // auth() can throw outside of a valid Next.js headers context — fall through to URL param
     }
@@ -31,13 +46,18 @@ export async function resolveTenant(req?: NextRequest): Promise<string | null> {
         return company?.id ?? null;
     }
 
-    // ── 2. Unauthenticated: honour explicit URL param if present ──────────────
+    // ── 2. Authenticated user with no organizations ─────────────────────────
+    if (userId) {
+        return null; // Do not fall back to unauthenticated URL params
+    }
+
+    // ── 3. Unauthenticated: honour explicit URL param if present ──────────────
     if (req) {
         const paramId = req.nextUrl.searchParams.get("companyId");
         if (paramId) return paramId;
     }
 
-    // ── 3. No session, no param → null. Never fall back to "most recent company" ─
+    // ── 4. No session, no param → null. Never fall back to "most recent company" ─
     return null;
 }
 
