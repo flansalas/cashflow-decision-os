@@ -1,3 +1,7 @@
+# Prior Product Documentation
+
+> This document is retained for historical evidence and product reconciliation. It is not the current canonical product authority. Refer to `CONSTITUTION.md`.
+
 # Product Vision
 
 Cash Flow Decision OS is not a generic cash flow dashboard. It is a weekly cash decision engine for owner-led SMEs.

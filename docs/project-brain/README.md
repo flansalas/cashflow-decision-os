@@ -7,10 +7,11 @@ The Project Brain is the canonical control record for human-approved product int
 
 ### A. Product Intent Authority
 This model determines what the product is *intended* to do. It guides specifications, requirements, and verification:
-1. **Human-approved and committed Project Brain decisions/specifications:** The highest authority on the product definition.
-2. **Explicit current human instruction:** Active guidance provided by the operator.
-3. **Other approved product documentation:** Core product documents such as `PRODUCT.md`.
-4. **Historical documentation and conversation claims:** Legacy plans, roadmap drafts, and conversational context.
+1. **Explicit current human instruction:** Active guidance provided by the operator.
+2. **CONSTITUTION.md:** The highest repository-level product authority, containing the Canonical Product Specification.
+3. **Human-approved and committed Project Brain decisions/specifications:** Additional authoritative product definitions.
+4. **Prior product documentation:** Core legacy documents such as `PRODUCT.md` (historical evidence, not current canonical authority).
+5. **Historical documentation and conversation claims:** Legacy plans, roadmap drafts, and conversational context.
 
 *Note: Current code does not automatically override approved product intent. The codebase may reveal that product intent has not been fully implemented or has drifted over time.*
 
