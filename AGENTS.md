@@ -8,6 +8,22 @@
 - Do not create generic SaaS dashboard features unless they directly support the weekly cash decision loop.
 - For any roadmap or architecture recommendation, inspect the actual repo first and clearly separate current code reality from product vision.
 
+## Project Brain — Required Recovery Context
+
+Before any product, architecture, audit, recovery, implementation, or verification task, agents must read:
+- docs/project-brain/README.md
+- docs/project-brain/CURRENT_STATE.md
+- docs/project-brain/RECOVERY_STATUS.md
+- docs/project-brain/OPEN_QUESTIONS.md
+- docs/project-brain/DECISION_LEDGER.md
+- docs/project-brain/MAINTENANCE_PROTOCOL.md
+
+- The Project Brain governs human-approved product intent, recovery control, decisions, and open questions.
+- It does not replace repository code, schema, Git history, tests, deployment evidence, or runtime behavior when determining implementation reality.
+- Agents may propose Project Brain changes but must follow docs/project-brain/MAINTENANCE_PROTOCOL.md.
+- Agents must not silently resolve contradictions or convert audit findings into canonical decisions.
+- Audit work and implementation work must remain separate unless the human explicitly starts a new implementation task.
+
 This protocol is mandatory for all AI agent work on the CashFlowDecision OS project.
 
 ## 1. Canonical Repository
