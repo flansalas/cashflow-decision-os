@@ -1,5 +1,7 @@
 // app/api/scenarios/[id]/route.ts – PATCH (edit) and DELETE a scenario item
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { resolveTenant } from "@/lib/tenant";
 import prisma from "@/db/prisma";
 
 export async function PATCH(
@@ -7,15 +9,17 @@ export async function PATCH(
     context: { params: Promise<{ id: string }> }
 ) {
     const { id } = await context.params;
+    const authResult = await auth();
+    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { label, direction, weekNumber, amount } = await req.json() as {
         label?: string;
         direction?: "in" | "out";
         weekNumber?: number;
         amount?: number;
     };
-
-    const existing = await prisma.scenarioItem.findUnique({ where: { id } });
-    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     if (direction && !["in", "out"].includes(direction))
         return NextResponse.json({ error: "Invalid direction" }, { status: 400 });
@@ -24,8 +28,8 @@ export async function PATCH(
     if (amount !== undefined && amount <= 0)
         return NextResponse.json({ error: "Amount must be positive" }, { status: 400 });
 
-    const updated = await prisma.scenarioItem.update({
-        where: { id },
+    const result = await prisma.scenarioItem.updateMany({
+        where: { id, companyId: tenantId },
         data: {
             ...(label !== undefined ? { label: label.trim() } : {}),
             ...(direction !== undefined ? { direction } : {}),
@@ -33,6 +37,11 @@ export async function PATCH(
             ...(amount !== undefined ? { amount } : {}),
         },
     });
+
+    if (result.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const updated = await prisma.scenarioItem.findUnique({ where: { id } });
+    if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     return NextResponse.json({
         id: updated.id, label: updated.label,
@@ -46,9 +55,13 @@ export async function DELETE(
     context: { params: Promise<{ id: string }> }
 ) {
     const { id } = await context.params;
-    const existing = await prisma.scenarioItem.findUnique({ where: { id } });
-    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const authResult = await auth();
+    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    await prisma.scenarioItem.delete({ where: { id } });
+    const result = await prisma.scenarioItem.deleteMany({ where: { id, companyId: tenantId } });
+    if (result.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
     return NextResponse.json({ ok: true });
 }

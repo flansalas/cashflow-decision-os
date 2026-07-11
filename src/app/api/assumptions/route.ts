@@ -1,35 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { resolveTenant } from "@/lib/tenant";
 import prisma from "@/db/prisma";
 
 export async function POST(req: NextRequest) {
     try {
+        const authResult = await auth();
+        if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const tenantId = await resolveTenant(req);
+        if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
         const body = await req.json();
-        let { companyId, bufferMin, projectionSafetyMargin } = body;
+        const { companyId, bufferMin, projectionSafetyMargin } = body;
 
-        // Resolve Clerk Org ID to internal DB UUID if necessary
-        if (companyId && companyId.startsWith('org_')) {
-            const company = await prisma.company.findUnique({
-                where: { clerkOrgId: companyId },
-                select: { id: true }
-            });
-            if (company) companyId = company.id;
-        }
-
-        // Local development fallback if companyId is missing
-        if (!companyId) {
-            const fallback = await prisma.company.findFirst({ orderBy: { createdAt: "desc" }});
-            if (fallback) companyId = fallback.id;
-        }
-
-        if (!companyId) {
-            return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
-        }
+        if (companyId && companyId !== tenantId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
         const dataToUpdate: any = {};
         if (bufferMin !== undefined) dataToUpdate.bufferMin = bufferMin;
         if (projectionSafetyMargin !== undefined) dataToUpdate.projectionSafetyMargin = projectionSafetyMargin;
 
-        const existing = await prisma.assumption.findFirst({ where: { companyId } });
+        const existing = await prisma.assumption.findFirst({ where: { companyId: tenantId } });
         let updated;
         if (existing) {
             updated = await prisma.assumption.update({
@@ -38,13 +28,13 @@ export async function POST(req: NextRequest) {
             });
         } else {
             updated = await prisma.assumption.create({
-                data: { companyId, ...dataToUpdate },
+                data: { companyId: tenantId, ...dataToUpdate },
             });
         }
 
         await prisma.changeLog.create({
             data: {
-                companyId,
+                companyId: tenantId,
                 action: "UPDATE_ASSUMPTIONS",
                 source: "user_ui",
                 inputText: `Updated financial assumptions and baseline targets`,

@@ -2,13 +2,20 @@
 // Creates a new RecurringPattern (outflow commitment) from the dashboard.
 
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { resolveTenant } from "@/lib/tenant";
 import prisma from "@/db/prisma";
 import { v4 as uuidv4 } from "uuid";
 
 export async function POST(req: NextRequest) {
+    const authResult = await auth();
+    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { companyId, displayName, category, cadence, typicalAmount, nextExpectedDate, isCritical, direction } =
         await req.json() as {
-            companyId: string;
+            companyId?: string;
             displayName: string;
             category: string;
             cadence: string;
@@ -18,7 +25,8 @@ export async function POST(req: NextRequest) {
             direction?: string;
         };
 
-    if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    if (companyId && companyId !== tenantId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     if (!displayName?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
     if (!typicalAmount || typicalAmount <= 0) return NextResponse.json({ error: "Amount must be positive" }, { status: 400 });
     if (!nextExpectedDate) return NextResponse.json({ error: "Next date is required" }, { status: 400 });
@@ -27,7 +35,7 @@ export async function POST(req: NextRequest) {
         const created = await prisma.recurringPattern.create({
             data: {
                 id: uuidv4(),
-                companyId,
+                companyId: tenantId,
                 direction: direction || "outflow",
                 merchantKey: displayName.trim().toLowerCase().replace(/\s+/g, "_"),
                 displayName: displayName.trim(),

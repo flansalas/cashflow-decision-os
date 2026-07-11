@@ -1,6 +1,7 @@
 // app/api/overrides/route.ts – POST: create a new override
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { resolveTenant } from "@/lib/tenant";
 import prisma from "@/db/prisma";
 import { v4 as uuidv4 } from "uuid";
 import { recordCustomerPaymentObservation, recordVendorPaymentObservation, PaymentObservationSource, VendorObservationSource } from "@/services/payment-memory";
@@ -16,8 +17,13 @@ const VALID_TYPES = [
 ];
 
 export async function POST(req: NextRequest) {
+    const authResult = await auth();
+    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const body = await req.json() as {
-        companyId: string;
+        companyId?: string;
         type: string;
         targetType: string;
         targetId?: string;
@@ -31,7 +37,10 @@ export async function POST(req: NextRequest) {
 
     const { companyId, type, targetType: rawTargetType, targetId, amount, effectiveDate, metaJson, reason, actualPaymentDate, paymentSource } = body;
 
-    if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    if (companyId && companyId !== tenantId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     if (!VALID_TYPES.includes(type)) return NextResponse.json({ error: "Invalid override type" }, { status: 400 });
     if (!rawTargetType) return NextResponse.json({ error: "Missing targetType" }, { status: 400 });
 
@@ -42,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Check for existing active overrides to prevent duplicates and find oldValue
     const existingOverrides = await prisma.override.findMany({
-        where: { companyId, targetId: targetId ?? null, type, status: "active" }
+        where: { companyId: tenantId, targetId: targetId ?? null, type, status: "active" }
     });
 
     let oldValue: string | number | null = null;
@@ -67,7 +76,7 @@ export async function POST(req: NextRequest) {
 
         // Archive old overrides to avoid stacking
         await prisma.override.updateMany({
-            where: { companyId, targetId: targetId ?? null, type, status: "active" },
+            where: { companyId: tenantId, targetId: targetId ?? null, type, status: "active" },
             data: { status: "archived" }
         });
     }
@@ -110,7 +119,7 @@ export async function POST(req: NextRequest) {
     const created = await prisma.override.create({
         data: {
             id: uuidv4(),
-            companyId,
+            companyId: tenantId,
             type,
             targetType,
             targetId: targetId ?? null,
@@ -154,9 +163,9 @@ export async function POST(req: NextRequest) {
         if (targetId && actualPaymentDate) {
             if (targetType === "receivable_invoice") {
                 const inv = await prisma.receivableInvoice.findUnique({ where: { id: targetId } });
-                if (inv) {
+                if (inv && inv.companyId === tenantId) {
                     await recordCustomerPaymentObservation({
-                        companyId,
+                        companyId: tenantId,
                         customerName: inv.customerName,
                         invoiceId: inv.id,
                         invoiceNo: inv.invoiceNo,
@@ -169,9 +178,9 @@ export async function POST(req: NextRequest) {
                 }
             } else if (targetType === "payable_bill") {
                 const bill = await prisma.payableBill.findUnique({ where: { id: targetId } });
-                if (bill) {
+                if (bill && bill.companyId === tenantId) {
                     await recordVendorPaymentObservation({
-                        companyId,
+                        companyId: tenantId,
                         vendorName: bill.vendorName,
                         billId: bill.id,
                         billNo: bill.billNo,
@@ -197,7 +206,7 @@ export async function POST(req: NextRequest) {
     try {
         const { logAuditEvent } = await import("@/services/audit");
         const logResult = await logAuditEvent({
-            companyId,
+            companyId: tenantId,
             targetId: targetId || "unknown",
             targetType: rawTargetType as any,
             action: actionDesc,
@@ -219,6 +228,11 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+    const authResult = await auth();
+    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const targetId = req.nextUrl.searchParams.get("targetId");
     const rawType = req.nextUrl.searchParams.get("type");
 
@@ -232,14 +246,19 @@ export async function DELETE(req: NextRequest) {
     if (rawType === "set_bill_due_date") types.push("delay_due_date");
 
     const existing = await prisma.override.findFirst({
-        where: { targetId, type: { in: types }, status: "active" }
+        where: { targetId, type: { in: types }, status: "active", companyId: tenantId }
     });
+
+    if (!existing) {
+        return NextResponse.json({ error: "Not Found" }, { status: 404 });
+    }
 
     await prisma.override.updateMany({
         where: {
             targetId,
             type: { in: types },
-            status: "active"
+            status: "active",
+            companyId: tenantId
         },
         data: { status: "archived" },
     });

@@ -6,12 +6,19 @@
 // Both overrides can be individually deleted to undo the move.
 
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { resolveTenant } from "@/lib/tenant";
 import prisma from "@/db/prisma";
 import { v4 as uuidv4 } from "uuid";
 
 export async function POST(req: NextRequest) {
+    const authResult = await auth();
+    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const body = await req.json() as {
-        companyId: string;
+        companyId?: string;
         patternId: string;
         displayName: string;
         amount: number;
@@ -23,21 +30,22 @@ export async function POST(req: NextRequest) {
 
     const { companyId, patternId, displayName, amount, sourceWeekStart, targetWeekStart } = body;
 
-    if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    if (companyId && companyId !== tenantId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     if (!patternId) return NextResponse.json({ error: "Missing patternId" }, { status: 400 });
     if (!sourceWeekStart || !targetWeekStart) return NextResponse.json({ error: "Missing week dates" }, { status: 400 });
     if (!amount || amount <= 0) return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
     if (sourceWeekStart === targetWeekStart) return NextResponse.json({ error: "Source and target weeks are the same" }, { status: 400 });
 
     // Verify the pattern belongs to this company
-    const pattern = await prisma.recurringPattern.findFirst({ where: { id: patternId, companyId } });
+    const pattern = await prisma.recurringPattern.findFirst({ where: { id: patternId, companyId: tenantId } });
     if (!pattern) return NextResponse.json({ error: "Pattern not found" }, { status: 404 });
 
     // Remove any existing skip or one-time outflow for this pattern/sourceWeek combination
     // (prevents duplicate skips if user clicks twice)
     await prisma.override.updateMany({
         where: {
-            companyId,
+            companyId: tenantId,
             targetId: patternId,
             type: "skip_recurring_occurrence",
             effectiveDate: new Date(sourceWeekStart),
@@ -52,7 +60,7 @@ export async function POST(req: NextRequest) {
         prisma.override.create({
             data: {
                 id: uuidv4(),
-                companyId,
+                companyId: tenantId,
                 type: "skip_recurring_occurrence",
                 targetType: "recurring",
                 targetId: patternId,
@@ -66,7 +74,7 @@ export async function POST(req: NextRequest) {
         prisma.override.create({
             data: {
                 id: uuidv4(),
-                companyId,
+                companyId: tenantId,
                 type: "add_one_time_outflow",
                 targetType: "recurring",
                 targetId: patternId,
@@ -84,6 +92,11 @@ export async function POST(req: NextRequest) {
 /** DELETE /api/recurring-reschedule?skipId=...&onetimeId=...
  *  Undoes a reschedule by archiving both override records. */
 export async function DELETE(req: NextRequest) {
+    const authResult = await auth();
+    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const skipId = req.nextUrl.searchParams.get("skipId");
     const onetimeId = req.nextUrl.searchParams.get("onetimeId");
     const patternId = req.nextUrl.searchParams.get("patternId");
@@ -91,21 +104,24 @@ export async function DELETE(req: NextRequest) {
 
     if (skipId && onetimeId) {
         // Precise undo by override IDs
-        await prisma.override.updateMany({
-            where: { id: { in: [skipId, onetimeId] } },
+        const result = await prisma.override.updateMany({
+            where: { id: { in: [skipId, onetimeId] }, companyId: tenantId },
             data: { status: "archived" },
         });
+        if (result.count === 0) return NextResponse.json({ error: "Not Found" }, { status: 404 });
     } else if (patternId && sourceWeekStart) {
         // Undo by pattern + source week (used when IDs not available)
-        await prisma.override.updateMany({
+        const result = await prisma.override.updateMany({
             where: {
                 targetId: patternId,
+                companyId: tenantId,
                 effectiveDate: new Date(sourceWeekStart),
                 type: { in: ["skip_recurring_occurrence", "add_one_time_outflow"] },
                 status: "active",
             },
             data: { status: "archived" },
         });
+        if (result.count === 0) return NextResponse.json({ error: "Not Found" }, { status: 404 });
     } else {
         return NextResponse.json({ error: "Provide skipId+onetimeId or patternId+sourceWeekStart" }, { status: 400 });
     }

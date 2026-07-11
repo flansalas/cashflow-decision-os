@@ -2,6 +2,7 @@
 // API: POST /api/cash-entries                — Create a new entry
 
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
 import { v4 as uuidv4 } from "uuid";
 import { resolveTenant } from "@/lib/tenant";
@@ -45,18 +46,24 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+    const authResult = await auth();
+    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { companyId, categoryId, label, amount, weekNumber, note } = await req.json() as {
-        companyId: string; categoryId: string; label: string; amount: number; weekNumber: number; note?: string;
+        companyId?: string; categoryId: string; label: string; amount: number; weekNumber: number; note?: string;
     };
 
-    if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    if (companyId && companyId !== tenantId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     if (!categoryId) return NextResponse.json({ error: "Missing categoryId" }, { status: 400 });
     if (!label?.trim()) return NextResponse.json({ error: "Label is required" }, { status: 400 });
     if (!amount || amount <= 0) return NextResponse.json({ error: "Amount must be positive" }, { status: 400 });
     if (!weekNumber || weekNumber < 1 || weekNumber > 13) return NextResponse.json({ error: "Week number must be 1-13" }, { status: 400 });
 
     // Use the same Monday the forecast uses: getMonday(cashSnapshot.asOfDate)
-    const snapshot = await prisma.cashSnapshot.findFirst({ where: { companyId }, orderBy: { asOfDate: "desc" } });
+    const snapshot = await prisma.cashSnapshot.findFirst({ where: { companyId: tenantId }, orderBy: { asOfDate: "desc" } });
     const baseMonday = snapshot ? getMondayUTC(new Date(snapshot.asOfDate)) : getMondayUTC(new Date());
     const targetDate = new Date(baseMonday.getTime() + (weekNumber - 1) * 7 * 24 * 60 * 60 * 1000);
 
@@ -65,7 +72,7 @@ export async function POST(req: NextRequest) {
         const created = await prisma.cashFlowEntry.create({
             data: {
                 id: uuidv4(),
-                companyId,
+                companyId: tenantId,
                 categoryId,
                 label: label.trim(),
                 amount,
@@ -76,7 +83,7 @@ export async function POST(req: NextRequest) {
         });
 
         await logAuditEvent({
-            companyId,
+            companyId: tenantId,
             targetId: created.id,
             targetType: "forecast_week", // Use this or a new type for cash entry. Wait, logAuditEvent expects specific targetTypes. Let's use "cash_entry" if we can, or just cast to any.
             action: `Added Manual Entry`,
