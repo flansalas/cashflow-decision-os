@@ -20,13 +20,16 @@ export interface RecurringPatternForBaseline {
     amountStdDev: number;
 }
 
+export type BaselineConfidenceTier = "high" | "med" | "low" | "none";
+
 export interface BaselineResult {
     variableOutflowWeekly: number;
     variableInflowWeekly: number;
     variableOutflowBand: number;   // fractional stddev / mean
     variableInflowBand: number;
     weeksAnalyzed: number;
-    hasSufficientHistory: boolean; // true if >= 6 complete weeks of data
+    hasSufficientHistory: boolean; // true if >= 2 complete weeks of data
+    baselineConfidenceTier: BaselineConfidenceTier; // "high" 6+ wks | "med" 3-5 | "low" 1-2 | "none" 0
     computedFrom: "bank_tx" | "placeholder";
     note: string;
 }
@@ -39,9 +42,16 @@ export interface BaselineAssumptions {
     rentDayOfMonth: number | null;
 }
 
-// Minimum weeks required to trust the baseline
-export const MIN_WEEKS_REQUIRED = 6;
+// Minimum weeks required to enable gap-fill projections (was 6, now 2 for always-on)
+export const MIN_WEEKS_REQUIRED = 2;
 const WEEKS_TO_ANALYZE = 12;
+
+function toBaselineTier(activeWeekCount: number): BaselineConfidenceTier {
+    if (activeWeekCount >= 6) return "high";
+    if (activeWeekCount >= 3) return "med";
+    if (activeWeekCount >= 1) return "low";
+    return "none";
+}
 
 export function computeBaseline(
     txs: BankTxForBaseline[],
@@ -204,6 +214,7 @@ export function computeBaseline(
         variableInflowBand: Math.round(variableInflowBand * 100) / 100,
         weeksAnalyzed: activeWeeks.length,
         hasSufficientHistory: true,
+        baselineConfidenceTier: toBaselineTier(activeWeeks.length),
         computedFrom: "bank_tx",
         note: `Computed from ${activeWeeks.length} weeks of bank tx, excluding ${excludedPatterns.length} recurring patterns`,
     };
@@ -219,6 +230,7 @@ function placeholderBaseline(reason: string): BaselineResult {
         variableInflowBand: 0.3,
         weeksAnalyzed: 0,
         hasSufficientHistory: false,
+        baselineConfidenceTier: "none",
         computedFrom: "placeholder",
         note: `Baseline uses placeholder defaults — ${reason}`,
     };

@@ -550,6 +550,21 @@ function SectionBlock({
                                                 </p>
                                             </div>
                                         )}
+                                        {/* Projection origin note — shown when no macro-memory yet */}
+                                        {item.sourceType === "baseline" && !(macroMemory && macroMemory.weeksTracked > 0) && (
+                                            <div className="mt-1.5 text-[9px] uppercase tracking-wide font-semibold text-slate-400 bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 w-fit">
+                                                <span className="text-amber-600 font-black">Auto-Projection</span>
+                                                <p className="normal-case tracking-normal text-xs font-medium text-slate-500 mt-0.5">
+                                                    {item.label.includes("limited history")
+                                                        ? "Estimated from a small sample of bank history. Upload more bank data to improve accuracy."
+                                                        : item.label.includes("moderate history")
+                                                        ? "Estimated from a growing bank history. Accuracy improves each week you close."
+                                                        : item.label.includes("recurring patterns only")
+                                                        ? "No bank data yet — based on your confirmed recurring items. Upload bank statements to enable full projection."
+                                                        : "Estimated from your bank history, reduced by any hard data already scheduled for this week."}
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">

@@ -206,6 +206,7 @@ export async function assembleForecastData(companyId: string) {
             projectionSafetyMargin: assumptions.projectionSafetyMargin ?? 1.0,
         },
         hasBankBaseline: baseline.hasSufficientHistory,
+        baselineConfidenceTier: baseline.baselineConfidenceTier,
         variableOutflowWeekly: baseline.variableOutflowWeekly,
         variableOutflowBand: baseline.variableOutflowBand,
         baselineInflowWeekly: baseline.variableInflowWeekly,
@@ -220,6 +221,7 @@ export async function assembleForecastData(companyId: string) {
             targetDate: e.targetDate,
         }))
     };
+
 
     const forecastResult = computeForecast(input);
 

@@ -89,6 +89,7 @@ export interface ForecastInput {
     recurring: ForecastRecurring[];
     assumptions: ForecastAssumptions;
     hasBankBaseline: boolean;
+    baselineConfidenceTier?: string;   // "high" | "med" | "low" | "none"
     variableOutflowWeekly: number;     // avg variable outflow from baseline
     variableOutflowBand: number;       // +/- band (e.g., 0.2 = 20%)
     baselineInflowWeekly: number;      // avg inflow from baseline
@@ -697,12 +698,23 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             inflowBest += inflowGap * (1 + (input.baselineInflowBand || 0.1));
             inflowWorst += inflowGap * (1 - (input.baselineInflowBand || 0.15));
 
+            // Derive label and confidence from baseline tier so the Weekly Intelligence
+            // card always explains where the projection came from and how certain it is.
+            const tier = input.baselineConfidenceTier ?? "none";
+            const projLabel =
+                tier === "high" ? "Projected inflow (historical baseline)" :
+                tier === "med"  ? "Projected inflow (moderate history — growing accuracy)" :
+                tier === "low"  ? "Projected inflow (limited history — early estimate)" :
+                                  "Projected inflow (recurring patterns only)";
+            const projConfidence: ConfidenceLevel =
+                tier === "high" ? "med" : "low";
+
             inflowBreakdown.push({
-                label: "Projected inflow (risk-adjusted smoothing)",
+                label: projLabel,
                 amount: inflowGap,
                 type: "assumed",
                 sourceType: "baseline",
-                confidence: "low",
+                confidence: projConfidence,
                 section: "Baseline Inflow",
             });
         }
@@ -803,12 +815,21 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             outflowBest += outflowGap * (1 - (input.variableOutflowBand || 0.1));
             outflowWorst += outflowGap * (1 + (input.variableOutflowBand || 0.2));
 
+            const tier = input.baselineConfidenceTier ?? "none";
+            const projOutLabel =
+                tier === "high" ? "Projected variable spend (historical baseline)" :
+                tier === "med"  ? "Projected variable spend (moderate history)" :
+                tier === "low"  ? "Projected variable spend (limited history — early estimate)" :
+                                  "Projected variable spend (recurring patterns only)";
+            const projOutConfidence: ConfidenceLevel =
+                tier === "high" ? "med" : "low";
+
             outflowBreakdown.push({
-                label: "Projected variable spend (risk-adjusted smoothing)",
+                label: projOutLabel,
                 amount: outflowGap,
                 type: "assumed",
                 sourceType: "baseline" as OverrideTargetType,
-                confidence: "med",
+                confidence: projOutConfidence,
                 section: "Baseline Outflow",
             });
         }
