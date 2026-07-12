@@ -25,7 +25,7 @@ function ScenariosContent() {
             .catch(console.error);
     }, [urlCompanyId]);
 
-    const companyId = data?.companyId || null;
+    const companyId = data?.company?.id || null;
 
     return (
         <div className="min-h-screen flex flex-col" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
