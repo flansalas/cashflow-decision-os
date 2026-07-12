@@ -22,3 +22,6 @@
 
 ## Documentation and knowledge
 - Not yet verified through the recovery audit.
+
+## Milestone 2: Action Accountability
+- Action completion, missed/cancelled status, and expected-versus-actual effect remain open.
