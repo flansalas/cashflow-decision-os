@@ -10,6 +10,7 @@ jspm_packages/
 # Environment variables
 .env*
 !.env.example
+.env.recovery
 
 # Databases
 *.db

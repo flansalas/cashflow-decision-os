@@ -1050,6 +1050,7 @@ export function CashflowGrid({
         {/* Execution Plan Modal */}
         {showPlan && (
             <ExecutionPlanModal
+                companyId={companyId}
                 weeks={weeks}
                 invoices={invoices}
                 bills={bills}
