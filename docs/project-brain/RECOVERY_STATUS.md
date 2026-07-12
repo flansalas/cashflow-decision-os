@@ -8,7 +8,7 @@ Recover and document the architecture, state, and decision boundaries of the Cas
 - Active branch: architecture-recovery
 - Recovery baseline commit: 7419baa
 - Verified implementation baseline for Constitution reconciliation: c0e6d5fe43529ae7be030fd8b6de806f4ffecde0
-- Current blocker: Production promotion is blocked pending verification and resolution of the remaining Gate A findings (Gate A Findings 1, 2, and 3 are resolved and verified). (Note: No Git merge is in progress and no tooling blocker exists; production promotion remains blocked solely by verification/reconciliation status.)
+- Current blocker: Production promotion is blocked pending verification of Milestone 2. (Note: No Git merge is in progress and no tooling blocker exists; production promotion remains blocked; all four Gate A integrity findings are complete, but production promotion is still not authorized.)
   - Unfinished production merge was aborted; production remains unchanged.
   - release-slice-7 and its Preview represent a verified convergence checkpoint, not completion of the Constitution.
 
@@ -30,12 +30,13 @@ Recover and document the architecture, state, and decision boundaries of the Cas
 - Gate A Slice 1 (Company-ID Contract Repair) resolved and verified.
 - Gate A Slice 2 (Recurring Skip-Date Handling) resolved and verified.
 - Gate A Slice 3 (Cash Check-in Learning Mismatch) resolved and verified.
-- Next checkpoint: Gate A Slice 4: mandatory checkpoint preservation during week close.
+- Gate A Slice 4 (Checkpoint Preservation at Week Close) resolved and verified.
+- Next checkpoint: Milestone 2, Slice 5 — committed action accountability.
 
 ## Handoff
 - Source branch: release-slice-7
 - Recovery branch: architecture-recovery
 - Canonical repository: flansalas/cashflow-decision-os
 - Phase 1 status: Completed
-- Next task: Gate A Slice 4: mandatory checkpoint preservation during week close.
+- Next task: Milestone 2, Slice 5 — committed action accountability.
 - Do not merge, push, or resume implementation until approved.

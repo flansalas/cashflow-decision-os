@@ -11,7 +11,7 @@
 
 ## Weekly decision loop
 - **Release Gate A Finding 3 (Resolved and Verified):** The cash-check-in learning path reads `amountExpected` while forecast breakdowns use `amount`. Cash check-ins now read `WeekBreakdownItem.amount` (expected baseline values no longer silently default to zero).
-- **Release Gate A Finding 4 (Open/Unapproved):** Week-close checkpoint preservation is not enforced as a required successful step.
+- **Release Gate A Finding 4 (Resolved and Verified):** Week close now requires successful checkpoint preservation. A failed checkpoint rolls back the week-close transaction and returns non-success. All four Gate A integrity findings are complete.
 
 ## AI and learning
 - Hidden CFO AI is not implemented. Deterministic explanations and recommendations are partial. Financial and behavioral memory exist partially, but controlled outcome learning is not operational.
