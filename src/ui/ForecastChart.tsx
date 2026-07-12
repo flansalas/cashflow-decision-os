@@ -33,6 +33,7 @@ interface WeekData {
 interface Props {
     weeks: WeekData[];
     planWeeks?: WeekData[];
+    organicWeeks?: WeekData[];
     buffer: number;
     constraintWeek: number | null;
     scenarioItems?: ScenarioItem[];
@@ -55,7 +56,7 @@ function formatDate(dateStr: string): string {
     return (d.getUTCMonth() + 1) + "/" + d.getUTCDate();
 }
 
-export function ForecastChart({ weeks, planWeeks, buffer, constraintWeek, scenarioItems = [], onWeekClick }: Props) {
+export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constraintWeek, scenarioItems = [], onWeekClick }: Props) {
     const hasScenario = scenarioItems.length > 0;
     const [comparePlan, setComparePlan] = useState(false);
 
@@ -87,6 +88,11 @@ export function ForecastChart({ weeks, planWeeks, buffer, constraintWeek, scenar
             planExpected = Math.round(planWeeks[idx].startCash);
         }
 
+        let organicExpected: number | undefined;
+        if (organicWeeks && organicWeeks[idx]) {
+            organicExpected = Math.round(organicWeeks[idx].startCash);
+        }
+
         return {
             name: dateLabel,
             weekNum: `Week ${w.weekNumber}`,
@@ -95,13 +101,14 @@ export function ForecastChart({ weeks, planWeeks, buffer, constraintWeek, scenar
             outflow: w.outflowsExpected,
             expected: Math.round(w.startCash), // Main series now plots beginning cash
             expectedEnd: Math.round(w.endCashExpected),
-            best: Math.round(w.endCashBest),
-            worst: Math.round(w.endCashWorst),
-            scenarioEndCash: hasScenario ? Math.round(w.startCash + runningScenarioCash) : undefined,
+            best: Math.round(startCashBest),
+            worst: Math.round(startCashWorst),
+            scenario: hasScenario ? Math.round(w.startCash + currentScenarioCashForStart) : undefined,
             planExpected,
+            organicExpected,
             zone: w.zone,
-            bandHigh: w.zone !== "committed" ? Math.round(w.endCashBest) : undefined,
-            bandLow: w.zone !== "committed" ? Math.round(w.endCashWorst) : undefined,
+            bandHigh: w.zone !== "committed" ? Math.round(startCashBest) : undefined,
+            bandLow: w.zone !== "committed" ? Math.round(startCashWorst) : undefined,
         };
     });
 
@@ -266,7 +273,7 @@ export function ForecastChart({ weeks, planWeeks, buffer, constraintWeek, scenar
                         <Line
                             type="monotone"
                             dataKey="expected"
-                            name="Expected"
+                            name="Live Forecast"
                             stroke="#0f172a"
                             strokeWidth={3}
                             strokeLinecap="round"
@@ -291,6 +298,31 @@ export function ForecastChart({ weeks, planWeeks, buffer, constraintWeek, scenar
                             } : { r: 6, fill: "#0f172a", stroke: "#ffffff", strokeWidth: 2 }}
                             animationDuration={1500}
                         />
+
+                        {organicWeeks && organicWeeks.length > 0 && (
+                            <Line
+                                type="monotone"
+                                dataKey="organicExpected"
+                                name="Organic Baseline"
+                                stroke="#94a3b8"
+                                strokeWidth={2}
+                                strokeDasharray="3 3"
+                                dot={{ r: 2, fill: "#94a3b8" }}
+                                activeDot={{ r: 4, fill: "#94a3b8" }}
+                            />
+                        )}
+
+                        {comparePlan && (
+                            <Line
+                                type="monotone"
+                                dataKey="planExpected"
+                                name="Approved Plan"
+                                stroke="#6366f1"
+                                strokeWidth={2}
+                                strokeDasharray="5 5"
+                                dot={false}
+                            />
+                        )}
 
                         {/* Scenario overlay (orange) – only when active */}
                         {hasScenario && (

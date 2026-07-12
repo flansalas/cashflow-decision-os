@@ -1,24 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import prisma from "../../../../db/prisma";
+import { resolveTenant } from "../../../../lib/tenant";
 import { checkRollbackEligibility } from "../../../../services/rollback";
 import { assembleForecastData } from "../../../../services/forecast-assembly";
 
 export async function POST(req: NextRequest) {
     try {
         const url = new URL(req.url);
-        const tenantId = url.searchParams.get("companyId");
-        if (!tenantId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+        const urlCompanyId = url.searchParams.get("companyId");
 
-        let userId: string | null = null;
-        try {
-            const authResult = await auth();
-            userId = authResult?.userId ?? null;
-        } catch { /* safe fallback */ }
+        const authResult = await auth();
+        if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const tenantId = await resolveTenant(req);
+        if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        if (!userId) {
-            userId = req.headers.get("x-user-id") || req.headers.get("X-User-Id") || null;
-        }
+        if (urlCompanyId && urlCompanyId !== tenantId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+        const userId = authResult.userId;
 
         const body = await req.json();
         const { applicationId } = body;
@@ -62,11 +61,11 @@ export async function POST(req: NextRequest) {
             for (const change of application.changes) {
                 if (change.operation === "insert") {
                     if (change.entityType === "ar") {
-                        await tx.receivableInvoice.delete({ where: { id: change.entityId } });
+                        await tx.receivableInvoice.deleteMany({ where: { id: change.entityId, companyId: tenantId } });
                     } else if (change.entityType === "ap") {
-                        await tx.payableBill.delete({ where: { id: change.entityId } });
+                        await tx.payableBill.deleteMany({ where: { id: change.entityId, companyId: tenantId } });
                     } else if (change.entityType === "bank") {
-                        await tx.bankTransaction.delete({ where: { id: change.entityId } });
+                        await tx.bankTransaction.deleteMany({ where: { id: change.entityId, companyId: tenantId } });
                     }
                 } else if (change.operation === "update") {
                     const beforeFields = JSON.parse(change.beforeJson || "{}");
@@ -77,9 +76,9 @@ export async function POST(req: NextRequest) {
                     }
                     if (Object.keys(dataToRestore).length > 0) {
                         if (change.entityType === "ar") {
-                            await tx.receivableInvoice.update({ where: { id: change.entityId }, data: dataToRestore });
+                            await tx.receivableInvoice.updateMany({ where: { id: change.entityId, companyId: tenantId }, data: dataToRestore });
                         } else if (change.entityType === "ap") {
-                            await tx.payableBill.update({ where: { id: change.entityId }, data: dataToRestore });
+                            await tx.payableBill.updateMany({ where: { id: change.entityId, companyId: tenantId }, data: dataToRestore });
                         }
                     }
                 }

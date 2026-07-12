@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
+import { resolveForecastHashAfter } from "@/services/forecast-hash";
 
 export async function GET(req: Request) {
     try {
@@ -82,6 +83,8 @@ export async function POST(req: Request) {
                 }
             });
 
+            let changeLogId = null;
+
             if (existing) {
                 await tx.executionPlan.update({
                     where: { id: existing.id },
@@ -92,7 +95,7 @@ export async function POST(req: Request) {
                     }
                 });
 
-                await tx.changeLog.create({
+                const cl = await tx.changeLog.create({
                     data: {
                         companyId: company.id,
                         source: "user_ui",
@@ -102,12 +105,17 @@ export async function POST(req: Request) {
                         forecastVersionHashAfter: "pending"
                     }
                 });
+                changeLogId = cl.id;
             }
 
-            return newPlan;
+            return { newPlan, changeLogId };
         });
 
-        return NextResponse.json({ success: true, plan: result });
+        if (result.changeLogId) {
+            await resolveForecastHashAfter(company.id, result.changeLogId);
+        }
+
+        return NextResponse.json({ success: true, plan: result.newPlan });
 
     } catch (e: any) {
         console.error("Execution Plan POST Error:", e);

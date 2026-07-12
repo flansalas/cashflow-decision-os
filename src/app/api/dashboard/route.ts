@@ -73,6 +73,65 @@ export async function GET(req: NextRequest) {
             }),
         ]);
 
+        const [
+            latestBankUpload,
+            latestArUpload,
+            latestApUpload,
+        ] = await Promise.all([
+            prisma.importBatch.findFirst({
+                where: { companyId: cid, importType: "bank" },
+                orderBy: { uploadedAt: "desc" },
+            }),
+            prisma.importBatch.findFirst({
+                where: { companyId: cid, importType: "ar" },
+                orderBy: { uploadedAt: "desc" },
+            }),
+            prisma.importBatch.findFirst({
+                where: { companyId: cid, importType: "ap" },
+                orderBy: { uploadedAt: "desc" },
+            }),
+        ]);
+
+        const d = new Date();
+        const day = d.getUTCDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        d.setUTCDate(d.getUTCDate() + diff);
+        const currentWeekStart = new Date(d.toISOString().slice(0, 10));
+
+        const activePlan = await prisma.executionPlan.findFirst({
+            where: { companyId: cid, weekStart: currentWeekStart, status: "approved" },
+            orderBy: { version: 'desc' }
+        });
+
+        let postApprovalChanges: any[] = [];
+        let planForecast = null;
+
+        if (activePlan) {
+            try {
+                if (activePlan.forecastStateJson) {
+                    planForecast = JSON.parse(activePlan.forecastStateJson);
+                }
+            } catch (e) {
+                console.error("Failed to parse forecastStateJson for active plan", e);
+            }
+
+            const rawChanges = await prisma.changeLog.findMany({
+                where: { companyId: cid, timestamp: { gt: activePlan.createdAt } },
+                orderBy: { timestamp: 'asc' }
+            });
+            postApprovalChanges = rawChanges.map(c => {
+                let details = {};
+                try {
+                    details = JSON.parse(c.diffJson);
+                } catch { }
+                return {
+                    id: c.id,
+                    createdAt: c.timestamp.toISOString(),
+                    details
+                };
+            });
+        }
+
         if (!cashSnapshot) {
             return NextResponse.json({ error: "No cash snapshot found. Complete onboarding first." }, { status: 400 });
         }
@@ -114,7 +173,13 @@ export async function GET(req: NextRequest) {
             amountStdDev: rp.amountStdDev,
         }));
 
-        const baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate);
+        const baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate, {
+            payrollAllInAmount: assumptions.payrollAllInAmount,
+            payrollNextDate: assumptions.payrollNextDate,
+            payrollCadence: assumptions.payrollCadence,
+            rentMonthlyAmount: assumptions.rentMonthlyAmount,
+            rentDayOfMonth: assumptions.rentDayOfMonth,
+        });
         const hasBankBaseline = baseline.hasSufficientHistory;
 
         // ── Apply Macro-Memory Variance Multipliers (8-week recency-weighted) ─
@@ -346,6 +411,59 @@ export async function GET(req: NextRequest) {
         };
 
         const forecast = computeForecast(forecastInput);
+
+        const organicInvoices: ForecastInvoice[] = invoicesRaw.map(inv => {
+            const cp = customerMap.get(inv.customerName);
+            const ovs = overridesByTarget.get(inv.id) || [];
+            let markedPaid = false, overrideAmount: number | null = null, partialPayment: number | null = null, isExcluded = false;
+            for (const ov of ovs) {
+                if (ov.type === "mark_paid") markedPaid = true;
+                if (ov.type === "exclude") isExcluded = true;
+                if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
+                if (ov.type === "partial_payment" && ov.amount != null) partialPayment = ov.amount;
+            }
+            if (isExcluded) return null;
+            return {
+                id: inv.id, customerName: inv.customerName, invoiceNo: inv.invoiceNo, amountOpen: inv.amountOpen, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, daysPastDue: inv.daysPastDue, status: inv.status, metaJson: inv.metaJson, typicalDelayWeeks: cp?.typicalDelayWeeks, riskTag: cp?.riskTag, overrideExpectedDate: null, overrideAmount, markedPaid, partialPayment,
+            };
+        }).filter((inv): inv is NonNullable<typeof inv> => inv !== null);
+
+        const organicBills: ForecastBill[] = billsRaw.map(bill => {
+            const vp = vendorMap.get(bill.vendorName);
+            const ovs = overridesByTarget.get(bill.id) || [];
+            let markedPaid = false, overrideAmount: number | null = null, isExcluded = false;
+            for (const ov of ovs) {
+                if (ov.type === "mark_paid") markedPaid = true;
+                if (ov.type === "exclude") isExcluded = true;
+                if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
+            }
+            if (isExcluded) return null;
+            return {
+                id: bill.id, vendorName: bill.vendorName, billNo: bill.billNo, amountOpen: bill.amountOpen, billDate: bill.billDate, dueDate: bill.dueDate, daysPastDue: bill.daysPastDue, status: bill.status, criticality: vp?.criticality, overrideDueDate: null, overrideAmount, markedPaid,
+            };
+        }).filter((bill): bill is NonNullable<typeof bill> => bill !== null);
+
+        const organicRecurring: ForecastRecurring[] = recurringPatternsRaw.map(rp => ({
+            id: rp.id, direction: rp.direction as "inflow" | "outflow", displayName: rp.displayName, typicalAmount: rp.typicalAmount, amountStdDev: rp.amountStdDev, cadence: rp.cadence, nextExpectedDate: rp.nextExpectedDate, confidence: rp.confidence as "high" | "med" | "low", category: rp.category, isIncluded: rp.isIncluded, isCritical: rp.isCritical,
+            skipDates: []
+        })).filter(rp => rp.isIncluded);
+        for (const r of organicRecurring) {
+            const ovs = overridesByTarget.get(r.id) || [];
+            const adj = ovs.find(o => o.type === "adjust_amount");
+            if (adj && adj.amount != null) {
+                r.typicalAmount = adj.amount;
+            }
+        }
+
+        const organicInput: ForecastInput = {
+            ...forecastInput,
+            invoices: organicInvoices,
+            bills: organicBills,
+            recurring: organicRecurring,
+            oneTimeOutflows: []
+        };
+
+        const organicForecast = computeForecast(organicInput);
 
         // ── QA / Anomalies / Confidence ────────────────────────────────
         const payrollPattern = recurringPatternsRaw.find(
@@ -600,6 +718,7 @@ export async function GET(req: NextRequest) {
                 variableOutflowWeekly: baseline.variableOutflowWeekly,
                 variableInflowWeekly: baseline.variableInflowWeekly,
             },
+            organicForecast,
             forecast,
             confidence,
             dataQualityGate,
@@ -622,7 +741,22 @@ export async function GET(req: NextRequest) {
             },
             zoneBoundary,
             lastUpdated: cashSnapshot.createdAt,
+            freshness: {
+                bankBalanceAsOf: cashSnapshot ? cashSnapshot.asOfDate.toISOString() : null,
+                bankLastImportedAt: latestBankUpload ? latestBankUpload.uploadedAt.toISOString() : null,
+                arLastImportedAt: latestArUpload ? latestArUpload.uploadedAt.toISOString() : null,
+                apLastImportedAt: latestApUpload ? latestApUpload.uploadedAt.toISOString() : null,
+                forecastCalculatedAt: new Date().toISOString(),
+            },
             onboardingCompleted: company.onboardingCompleted,
+            executionPlan: activePlan ? {
+                id: activePlan.id,
+                version: activePlan.version,
+                createdAt: activePlan.createdAt.toISOString(),
+                approvedBy: activePlan.approvedBy,
+                planForecast
+            } : null,
+            postApprovalChanges,
             backlog: {
                 overdueAP,
                 overdueAR,

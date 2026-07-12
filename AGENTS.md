@@ -1,12 +1,30 @@
 # CashFlowDecision OS — Agent Operating Protocol
 
 ## Project Doctrine
-- Before implementing, read PRODUCT.md and ARCHITECTURE.md.
+- Before any product, architecture, design, implementation, or reconciliation work, read CONSTITUTION.md.
+- Before implementing, read ARCHITECTURE.md.
 - Compare every task against the core loop: Data → Forecast → Explain → Decide → Simulate → Intervene → Verify → Learn
 - Preserve the principle: The forecast is not the product. The weekly cash decision loop is the product.
 - Prefer the smallest safe implementation.
 - Do not create generic SaaS dashboard features unless they directly support the weekly cash decision loop.
 - For any roadmap or architecture recommendation, inspect the actual repo first and clearly separate current code reality from product vision.
+
+## Project Brain — Required Recovery Context
+
+Before any product, architecture, audit, recovery, implementation, or verification task, agents must read:
+- CONSTITUTION.md
+- docs/project-brain/README.md
+- docs/project-brain/CURRENT_STATE.md
+- docs/project-brain/RECOVERY_STATUS.md
+- docs/project-brain/OPEN_QUESTIONS.md
+- docs/project-brain/DECISION_LEDGER.md
+- docs/project-brain/MAINTENANCE_PROTOCOL.md
+
+- The Project Brain governs human-approved product intent, recovery control, decisions, and open questions.
+- It does not replace repository code, schema, Git history, tests, deployment evidence, or runtime behavior when determining implementation reality.
+- Agents may propose Project Brain changes but must follow docs/project-brain/MAINTENANCE_PROTOCOL.md.
+- Agents must not silently resolve contradictions or convert audit findings into canonical decisions.
+- Audit work and implementation work must remain separate unless the human explicitly starts a new implementation task.
 
 This protocol is mandatory for all AI agent work on the CashFlowDecision OS project.
 
@@ -229,8 +247,9 @@ Stop immediately if:
 ## 10. Memory Maintenance
 
 - `MEMORY.md` is the living project save state.
-- Before any implementation, read `PRODUCT.md`, `ARCHITECTURE.md`, and `MEMORY.md`.
-- `PRODUCT.md` is stable product doctrine and should change only when product vision, ICP, principles, or anti-goals change.
+- Before any implementation, read `CONSTITUTION.md`, `ARCHITECTURE.md`, and `MEMORY.md`.
+- `CONSTITUTION.md` is the canonical product authority and stable product doctrine.
+- `PRODUCT.md` is retained as prior product documentation, not current canonical authority.
 - `ARCHITECTURE.md` documents current technical reality and should change only when architecture, data models, routes, or major system boundaries change.
 - `MEMORY.md` should be updated when meaningful implementation work changes product state, current gaps, active focus, roadmap, risks, or the next safest implementation slice.
 - Do not update `MEMORY.md` for typo fixes, minor styling tweaks, aborted work, reverted work, or changes that do not affect product state or roadmap.

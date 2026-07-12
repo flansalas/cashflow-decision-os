@@ -58,6 +58,33 @@ interface Props {
     }>;
     forecastStateJson?: any;
     onPlanApproved?: () => void;
+    freshness?: {
+        bankBalanceAsOf: string | null;
+        bankLastImportedAt: string | null;
+        arLastImportedAt: string | null;
+        apLastImportedAt: string | null;
+        forecastCalculatedAt: string;
+    };
+}
+
+const FRESHNESS_THRESHOLD_DAYS = 7;
+
+function isStaleDate(dateStr: string | null): boolean {
+    if (!dateStr) return true;
+    const diffTime = Date.now() - new Date(dateStr).getTime();
+    return diffTime > FRESHNESS_THRESHOLD_DAYS * 24 * 60 * 60 * 1000;
+}
+
+function formatFreshnessDate(dateStr: string | null): string {
+    if (!dateStr) return "Not available";
+    return new Date(dateStr).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true
+    });
 }
 
 export function HeaderTruthBar({
@@ -66,11 +93,18 @@ export function HeaderTruthBar({
     payroll, payrollPromptNeeded, adjustments, onUpdateBalanceClick, onBalanceUpdated,
     expectedRunOutWeek, worstCaseRunOutWeek, inflow30, outflow30, isCompact, companyName, isCompanyDemo,
     onDrillIn, lowestExpected, lowestWorst, zoneBoundary, expectedEndingCash,
-    executionPlan, postApprovalChanges = [], forecastStateJson, onPlanApproved
+    executionPlan, postApprovalChanges = [], forecastStateJson, onPlanApproved, freshness
 }: Props) {
     const [showAdj, setShowAdj] = useState(false);
     const [showReasons, setShowReasons] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
+    const [showFreshnessMenu, setShowFreshnessMenu] = useState(false);
+
+    const isFreshnessStale = !freshness ? false : (
+        isStaleDate(freshness.bankLastImportedAt) ||
+        isStaleDate(freshness.arLastImportedAt) ||
+        isStaleDate(freshness.apLastImportedAt)
+    );
     
     // Plan Approval
     const [isApproving, setIsApproving] = useState(false);
@@ -187,6 +221,52 @@ export function HeaderTruthBar({
                             <span className="px-2 py-0.5 ml-2 text-[8px] rounded border border-amber-200 bg-amber-50 text-amber-700 font-black uppercase tracking-[0.1em]">
                                 Demo
                             </span>
+                        )}
+                        {freshness && (
+                            <div className="relative ml-2 z-30">
+                                <button
+                                    onClick={() => setShowFreshnessMenu(!showFreshnessMenu)}
+                                    className={`flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded border transition-colors ${
+                                        isFreshnessStale
+                                            ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                                            : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                    }`}
+                                >
+                                    <span className={`w-1 h-1 rounded-full ${isFreshnessStale ? "bg-amber-500" : "bg-emerald-500"}`} />
+                                    Data: {isFreshnessStale ? "Action Needed" : "Current"}
+                                    <ChevronDown className="w-2.5 h-2.5" />
+                                </button>
+                                {showFreshnessMenu && (
+                                    <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setShowFreshnessMenu(false)} />
+                                        <div className="absolute left-0 mt-1.5 w-64 rounded-xl border p-4 shadow-xl bg-white z-50 animate-in fade-in slide-in-from-top-2 border-slate-200 text-slate-700 font-normal normal-case tracking-normal">
+                                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-3 pb-1 border-b border-slate-100">Data Freshness Status</p>
+                                            <div className="space-y-2.5 text-xs">
+                                                <div>
+                                                    <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Balance as of</p>
+                                                    <p className="font-semibold text-slate-800">{formatFreshnessDate(freshness.bankBalanceAsOf)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Bank last imported</p>
+                                                    <p className="font-semibold text-slate-800">{formatFreshnessDate(freshness.bankLastImportedAt)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">AR last imported</p>
+                                                    <p className="font-semibold text-slate-800">{formatFreshnessDate(freshness.arLastImportedAt)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">AP last imported</p>
+                                                    <p className="font-semibold text-slate-800">{formatFreshnessDate(freshness.apLastImportedAt)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Forecast recalculated</p>
+                                                    <p className="font-semibold text-slate-800">{formatFreshnessDate(freshness.forecastCalculatedAt)}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         )}
                         {/* {isStale && <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse ml-1" title="Bank data is stale" />} */}
                     </div>

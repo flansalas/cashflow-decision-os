@@ -283,7 +283,7 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                                 const amount = w.breakdown.inflows
                                                     .filter((i: any) => i.section === `Cat: ${cat.name}`)
                                                     .reduce((s: number, i: any) => s + i.amount, 0);
-                                                return renderCell(amount, "cash-adjustments", w.weekNumber, cat.id);
+                                                return renderCell(amount, "adjustments", w.weekNumber, cat.id);
                                             })}
                                         </tr>
                                     ))}
@@ -407,7 +407,7 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                                 const amount = w.breakdown.outflows
                                                     .filter((i: any) => i.section === `Cat: ${cat.name}`)
                                                     .reduce((s: number, i: any) => s + i.amount, 0);
-                                                return renderCell(amount, "cash-adjustments", w.weekNumber, cat.id);
+                                                return renderCell(amount, "adjustments", w.weekNumber, cat.id);
                                             })}
                                         </tr>
                                     ))}

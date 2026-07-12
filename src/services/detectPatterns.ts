@@ -50,7 +50,7 @@ export function normalizeDescription(raw: string): string {
 }
 
 // Auto-categorize based on merchant keywords
-function categorize(displayName: string): string {
+export function categorize(displayName: string): string {
     const name = displayName.toLowerCase();
     if (/payroll|adp|paychex|gusto|rippling|bamboo|paylocity|quickbooks pay|intuit pay/.test(name)) return "payroll";
     if (/rent|lease|property|realty|landlord/.test(name)) return "rent";

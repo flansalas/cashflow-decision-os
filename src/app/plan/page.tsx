@@ -94,6 +94,50 @@ interface DashboardData {
         lowestExpectedBalance: number;
         lowestWorstBalance: number;
     };
+    organicForecast: {
+        weeks: Array<{
+            weekNumber: number;
+            weekStart: string;
+            weekEnd: string;
+            startCash: number;
+            endCashExpected: number;
+            endCashBest: number;
+            endCashWorst: number;
+            inflowsExpected: number;
+            outflowsExpected: number;
+            inflowsBest: number;
+            outflowsBest: number;
+            inflowsWorst: number;
+            outflowsWorst: number;
+            zone: string;
+            confidenceScore: number;
+            breakdown: {
+                inflows: Array<{
+                    label: string;
+                    amount: number;
+                    type: string;
+                    sourceType: string;
+                    confidence: string;
+                    section?: string;
+                }>;
+                outflows: Array<{
+                    label: string;
+                    amount: number;
+                    type: string;
+                    sourceType: string;
+                    confidence: string;
+                    section?: string;
+                }>;
+            };
+            worstCaseDriver: string | null;
+        }>;
+        constraintWeek: number | null;
+        worstCaseConstraintWeek: number | null;
+        expectedRunOutWeek: number | null;
+        worstCaseRunOutWeek: number | null;
+        lowestExpectedBalance: number;
+        lowestWorstBalance: number;
+    };
     confidence: { score: number; label: string; reasons: string[] };
     anomalies: Array<{ id: string; type: string; severity: string; message: string }>;
     anomalyCount: number;
@@ -143,6 +187,13 @@ interface DashboardData {
         createdAt: string;
         details: any;
     }>;
+    freshness?: {
+        bankBalanceAsOf: string | null;
+        bankLastImportedAt: string | null;
+        arLastImportedAt: string | null;
+        apLastImportedAt: string | null;
+        forecastCalculatedAt: string;
+    };
 }
 
 function PlanContent() {
@@ -288,7 +339,7 @@ function PlanContent() {
         
         if (searchParams.get('setup') === 'true') {
             setSetupOpen(true);
-            window.history.replaceState({}, '', '/dashboard');
+            window.history.replaceState({}, '', '/plan');
         }
         
         return () => window.removeEventListener('open-setup', handleOpenSetup);
@@ -392,6 +443,7 @@ function PlanContent() {
                         postApprovalChanges={data.postApprovalChanges}
                         forecastStateJson={data.forecast}
                         onPlanApproved={() => fetchDashboard(effectiveCompanyId)}
+                        freshness={data.freshness}
                     />
                 </div>
             </div>
@@ -467,6 +519,7 @@ function PlanContent() {
                             {forecastView === "chart" && (
                                 <ForecastChart
                                     weeks={data.forecast.weeks}
+                                    organicWeeks={data.organicForecast?.weeks}
                                     planWeeks={data.executionPlan?.planForecast?.weeks}
                                     buffer={data.assumptions.bufferMin}
                                     constraintWeek={data.forecast.constraintWeek}
@@ -560,13 +613,15 @@ function PlanContent() {
                             forecast={data.forecast} 
                             categories={data.cashFlowCategories || []} 
                             onCellClick={(type, week, extraId) => {
-                                if (type === "ar" || type === "ap") {
-                                    window.location.href = `/cashflow?mode=${type}&highlightWeek=${week}`;
+                                if (type === "ar") {
+                                    window.location.href = `/receivables?highlightWeek=${week}`;
+                                } else if (type === "ap") {
+                                    window.location.href = `/payables?highlightWeek=${week}`;
                                 } else if (type === "recurring" || type === "recurring-in" || type === "recurring-payroll") {
                                     window.location.href = `/recurring?highlightWeek=${week}`;
-                                } else if (type === "cash-adjustments") {
+                                } else if (type === "adjustments") {
                                     const dir = data.cashFlowCategories?.find(c => c.id === extraId)?.direction === "inflow" ? "in" : "out";
-                                    window.location.href = `/cash-adjustments?direction=${dir}&highlightWeek=${week}&highlightCategory=${extraId}`;
+                                    window.location.href = `/adjustments?direction=${dir}&highlightWeek=${week}&highlightCategory=${extraId}`;
                                 }
                             }}
                         />

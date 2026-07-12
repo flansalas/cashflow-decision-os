@@ -480,7 +480,7 @@ export function OnboardingWizard({ companyId: initialCompanyId, startStep = 0, o
                                 <button
                                     onClick={() => {
                                         onClose();
-                                        router.push(`/dashboard?companyId=${companyId}`);
+                                        router.push(`/plan?companyId=${companyId}`);
                                     }}
                                     className="text-sm font-semibold transition-colors hover:underline flex items-center justify-center gap-1 mx-auto"
                                     style={{ color: "var(--color-primary)" }}
@@ -501,7 +501,7 @@ export function OnboardingWizard({ companyId: initialCompanyId, startStep = 0, o
                                 companyId={companyId}
                                 onDone={() => {
                                     onClose();
-                                    router.push(`/dashboard?companyId=${companyId}`);
+                                    router.push(`/plan?companyId=${companyId}`);
                                 }}
                             />
                         </>

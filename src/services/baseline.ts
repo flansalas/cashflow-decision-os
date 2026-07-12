@@ -9,7 +9,7 @@ export interface BankTxForBaseline {
     merchantKey: string;  // typically the description field from bank tx
 }
 
-import { normalizeDescription } from "./detectPatterns";
+import { normalizeDescription, categorize } from "./detectPatterns";
 
 export interface RecurringPatternForBaseline {
     merchantKey: string;
@@ -31,29 +31,42 @@ export interface BaselineResult {
     note: string;
 }
 
+export interface BaselineAssumptions {
+    payrollAllInAmount: number | null;
+    payrollNextDate: Date | null;
+    payrollCadence: string;
+    rentMonthlyAmount: number | null;
+    rentDayOfMonth: number | null;
+}
+
 // Minimum weeks required to trust the baseline
-const MIN_WEEKS_REQUIRED = 6;
+export const MIN_WEEKS_REQUIRED = 6;
 const WEEKS_TO_ANALYZE = 12;
 
 export function computeBaseline(
     txs: BankTxForBaseline[],
     patterns: RecurringPatternForBaseline[],
     asOfDate: Date,
+    assumptions?: BaselineAssumptions,
 ): BaselineResult {
     if (txs.length === 0) {
         return placeholderBaseline("No bank transactions available");
     }
 
     // Build set of recurring merchantKeys to exclude
-    // Using normalizeDescription for identity and allowing a 30% or 2*stddev bounds check
+    // Using normalizeDescription for identity and allowing bounded checks
     const excludedPatterns = patterns
         .filter(p => p.isIncluded)
-        .map(p => ({
-            key: normalizeDescription(p.merchantKey || ""),
-            direction: p.direction,
-            minAmount: p.typicalAmount - Math.max(p.typicalAmount * 0.3, p.amountStdDev * 2),
-            maxAmount: p.typicalAmount + Math.max(p.typicalAmount * 0.3, p.amountStdDev * 2)
-        }));
+        .map(p => {
+            const isVolatile = ["utilities", "fuel", "taxes", "card_payment", "payroll"].includes(p.category);
+            const tolerance = isVolatile ? 0.5 : 0.2;
+            return {
+                key: normalizeDescription(p.merchantKey || ""),
+                direction: p.direction,
+                minAmount: p.typicalAmount - Math.max(p.typicalAmount * tolerance, p.amountStdDev * 2),
+                maxAmount: p.typicalAmount + Math.max(p.typicalAmount * tolerance, p.amountStdDev * 2)
+            };
+        });
 
     // Compute week boundaries: last WEEKS_TO_ANALYZE complete weeks before asOfDate
     const weekBuckets: { inflow: number; outflow: number }[] = [];
@@ -72,6 +85,50 @@ export function computeBaseline(
             const normalizedTxKey = normalizeDescription(tx.merchantKey || "");
             const txDirection = tx.amount >= 0 ? "inflow" : "outflow";
             const absAmount = Math.abs(tx.amount);
+            const txCategory = categorize(tx.merchantKey || "");
+
+            let matchesAssumption = false;
+            if (assumptions) {
+                if (
+                    assumptions.payrollAllInAmount &&
+                    assumptions.payrollNextDate &&
+                    txCategory === "payroll" &&
+                    txDirection === "outflow" &&
+                    absAmount >= assumptions.payrollAllInAmount * 0.8 &&
+                    absAmount <= assumptions.payrollAllInAmount * 1.2
+                ) {
+                    const daysDiff = Math.abs(daysBetween(tx.date, assumptions.payrollNextDate));
+                    const cadenceDays = assumptions.payrollCadence === "weekly" ? 7 : assumptions.payrollCadence === "biweekly" ? 14 : 30;
+                    const remainder = daysDiff % cadenceDays;
+                    if (remainder <= 3 || remainder >= cadenceDays - 3) {
+                        matchesAssumption = true;
+                    }
+                }
+
+                if (
+                    !matchesAssumption &&
+                    assumptions.rentMonthlyAmount &&
+                    assumptions.rentDayOfMonth &&
+                    txCategory === "rent" &&
+                    txDirection === "outflow" &&
+                    absAmount >= assumptions.rentMonthlyAmount * 0.8 &&
+                    absAmount <= assumptions.rentMonthlyAmount * 1.2
+                ) {
+                    const txDay = tx.date.getDate();
+                    const rentDay = assumptions.rentDayOfMonth;
+                    const diff = Math.min(
+                        Math.abs(txDay - rentDay),
+                        Math.abs(txDay + 30 - rentDay),
+                        Math.abs(rentDay + 30 - txDay)
+                    );
+                    if (diff <= 3) {
+                        matchesAssumption = true;
+                    }
+                }
+            }
+
+            if (matchesAssumption) continue;
+
             const isExcluded = excludedPatterns.some(p => 
                 p.key === normalizedTxKey &&
                 p.direction === txDirection &&
@@ -186,6 +243,10 @@ function addDays(d: Date, n: number): Date {
     const dt = new Date(d);
     dt.setDate(dt.getDate() + n);
     return dt;
+}
+
+function daysBetween(a: Date, b: Date): number {
+    return Math.round((b.getTime() - a.getTime()) / 86400000);
 }
 
 function mean(values: number[]): number {

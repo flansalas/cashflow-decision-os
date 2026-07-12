@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveTenant } from "@/lib/tenant";
 import prisma from "@/db/prisma";
-import { assembleForecastData } from "@/services/forecast-assembly";
+import { resolveForecastHashAfter } from "@/services/forecast-hash";
 
 /**
  * Rolls a date forward by the given cadence until it is >= the asOfDate.
@@ -383,16 +383,9 @@ export async function POST(req: NextRequest) {
         
         // ── Post-roll hash generation (non-blocking) ──────────────────────
         let postRollHashWarning = null;
-        try {
-            const assembly = await assembleForecastData(companyId);
-            const newHash = assembly.forecastResult.forecastVersionHash;
-            await prisma.changeLog.update({
-                where: { id: coreResult.changeLogId },
-                data: { forecastVersionHashAfter: newHash }
-            });
-        } catch (hashError) {
-            console.error("Post-roll hash generation failed (non-blocking):", hashError);
-            postRollHashWarning = "Failed to generate true post-roll hash; ChangeLog left as pending.";
+        const success = await resolveForecastHashAfter(companyId, coreResult.changeLogId);
+        if (!success) {
+            postRollHashWarning = "Failed to generate true post-roll hash; ChangeLog left as error.";
         }
 
         return NextResponse.json({ 

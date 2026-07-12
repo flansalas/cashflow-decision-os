@@ -89,7 +89,7 @@ function CashflowContent() {
         const params = new URLSearchParams(searchParams.toString());
         params.delete("highlightId");
         params.delete("highlightWeek");
-        router.replace(`/cashflow${params.size > 0 ? `?${params}` : ""}`, { scroll: false });
+        router.replace(`/receivables${params.size > 0 ? `?${params}` : ""}`, { scroll: false });
     }, [router, searchParams]);
 
     const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
@@ -123,7 +123,7 @@ function CashflowContent() {
             // Strip the param so bookmark/share URLs don't re-trigger
             const params = new URLSearchParams(searchParams.toString());
             params.delete('open');
-            router.replace(`/cashflow${params.size > 0 ? `?${params}` : ''}`, { scroll: false });
+            router.replace(`/receivables${params.size > 0 ? `?${params}` : ''}`, { scroll: false });
         }
     }, [searchParams, router]);
 

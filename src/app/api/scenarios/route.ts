@@ -1,5 +1,6 @@
 // app/api/scenarios/route.ts – GET (list) and POST (create) scenario items
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
 import { v4 as uuidv4 } from "uuid";
 
@@ -24,22 +25,27 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+    const authResult = await auth();
+    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { companyId, label, direction, weekNumber, amount } = await req.json() as {
-        companyId: string;
+        companyId?: string;
         label: string;
         direction: "in" | "out";
         weekNumber: number;
         amount: number;
     };
 
-    if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    if (companyId && companyId !== tenantId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     if (!label?.trim()) return NextResponse.json({ error: "Label is required" }, { status: 400 });
     if (!["in", "out"].includes(direction)) return NextResponse.json({ error: "Invalid direction" }, { status: 400 });
     if (!weekNumber || weekNumber < 1 || weekNumber > 13) return NextResponse.json({ error: "Week must be 1-13" }, { status: 400 });
     if (!amount || amount <= 0) return NextResponse.json({ error: "Amount must be positive" }, { status: 400 });
 
     const created = await prisma.scenarioItem.create({
-        data: { id: uuidv4(), companyId, label: label.trim(), direction, weekNumber, amount },
+        data: { id: uuidv4(), companyId: tenantId, label: label.trim(), direction, weekNumber, amount },
     });
 
     return NextResponse.json({

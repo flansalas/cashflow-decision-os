@@ -3,6 +3,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
+import { resolveForecastHashAfter } from "@/services/forecast-hash";
+import { auth } from "@clerk/nextjs/server";
+import { resolveTenant } from "@/lib/tenant";
 
 /** Mirrors forecast.ts getMonday — returns UTC-midnight Monday for a given date. */
 function getMondayUTC(d: Date): Date {
@@ -12,28 +15,30 @@ function getMondayUTC(d: Date): Date {
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const authResult = await auth();
+    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { id } = await params;
     const body = await req.json();
+
+    const oldEntry = await prisma.cashFlowEntry.findFirst({
+        where: { id, companyId: tenantId },
+        include: { category: true }
+    });
+    if (!oldEntry) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     let targetDate: Date | undefined;
     if (body.weekNumber !== undefined) {
         // Use the same Monday the forecast uses: getMonday(cashSnapshot.asOfDate)
-        // First find the entry to get companyId, then look up the snapshot
-        const entry = await prisma.cashFlowEntry.findUnique({ where: { id }, select: { companyId: true } });
-        const snapshot = entry
-            ? await prisma.cashSnapshot.findFirst({ where: { companyId: entry.companyId }, orderBy: { asOfDate: "desc" } })
-            : null;
+        const snapshot = await prisma.cashSnapshot.findFirst({ where: { companyId: tenantId }, orderBy: { asOfDate: "desc" } });
         const baseMonday = snapshot ? getMondayUTC(new Date(snapshot.asOfDate)) : getMondayUTC(new Date());
         targetDate = new Date(baseMonday.getTime() + (body.weekNumber - 1) * 7 * 24 * 60 * 60 * 1000);
     }
 
     try {
         const { logAuditEvent } = await import("@/services/audit");
-
-        const oldEntry = await prisma.cashFlowEntry.findUnique({
-            where: { id },
-            include: { category: true }
-        });
 
         const updated = await prisma.cashFlowEntry.update({
             where: { id },
@@ -53,7 +58,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             const impact = newVal - oldVal;
 
             if (impact !== 0 || body.label || targetDate) {
-                await logAuditEvent({
+                const logResult = await logAuditEvent({
                     companyId: updated.companyId,
                     targetId: id,
                     targetType: "forecast_week" as any,
@@ -64,6 +69,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
                     newValue: newVal,
                     reasoning: updated.label
                 });
+                
+                await resolveForecastHashAfter(updated.companyId, logResult.id);
             }
         }
 
@@ -75,20 +82,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const authResult = await auth();
+    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { id } = await params;
 
     try {
         const { logAuditEvent } = await import("@/services/audit");
 
-        const entry = await prisma.cashFlowEntry.findUnique({
-            where: { id },
+        const entry = await prisma.cashFlowEntry.findFirst({
+            where: { id, companyId: tenantId },
             include: { category: true }
         });
+        if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
         await prisma.cashFlowEntry.delete({ where: { id } });
 
         if (entry) {
-            await logAuditEvent({
+            const logResult = await logAuditEvent({
                 companyId: entry.companyId,
                 targetId: id,
                 targetType: "forecast_week" as any,
@@ -99,6 +112,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
                 newValue: 0,
                 reasoning: entry.label
             });
+            
+            await resolveForecastHashAfter(entry.companyId, logResult.id);
         }
 
         return NextResponse.json({ ok: true });

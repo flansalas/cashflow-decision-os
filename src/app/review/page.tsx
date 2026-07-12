@@ -125,6 +125,7 @@ function ReviewPageInner() {
     };
 
     const getMetric = (planStr: any, field: string) => {
+        if (field === "reconciliationDifference") return 0;
         if (!planStr) return null;
         let p;
         try { p = typeof planStr === "string" ? JSON.parse(planStr) : planStr; } catch { return null; }
@@ -135,11 +136,16 @@ function ReviewPageInner() {
     const getOriginalMetric = (field: string) => getMetric(activeData.originalPlan?.forecastStateJson, field);
     const getRevisedMetric = (field: string) => getMetric(activeData.revisedPlan?.forecastStateJson, field);
     const getForecastMetric = (field: string) => {
+        if (field === "reconciliationDifference") return 0;
         if (isHistorical) return getMetric(activeData.checkpoint, field);
         return getMetric(activeData.latestForecast, field);
     };
 
     const getActualMetric = (field: string) => {
+        if (!isHistorical) return null;
+        if (activeData.actuals) {
+            return activeData.actuals[field] ?? null;
+        }
         if (isHistorical && activeData.revisedPlan?.actualEndingCash) {
             if (field === "endCashExpected") return activeData.revisedPlan.actualEndingCash;
         }
@@ -207,6 +213,7 @@ function ReviewPageInner() {
                                     { label: "Beginning Cash", field: "startCash" },
                                     { label: "Total Inflows", field: "inflowsExpected" },
                                     { label: "Total Outflows", field: "outflowsExpected" },
+                                    { label: "Reconciliation Difference", field: "reconciliationDifference", help: "Difference between the reported bank balance and the balance implied by imported bank transactions for this week." },
                                     { label: "Expected Ending Cash", field: "endCashExpected" }
                                 ].map(row => {
                                     const orig = getOriginalMetric(row.field);
@@ -221,7 +228,12 @@ function ReviewPageInner() {
 
                                     return (
                                         <tr key={row.label} className="bg-white hover:bg-slate-50 transition-colors">
-                                            <td className="px-6 py-3 font-medium text-slate-700">{row.label}</td>
+                                            <td className="px-6 py-3 font-medium text-slate-700">
+                                                <div className="flex items-center gap-1.5">
+                                                    {row.label}
+                                                    {row.help && <HelpBubble text={row.help} />}
+                                                </div>
+                                            </td>
                                             {hasOriginal && hasRevised && <td className="px-6 py-3 text-right font-financial text-slate-500">{fmt(orig)}</td>}
                                             {hasOriginal && <td className="px-6 py-3 text-right font-financial text-slate-500">{fmt(hasRevised ? rev : orig)}</td>}
                                             <td className="px-6 py-3 text-right font-financial font-medium text-slate-900">{fmt(latest)}</td>
