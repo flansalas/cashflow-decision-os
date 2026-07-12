@@ -160,7 +160,52 @@ export function computeBaseline(
     // Find weeks with at least some activity
     const activeWeeks = weekBuckets.filter(b => b.inflow > 0 || b.outflow > 0);
 
+    // SPAN-BASED FALLBACK: if transactions are concentrated in few weeks but the
+    // date range covers meaningful history, compute weekly average from total / span.
+    // This handles cases where bank data was uploaded as a batch (all same dates).
     if (activeWeeks.length < MIN_WEEKS_REQUIRED) {
+        // Measure span from the OLDEST transaction date to asOfDate
+        // (not min-to-max tx dates, which fails when all txs are the same day)
+        const txDates = txs.map(t => t.date.getTime());
+        const oldestTxDate = Math.min(...txDates);
+        const daySpan = (asOfDate.getTime() - oldestTxDate) / 86_400_000;
+        
+        if (daySpan >= 1) {
+            // We have a usable span — compute weekly average from totals over that span
+            const weeksSpan = Math.max(1, daySpan / 7);
+            const totalInflow = txs.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+            const totalOutflow = txs.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+
+            // Subtract known recurring amounts from the total
+            // (rough estimate: N occurrences ≈ weeksSpan / cadence, conservative: weekly cadence)
+            let recurringInflowTotal = 0;
+            let recurringOutflowTotal = 0;
+            for (const p of excludedPatterns) {
+                const occurrences = Math.max(1, Math.round(weeksSpan));
+                if (p.direction === "inflow") recurringInflowTotal += p.minAmount * occurrences;
+                else recurringOutflowTotal += p.minAmount * occurrences;
+            }
+
+            const variableInflow = Math.max(0, totalInflow - recurringInflowTotal);
+            const variableOutflow = Math.max(0, totalOutflow - recurringOutflowTotal);
+            const weeklyInflow = variableInflow / weeksSpan;
+            const weeklyOutflow = variableOutflow / weeksSpan;
+
+            const tier = toBaselineTier(Math.max(1, Math.round(weeksSpan)));
+
+            return {
+                variableOutflowWeekly: Math.round(weeklyOutflow * 100) / 100,
+                variableInflowWeekly: Math.round(weeklyInflow * 100) / 100,
+                variableOutflowBand: 0.35,   // wider band = more uncertainty
+                variableInflowBand: 0.45,
+                weeksAnalyzed: Math.round(weeksSpan),
+                hasSufficientHistory: true,
+                baselineConfidenceTier: tier,
+                computedFrom: "bank_tx",
+                note: `Span-based estimate: ${Math.round(daySpan)}d window → $${Math.round(weeklyInflow).toLocaleString()} inflow/wk (${tier} confidence)`,
+            };
+        }
+
         return placeholderBaseline(
             `Only ${activeWeeks.length} weeks of transaction history (need ${MIN_WEEKS_REQUIRED})`
         );
