@@ -77,13 +77,12 @@ function ReviewPageInner() {
         loadData();
     };
 
-    if (loading) return <div className="p-8 text-center text-slate-500">Loading review...</div>;
-    if (error) return <div className="p-8 text-red-500">Error: {error}</div>;
-    if (!data) return null;
-
-    const historicalOptions = data.historical.map((h: any) => h.weekStart);
-
-    const activeData = viewHistorical ? data.historical.find((h: any) => h.weekStart === viewHistorical) : data.active;
+    // Declare all variables used in hooks or render paths before early returns to prevent TDZ ReferenceErrors
+    const historicalOptions = data?.historical ? data.historical.map((h: any) => h.weekStart) : [];
+    const activeData = data ? (viewHistorical ? data.historical.find((h: any) => h.weekStart === viewHistorical) : data.active) : null;
+    const isHistorical = !!viewHistorical;
+    const hasOriginal = activeData ? !!activeData.originalPlan : false;
+    const hasRevised = activeData ? !!activeData.revisedPlan : false;
 
     useEffect(() => {
         if (isHistorical && activeData?.checkpoint?.id) {
@@ -98,10 +97,9 @@ function ReviewPageInner() {
         }
     }, [viewHistorical, activeData?.checkpoint?.id]);
 
-    // Determine adaptive columns
-    const hasOriginal = !!activeData.originalPlan;
-    const hasRevised = !!activeData.revisedPlan;
-    const isHistorical = !!viewHistorical;
+    if (loading) return <div className="p-8 text-center text-slate-500">Loading review...</div>;
+    if (error) return <div className="p-8 text-red-500">Error: {error}</div>;
+    if (!data || !activeData) return null;
 
     let columns = [];
     if (!hasOriginal) {
