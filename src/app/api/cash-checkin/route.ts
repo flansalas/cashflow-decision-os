@@ -374,7 +374,59 @@ export async function POST(req: NextRequest) {
 
         let checkpoint = coreResult.checkpoint;
 
-        
+        // ── Best-effort Learning Proposal Generation ──────────────────────
+        try {
+            await prisma.$transaction(async (tx) => {
+                if (priorWeekForecast?.weekStart) {
+                    const weekStart = new Date(priorWeekForecast.weekStart);
+                    
+                    const actions = await tx.actionItem.findMany({
+                        where: {
+                            companyId,
+                            status: "completed",
+                            actualAmountImpact: { not: null },
+                            executionPlan: { weekStart: weekStart }
+                        }
+                    });
+
+                    let expectedTotal = 0;
+                    let actualTotal = 0;
+                    let actionIds: string[] = [];
+                    for (const a of actions) {
+                        expectedTotal += a.amountImpact;
+                        actualTotal += a.actualAmountImpact!;
+                        actionIds.push(a.id);
+                    }
+
+                    if (expectedTotal > 0 && actualTotal < expectedTotal) {
+                        const variance = (expectedTotal - actualTotal) / expectedTotal;
+                        if (variance >= 0.10) {
+                            const assumption = await tx.assumption.findFirst({ where: { companyId } });
+                            if (assumption) {
+                                const currentSafetyMargin = assumption.projectionSafetyMargin;
+                                const proposedSafetyMargin = parseFloat((currentSafetyMargin * 1.05).toFixed(2));
+                                await tx.learningProposal.create({
+                                    data: {
+                                        companyId,
+                                        type: "safety_margin_increase",
+                                        proposedChangeJson: JSON.stringify({
+                                            field: "projectionSafetyMargin",
+                                            currentValue: currentSafetyMargin,
+                                            proposedValue: proposedSafetyMargin
+                                        }),
+                                        rationale: `Completed actions for week underperformed expected cash effect by ${(variance * 100).toFixed(1)}%. Recommend increasing safety margin to protect runway.`,
+                                        evidenceActionIds: JSON.stringify(actionIds)
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (proposalError) {
+            console.error("Best-effort learning proposal generation failed:", proposalError);
+        }
+
         // ── Post-roll hash generation (non-blocking) ──────────────────────
         let postRollHashWarning = null;
         const success = await resolveForecastHashAfter(companyId, coreResult.changeLogId);

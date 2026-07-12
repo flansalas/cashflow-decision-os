@@ -204,6 +204,11 @@ export async function GET(req: NextRequest) {
             }
         }
 
+        const learningProposals = await prisma.learningProposal.findMany({
+            where: { companyId, status: "pending" },
+            orderBy: { createdAt: "desc" }
+        });
+
         return NextResponse.json({
             active: {
                 weekStart: currentWeekStart,
@@ -216,6 +221,7 @@ export async function GET(req: NextRequest) {
             priorWeekActions,
             customerObservations,
             vendorObservations,
+            learningProposals,
             cash,
             lastUpdated
         });

@@ -51,6 +51,7 @@ model Company {
   importBatches               ImportBatch[]
   importApplications          ImportApplication[]
   importApplyChanges          ImportApplyChange[]
+  learningProposals           LearningProposal[]
 }
 
 model CompanyNote {
@@ -678,4 +679,25 @@ model ImportApplyChange {
   application ImportApplication @relation(fields: [importApplicationId], references: [id], onDelete: Cascade)
 
   @@index([companyId, importApplicationId])
+}
+
+// ────────────────────────────────────────────────
+// LEARNING / PROPOSALS
+// ────────────────────────────────────────────────
+
+model LearningProposal {
+  id                 String    @id @default(uuid())
+  companyId          String
+  type               String
+  proposedChangeJson String
+  rationale          String
+  evidenceActionIds  String    // JSON array
+  status             String    @default("pending") // pending | approved | rejected
+  createdAt          DateTime  @default(now())
+  reviewedAt         DateTime?
+  reviewedBy         String?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, status])
 }
