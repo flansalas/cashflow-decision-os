@@ -4,10 +4,18 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 // Currently targeting the main dashboard, cashflow pages, and all APIs.
 // Excludes public routes like /, /sign-in, /sign-up
 const isProtectedRoute = createRouteMatcher([
+  "/plan(.*)",
+  "/receivables(.*)",
+  "/payables(.*)",
+  "/recurring(.*)",
+  "/adjustments(.*)",
+  "/scenarios(.*)",
+  "/sources(.*)",
+  "/settings(.*)",
+  "/audit(.*)",
+  "/review(.*)",
   "/dashboard(.*)",
   "/cashflow(.*)",
-  "/audit(.*)",
-  "/recurring(.*)",
   "/cash-adjustments(.*)",
   "/api/(.*)"
 ]);

@@ -288,7 +288,7 @@ function PlanContent() {
         
         if (searchParams.get('setup') === 'true') {
             setSetupOpen(true);
-            window.history.replaceState({}, '', '/dashboard');
+            window.history.replaceState({}, '', '/plan');
         }
         
         return () => window.removeEventListener('open-setup', handleOpenSetup);
@@ -560,13 +560,15 @@ function PlanContent() {
                             forecast={data.forecast} 
                             categories={data.cashFlowCategories || []} 
                             onCellClick={(type, week, extraId) => {
-                                if (type === "ar" || type === "ap") {
-                                    window.location.href = `/cashflow?mode=${type}&highlightWeek=${week}`;
+                                if (type === "ar") {
+                                    window.location.href = `/receivables?highlightWeek=${week}`;
+                                } else if (type === "ap") {
+                                    window.location.href = `/payables?highlightWeek=${week}`;
                                 } else if (type === "recurring" || type === "recurring-in" || type === "recurring-payroll") {
                                     window.location.href = `/recurring?highlightWeek=${week}`;
-                                } else if (type === "cash-adjustments") {
+                                } else if (type === "adjustments") {
                                     const dir = data.cashFlowCategories?.find(c => c.id === extraId)?.direction === "inflow" ? "in" : "out";
-                                    window.location.href = `/cash-adjustments?direction=${dir}&highlightWeek=${week}&highlightCategory=${extraId}`;
+                                    window.location.href = `/adjustments?direction=${dir}&highlightWeek=${week}&highlightCategory=${extraId}`;
                                 }
                             }}
                         />

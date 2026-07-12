@@ -121,11 +121,11 @@ export function ActionsPanel({ actions }: Props) {
                                 <div className="mt-4">
                                     <a 
                                         href={
-                                            action.type === "collect_ar" ? `/cashflow?mode=ar&highlightId=${action.targetId}` :
-                                            action.type === "delay_ap" ? `/cashflow?mode=ap&highlightId=${action.targetId}` :
+                                            action.type === "collect_ar" ? `/receivables?highlightId=${action.targetId}` :
+                                            action.type === "delay_ap" ? `/payables?highlightId=${action.targetId}` :
                                             action.type === "reduce_outflows" ? `/recurring?highlightId=${action.targetId}` :
-                                            action.type === "add_cash_adjustment" ? "/cash-adjustments" :
-                                            "/cashflow"
+                                            action.type === "add_cash_adjustment" ? "/adjustments" :
+                                            "/receivables"
                                         }
                                         className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-xl border shadow-sm hover:shadow-md hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all active:scale-95"
                                         style={{ color: "var(--text-primary)", borderColor: "var(--border-subtle)", background: "var(--bg-raised)" }}

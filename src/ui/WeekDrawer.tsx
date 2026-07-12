@@ -477,14 +477,15 @@ function SectionBlock({
     const handleRowClick = (e: React.MouseEvent, item: BreakdownItem) => {
         if ((e.target as HTMLElement).closest('button, input')) return;
 
-        if ((item.sourceType === "invoice" || item.sourceType === "bill") && item.sourceId) {
-            const mode = item.sourceType === "invoice" ? "ar" : "ap";
-            window.location.href = `/cashflow?mode=${mode}&highlightId=${item.sourceId}`;
+        if (item.sourceType === "invoice" && item.sourceId) {
+            window.location.href = `/receivables?highlightId=${item.sourceId}`;
+        } else if (item.sourceType === "bill" && item.sourceId) {
+            window.location.href = `/payables?highlightId=${item.sourceId}`;
         } else if (item.sourceType === "recurring" && item.sourceId) {
             window.location.href = `/recurring?highlightId=${item.sourceId}`;
         } else if (item.sourceType === "manual") {
             const dir = sign === "+" ? "in" : "out";
-            window.location.href = `/cash-adjustments?direction=${dir}&highlightWeek=${weekNumber}`;
+            window.location.href = `/adjustments?direction=${dir}&highlightWeek=${weekNumber}`;
         }
     };
 

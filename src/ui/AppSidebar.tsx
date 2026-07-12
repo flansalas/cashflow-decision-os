@@ -82,18 +82,18 @@ export function AppSidebar() {
     };
 
     const handleOpenSetup = () => {
-        if (pathname === "/dashboard") {
+        if (pathname === "/plan") {
             window.dispatchEvent(new CustomEvent('open-setup'));
         } else {
-            window.location.href = '/dashboard?setup=true';
+            window.location.href = '/plan?setup=true';
         }
     };
 
     const handleOpenData = () => {
-        if (pathname === "/cashflow" || pathname.startsWith("/cashflow")) {
+        if (pathname === "/sources" || pathname.startsWith("/sources")) {
             window.dispatchEvent(new CustomEvent('open-data-sources'));
         } else {
-            window.location.href = '/cashflow?open=data';
+            window.location.href = '/sources';
         }
     };
 
@@ -175,7 +175,7 @@ export function AppSidebar() {
 
     const isActive = (href?: string) => {
         if (!href) return false;
-        if (href === "/dashboard") return pathname === "/dashboard";
+        if (href === "/plan") return pathname === "/plan";
         return pathname.startsWith(href);
     };
 

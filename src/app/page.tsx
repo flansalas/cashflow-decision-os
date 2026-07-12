@@ -60,12 +60,12 @@ function AuthenticatedHomepage() {
         // Auto-activate the single organization if none is active
         setActive({ organization: memberships[0].organization.id }).then(() => {
           localStorage.removeItem("cfdo_company_id");
-          router.replace("/dashboard");
+          router.replace("/plan");
         });
       } else if (organization) {
         // Already active, proceed to dashboard
         localStorage.removeItem("cfdo_company_id");
-        router.replace("/dashboard");
+        router.replace("/plan");
       }
     }
     // Multi-org users: do NOT auto-redirect — show the selection card below
@@ -112,7 +112,7 @@ function AuthenticatedHomepage() {
                     await setActive({ organization: m.organization.id });
                     localStorage.removeItem("cfdo_company_id");
                     localStorage.setItem("cfdo_last_org_id", m.organization.id);
-                    router.replace("/dashboard");
+                    router.replace("/plan");
                   }
                 }}
                 className={`w-full flex items-center justify-between px-4 py-3.5 rounded-[8px] border transition-all ${
@@ -236,7 +236,7 @@ function AnonymousPublicPage() {
         {/* SECONDARY: Returning setup / completed user shortcut */}
         {hasCompletedSetup && (
           <button
-            onClick={() => router.push(`/dashboard?companyId=${status!.companyId}`)}
+            onClick={() => router.push(`/plan?companyId=${status!.companyId}`)}
             className="w-full py-3.5 px-6 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-[8px] transition-colors border border-gray-700 hover:border-gray-600 text-sm flex flex-col items-center justify-center gap-0.5"
           >
             <span className="flex items-center gap-2">
