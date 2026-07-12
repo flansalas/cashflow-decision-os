@@ -38,14 +38,19 @@ Recover and document the architecture, state, and decision boundaries of the Cas
   - Runtime verification commit: 64a9172
   - Migration 20260712144800_add_learning_proposal applied to Preview database only.
   - Controlled proposal lifecycle and stale-assumption protection verified.
+- Milestone 2, Slice 8A (Historical Action Outcomes) implemented and runtime-verified.
+  - Commit: b67ae66
+  - Planned actions are archived to "missed" status on week close.
+  - Historical actions are rendered as read-only in the UI.
 
 ## Next Checkpoint
-- Milestone 2, Slice 8.
+- Milestone 2, Slice 8B or next phase.
 
 ## Handoff
 - Source branch: release-slice-7
 - Recovery branch: architecture-recovery
 - Canonical repository: flansalas/cashflow-decision-os
 - Phase 1 status: Completed
-- Next task: Milestone 2, Slice 8.
+- Next task: Milestone 2, Slice 8B or next phase.
 - Do not merge, push, or resume implementation until approved.
+

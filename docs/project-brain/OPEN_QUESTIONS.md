@@ -24,7 +24,9 @@
 - Not yet verified through the recovery audit.
 
 ## Milestone 2: Action Accountability
-- The next checkpoint is Milestone 2, Slice 8.
+- The next checkpoint is Milestone 2, Slice 8B or next phase.
 - Action completion and actual-effect review (Slice 6) is implemented and runtime-verified on the authorized Preview database.
 - Controlled learning from action outcomes (Slice 7) is implemented and runtime-verified on the authorized Preview database (code commit: 27a9519, runtime verification commit: 64a9172).
+- Historical Action Outcomes (Slice 8A) are implemented and runtime-verified (commit: b67ae66). Planned actions are archived as missed on week close, and historical actions are rendered read-only in the UI.
 - Owner-cockpit simplification and broader AI remain later work.
+
