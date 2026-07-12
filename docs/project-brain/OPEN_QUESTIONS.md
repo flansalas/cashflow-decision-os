@@ -10,7 +10,7 @@
 - **Release Gate A Finding 2 (Resolved and Verified):** `forecast-assembly.ts` builds `skipDatesByPattern` but does not consistently apply it to Managed recurring items. Managed recurring forecasts now apply `skip_recurring_occurrence` dates. Organic forecasts intentionally ignore management skip overrides.
 
 ## Weekly decision loop
-- **Release Gate A Finding 3 (Open/Unapproved):** The cash-check-in learning path reads `amountExpected` while forecast breakdowns use `amount`.
+- **Release Gate A Finding 3 (Resolved and Verified):** The cash-check-in learning path reads `amountExpected` while forecast breakdowns use `amount`. Cash check-ins now read `WeekBreakdownItem.amount` (expected baseline values no longer silently default to zero).
 - **Release Gate A Finding 4 (Open/Unapproved):** Week-close checkpoint preservation is not enforced as a required successful step.
 
 ## AI and learning
