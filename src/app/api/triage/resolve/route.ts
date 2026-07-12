@@ -11,6 +11,7 @@ import prisma from "@/db/prisma";
 import { recordCustomerPaymentObservation, recordVendorPaymentObservation } from "@/services/payment-memory";
 import { logAuditEvent } from "@/services/audit";
 import { resolveForecastHashAfter } from "@/services/forecast-hash";
+import { resolveTenant } from "@/lib/tenant";
 
 type TriageAction = {
     id: string;
@@ -20,12 +21,23 @@ type TriageAction = {
 };
 
 export async function POST(req: NextRequest) {
-    const { companyId, actions } = await req.json() as {
-        companyId: string;
+    const authResult = await auth();
+    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { companyId: bodyCompanyId, actions } = await req.json() as {
+        companyId?: string;
         actions: TriageAction[];
     };
 
-    if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    if (bodyCompanyId && bodyCompanyId !== tenantId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // We strictly use tenantId for all operations
+    const companyId = tenantId;
+
     if (!actions?.length) return NextResponse.json({ ok: true, resolved: 0 });
 
     let resolved = 0;
@@ -33,12 +45,7 @@ export async function POST(req: NextRequest) {
     let markedPaid = 0;
 
     let lastChangeLogId: string | null = null;
-
-    let userId = null;
-    try {
-        const authResult = await auth();
-        userId = authResult?.userId ?? null;
-    } catch {}
+    const userId = authResult.userId;
 
     for (const a of actions) {
         if (a.action === "dismiss") {

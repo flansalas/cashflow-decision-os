@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
+import { resolveTenant } from "@/lib/tenant";
 
 export async function PATCH(req: NextRequest) {
     try {
@@ -11,17 +12,22 @@ export async function PATCH(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { companyId, overrideId, changeLogId, reason } = body;
+        const { companyId: bodyCompanyId, overrideId, changeLogId, reason } = body;
 
-        if (!companyId || !overrideId || !changeLogId) {
+        const tenantId = await resolveTenant(req);
+        if (!tenantId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        if (bodyCompanyId && bodyCompanyId !== tenantId) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+
+        if (!overrideId || !changeLogId) {
             return NextResponse.json({ error: "Missing identifiers" }, { status: 400 });
         }
 
-        // Verify tenant
-        const company = await prisma.company.findUnique({ where: { id: companyId } });
-        if (!company) {
-            return NextResponse.json({ error: "Invalid company" }, { status: 403 });
-        }
+        const companyId = tenantId;
 
         // 1. Update Override
         const override = await prisma.override.findUnique({ where: { id: overrideId } });

@@ -5,13 +5,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
 import { detectPatterns, type BankTxForDetection } from "@/services/detectPatterns";
+import { auth } from "@clerk/nextjs/server";
+import { resolveTenant } from "@/lib/tenant";
 
 export async function POST(req: NextRequest) {
-    const { companyId } = await req.json() as { companyId: string };
+    const authResult = await auth();
+    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    if (!companyId) {
-        return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    const { companyId: bodyCompanyId } = await req.json() as { companyId?: string };
+
+    if (bodyCompanyId && bodyCompanyId !== tenantId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+
+    const companyId = tenantId;
 
     try {
         // Load stored bank transactions
