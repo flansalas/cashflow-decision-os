@@ -231,10 +231,10 @@ export async function POST(req: NextRequest) {
                 const breakdown = JSON.parse(priorWeekForecast.breakdownJson);
                 
                 const baselineOutflowItem = breakdown.outflows?.find((item: any) => item.sourceType === "baseline");
-                const projectedOutflow = baselineOutflowItem ? baselineOutflowItem.amountExpected : 0;
+                const projectedOutflow = baselineOutflowItem ? baselineOutflowItem.amount : 0;
 
                 const baselineInflowItem = breakdown.inflows?.find((item: any) => item.sourceType === "baseline");
-                const projectedInflow = baselineInflowItem ? baselineInflowItem.amountExpected : 0;
+                const projectedInflow = baselineInflowItem ? baselineInflowItem.amount : 0;
 
                 // 2. Get Actual Bank Txs for that week
                 const bankTxs = await prisma.bankTransaction.findMany({
