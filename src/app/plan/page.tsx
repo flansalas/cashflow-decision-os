@@ -10,8 +10,6 @@ import { ForecastRunwayView } from "@/ui/ForecastRunwayView";
 import { ForecastPulseView } from "@/ui/ForecastPulseView";
 import { ForecastActionsView } from "@/ui/ForecastActionsView";
 import { ForecastSummaryGrid } from "@/ui/ForecastSummaryGrid";
-import { ActionsPanel } from "@/ui/ActionsPanel";
-import { WeeklyRoutineCard } from "@/ui/WeeklyRoutineCard";
 import { WeekDrawer } from "@/ui/WeekDrawer";
 import { OnboardingWizard } from "@/ui/OnboardingWizard";
 import { ScenarioBuilder, type ScenarioItem } from "@/ui/ScenarioBuilder";
@@ -207,7 +205,7 @@ function PlanContent() {
     const [selectedWeekNumber, setSelectedWeekNumber] = useState<number | null>(null);
     const [setupOpen, setSetupOpen] = useState(false);
     const [scenarioItems, setScenarioItems] = useState<ScenarioItem[]>([]);
-    const [forecastView, setForecastView] = useState<"actions" | "chart" | "runway" | "pulse" | "bar">("chart");
+    const [forecastView, setForecastView] = useState<"actions" | "chart" | "runway" | "pulse" | "bar" | "table">("chart");
     const [showUpdateBalance, setShowUpdateBalance] = useState(false);
     // Map from weekNumber → change in endCashExpected vs last saved snapshot (positive = improved)
     const [forecastDiff, setForecastDiff] = useState<Map<number, number>>(new Map());
@@ -449,8 +447,6 @@ function PlanContent() {
             </div>
 
             <main className="max-w-[88rem] mx-auto px-6 py-6 space-y-6">
-                {/* ── Weekly Cash Routine ── */}
-                <WeeklyRoutineCard />
 
                 {/* ── Dashboard Pulse Grid ─────────────────────────── */}
                 <div className="flex flex-col gap-5">
@@ -493,6 +489,7 @@ function PlanContent() {
                                                 : { color: "var(--text-muted)" }}
                                         >
                                             <option value="more" disabled>More Views...</option>
+                                            <option value="table">Table (13-Week Grid)</option>
                                             <option value="runway">Runway (Health strip)</option>
                                             <option value="bar">Cash Flow (Inflow vs Outflow grid)</option>
                                             <option value="pulse">Waterfall (Pacing details)</option>
@@ -555,6 +552,26 @@ function PlanContent() {
                                     onWeekClick={wn => setSelectedWeekNumber(wn)}
                                 />
                             )}
+                            {forecastView === "table" && (
+                                <div className="mt-2 border rounded-xl overflow-hidden" style={{ borderColor: 'var(--border-subtle)' }}>
+                                    <ForecastSummaryGrid 
+                                        forecast={data.forecast} 
+                                        categories={data.cashFlowCategories || []} 
+                                        onCellClick={(type, week, extraId) => {
+                                            if (type === "ar") {
+                                                window.location.href = `/receivables?highlightWeek=${week}`;
+                                            } else if (type === "ap") {
+                                                window.location.href = `/payables?highlightWeek=${week}`;
+                                            } else if (type === "recurring" || type === "recurring-in" || type === "recurring-payroll") {
+                                                window.location.href = `/recurring?highlightWeek=${week}`;
+                                            } else if (type === "adjustments") {
+                                                const dir = data.cashFlowCategories?.find(c => c.id === extraId)?.direction === "inflow" ? "in" : "out";
+                                                window.location.href = `/adjustments?direction=${dir}&highlightWeek=${week}&highlightCategory=${extraId}`;
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -594,88 +611,7 @@ function PlanContent() {
                 })()}
 
 
-                {/* ── 13-Week Forecast Summary Grid ─────────── */}
-                <details className="rounded-2xl border overflow-hidden shadow-sm group transition-shadow hover:shadow-[0_8px_16px_rgba(15,23,42,0.04)] bg-white" style={{ borderColor: "var(--border-subtle)" }}>
-                    <summary className="px-6 py-4 cursor-pointer text-xs font-semibold uppercase tracking-wider select-none flex items-center justify-between hover:bg-slate-50 active:bg-slate-100/80 transition-colors group/summary" style={{ color: "var(--text-secondary)" }}>
-                        <span className="flex items-center gap-2">
-                            <ClipboardList className="w-4 h-4 text-slate-400 group-hover/summary:text-indigo-500 transition-colors" />
-                            13-Week Detailed Forecast Table
-                        </span>
-                        <div className="flex items-center gap-3">
-                            <span className="text-[10px] font-bold text-slate-400 opacity-0 group-hover/summary:opacity-100 transition-opacity">
-                                Click to View Details
-                            </span>
-                            <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180 transition-transform text-slate-400" />
-                        </div>
-                    </summary>
-                    <div className="border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-                        <ForecastSummaryGrid 
-                            forecast={data.forecast} 
-                            categories={data.cashFlowCategories || []} 
-                            onCellClick={(type, week, extraId) => {
-                                if (type === "ar") {
-                                    window.location.href = `/receivables?highlightWeek=${week}`;
-                                } else if (type === "ap") {
-                                    window.location.href = `/payables?highlightWeek=${week}`;
-                                } else if (type === "recurring" || type === "recurring-in" || type === "recurring-payroll") {
-                                    window.location.href = `/recurring?highlightWeek=${week}`;
-                                } else if (type === "adjustments") {
-                                    const dir = data.cashFlowCategories?.find(c => c.id === extraId)?.direction === "inflow" ? "in" : "out";
-                                    window.location.href = `/adjustments?direction=${dir}&highlightWeek=${week}&highlightCategory=${extraId}`;
-                                }
-                            }}
-                        />
-                    </div>
-                </details>
 
-                {/* ── Zone 5: Lab — Scenario Builder ──────────────────────────── */}
-                <details className="rounded-2xl border overflow-hidden shadow-sm group transition-shadow hover:shadow-[0_8px_16px_rgba(15,23,42,0.04)] bg-white" style={{ borderColor: "var(--border-subtle)" }}>
-                    <summary className="px-6 py-4 cursor-pointer text-xs font-semibold uppercase tracking-wider select-none flex items-center justify-between hover:bg-indigo-50/30 active:bg-indigo-50/60 transition-colors group/summary" style={{ color: "var(--text-secondary)" }}>
-                        <span className="flex items-center gap-2">
-                            <Lightbulb className="w-4 h-4 text-indigo-400 group-hover/summary:scale-110 transition-transform" />
-                            Lab: Scenario Builder & What-Ifs
-                        </span>
-                        <div className="flex items-center gap-3">
-                            <span className="text-[10px] font-bold text-indigo-400/70 opacity-0 group-hover/summary:opacity-100 transition-opacity">
-                                Model Scenarios
-                            </span>
-                            <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180 transition-transform text-indigo-400/50" />
-                        </div>
-                    </summary>
-                    <div className="px-5 pb-5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-                        <ScenarioBuilder
-                            companyId={effectiveCompanyId ?? ""}
-                            weeks={data.forecast.weeks.map(w => ({ weekNumber: w.weekNumber, weekEnd: w.weekEnd }))}
-                            items={scenarioItems}
-                            onAdd={item => setScenarioItems(prev => [...prev, item])}
-                            onUpdate={item => setScenarioItems(prev => prev.map(i => i.id === item.id ? item : i))}
-                            onRemove={id => setScenarioItems(prev => prev.filter(i => i.id !== id))}
-                            onClear={() => setScenarioItems([])}
-                            onLoad={items => setScenarioItems(items)}
-                        />
-                    </div>
-                </details>
-
-                {/* ── Zone 6: Execution — Actions (collapsed by default, full list) ─ */}
-                <details className="rounded-2xl border overflow-hidden shadow-sm transition-shadow hover:shadow-[0_8px_16px_rgba(15,23,42,0.04)] bg-white" style={{ borderColor: "var(--border-subtle)" }}>
-                    <summary className="px-6 py-4 cursor-pointer text-xs font-semibold uppercase tracking-wider select-none flex items-center justify-between hover:bg-slate-50 active:bg-slate-100 transition-colors group/summary" style={{ color: "var(--text-secondary)" }}>
-                        <span className="flex items-center gap-2">
-                            <Zap className="w-4 h-4 text-amber-500 group-hover/summary:animate-pulse" />
-                            What Moves the Needle — All Actions
-                        </span>
-                        <div className="flex items-center gap-4">
-                            <span className="text-[10px] font-bold text-amber-500 opacity-0 group-hover/summary:opacity-100 transition-opacity">
-                                View Strategy
-                            </span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 bg-white shadow-sm" style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}>
-                                {data.actions.length} actions <ChevronDown className="w-3 h-3 group-open:rotate-180 transition-transform" />
-                            </span>
-                        </div>
-                    </summary>
-                    <div className="border-t" style={{ borderColor: "var(--border-subtle)" }}>
-                        <ActionsPanel actions={data.actions} />
-                    </div>
-                </details>
 
                 {data.anomalyCount > 0 && (
                     <details className="border rounded-2xl shadow-sm overflow-hidden transition-shadow hover:shadow-[0_8px_16px_rgba(15,23,42,0.04)] bg-white" style={{ borderColor: "var(--border-subtle)" }}>
