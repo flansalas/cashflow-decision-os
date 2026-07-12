@@ -303,7 +303,7 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
                             <Line
                                 type="monotone"
                                 dataKey="organicExpected"
-                                name="Organic Baseline"
+                                name="Do-Nothing Trajectory"
                                 stroke="#94a3b8"
                                 strokeWidth={2}
                                 strokeDasharray="3 3"

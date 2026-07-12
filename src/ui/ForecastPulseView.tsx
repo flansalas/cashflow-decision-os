@@ -115,7 +115,7 @@ export function ForecastPulseView({ weeks, organicWeeks, buffer, constraintWeek,
                     )}
                     {hasOrganic && (
                         <span className="flex items-center gap-1.5 ml-2">
-                            <span className="w-3 h-0.5 border-t border-dashed inline-block" style={{ borderColor: "var(--text-faint)" }} /> Baseline (Organic)
+                            <span className="w-3 h-0.5 border-t border-dashed inline-block" style={{ borderColor: "var(--text-faint)" }} /> Do-Nothing Trajectory
                         </span>
                     )}
                 </div>

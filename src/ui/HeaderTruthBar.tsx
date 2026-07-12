@@ -65,6 +65,7 @@ interface Props {
         apLastImportedAt: string | null;
         forecastCalculatedAt: string;
     };
+    managementImpact?: number;
 }
 
 const FRESHNESS_THRESHOLD_DAYS = 7;
@@ -93,7 +94,7 @@ export function HeaderTruthBar({
     payroll, payrollPromptNeeded, adjustments, onUpdateBalanceClick, onBalanceUpdated,
     expectedRunOutWeek, worstCaseRunOutWeek, inflow30, outflow30, isCompact, companyName, isCompanyDemo,
     onDrillIn, lowestExpected, lowestWorst, zoneBoundary, expectedEndingCash,
-    executionPlan, postApprovalChanges = [], forecastStateJson, onPlanApproved, freshness
+    executionPlan, postApprovalChanges = [], forecastStateJson, onPlanApproved, freshness, managementImpact
 }: Props) {
     const [showAdj, setShowAdj] = useState(false);
     const [showReasons, setShowReasons] = useState(false);
@@ -641,6 +642,13 @@ export function HeaderTruthBar({
                         
                         {!isCompact && (lowestExpected !== undefined || lowestWorst !== undefined) && (
                             <div className="flex items-center justify-end gap-2 font-bold uppercase tracking-widest opacity-60 group-hover/health:opacity-100 transition-all duration-500 text-[9px] mt-1.5">
+                                {managementImpact !== undefined && Math.abs(managementImpact) > 500 && (
+                                    <span className={`flex items-center gap-1 ${managementImpact > 0 ? 'text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded' : 'text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded'}`}>
+                                        Actions: {managementImpact > 0 ? '+' : '–'}{fmt(Math.abs(managementImpact))}
+                                        <HelpBubble position="bottom-left" width="w-64" text="Net cash impact of your rescheduling actions, compared to the 'Do-Nothing Trajectory' at the lowest cash point." />
+                                    </span>
+                                )}
+                                {managementImpact !== undefined && Math.abs(managementImpact) > 500 && <span className="text-slate-300">|</span>}
                                 {lowestExpected !== undefined && (
                                     <span className="flex items-center gap-1 text-slate-500">
                                         Floor: <span className={`font-financial font-bold ${lowestExpected < 0 ? 'text-rose-600' : 'text-slate-700'}`}>{fmt(lowestExpected)}</span>

@@ -436,6 +436,7 @@ function PlanContent() {
                         lowestExpected={data.forecast.lowestExpectedBalance}
                         lowestWorst={data.forecast.lowestWorstBalance}
                         zoneBoundary={data.zoneBoundary}
+                        managementImpact={data.organicForecast && data.forecast.lowestExpectedBalance !== undefined && data.organicForecast.lowestExpectedBalance !== undefined ? data.forecast.lowestExpectedBalance - data.organicForecast.lowestExpectedBalance : undefined}
                         expectedEndingCash={data.forecast.weeks[0]?.endCashExpected}
                         executionPlan={data.executionPlan}
                         postApprovalChanges={data.postApprovalChanges}
