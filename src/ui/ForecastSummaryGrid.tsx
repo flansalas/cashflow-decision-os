@@ -63,8 +63,8 @@ function ProvenanceCard({ info }: { info: HoveredInfo }) {
     const top = info.y + OFFSET_Y;
 
     const methodNote = isIn
-        ? "Gap between the 90-day avg. collection total and the invoices + recurring items already logged for this week. If known items cover the avg, this is $0."
-        : "Gap between the 90-day avg. outflow total and the AP bills + recurring commitments already logged for this week. If known items cover the avg, this is $0.";
+        ? "Gap between the 52-week recency-weighted avg. collection and the invoices + recurring items already logged for this week. Recent weeks count more than older ones. If known items cover the avg, this is $0."
+        : "Gap between the 52-week recency-weighted avg. outflow and the AP bills + recurring commitments already logged for this week. Recent weeks count more than older ones. If known items cover the avg, this is $0.";
 
     return (
         <div
@@ -301,6 +301,36 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                             return renderCell(amount, "recurring-in", w.weekNumber);
                                         })}
                                     </tr>
+                                    {/* Baseline Projection row — only shown when engine has projected inflows */}
+                                    {weeks.some((w: any) => w.breakdown.inflows.some((i: any) => i.sourceType === "baseline")) && (
+                                        <tr className="hover:bg-emerald-50/60" style={{ background: "var(--bg-surface)" }}>
+                                            <td
+                                                className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs flex items-center gap-1.5 w-[180px]"
+                                                style={{ background: "inherit", borderColor: "var(--border-subtle)", color: "#065f46" }}
+                                            >
+                                                <div className="w-3.5" />
+                                                <span>Baseline Projection</span>
+                                                <span className="ml-auto text-[8px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold tracking-wide">AUTO</span>
+                                            </td>
+                                            {weeks.map((w: any) => {
+                                                const amount = w.breakdown.inflows
+                                                    .filter((i: any) => i.sourceType === "baseline")
+                                                    .reduce((s: number, i: any) => s + i.amount, 0);
+                                                return (
+                                                    <td
+                                                        key={w.weekNumber}
+                                                        className="px-3 py-2 border-b border-r text-right text-xs"
+                                                        style={{ borderColor: "var(--border-subtle)", color: amount > 0 ? "#065f46" : undefined }}
+                                                        title={amount > 0 ? "Engine-projected inflow based on 52-week bank history" : undefined}
+                                                    >
+                                                        {amount === 0
+                                                            ? <span style={{ color: "var(--text-muted)", opacity: 0.3 }}>—</span>
+                                                            : <span className="font-financial tracking-tight font-medium italic">{fmt(amount)}</span>}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    )}
                                 </>
                             )}
 
@@ -411,6 +441,36 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                             })}
                                         </tr>
                                     ))}
+                                    {/* Baseline Projection row — only shown when engine has projected outflows */}
+                                    {weeks.some((w: any) => w.breakdown.outflows.some((i: any) => i.sourceType === "baseline")) && (
+                                        <tr className="hover:bg-amber-50/60" style={{ background: "var(--bg-surface)" }}>
+                                            <td
+                                                className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs flex items-center gap-1.5 w-[180px]"
+                                                style={{ background: "inherit", borderColor: "var(--border-subtle)", color: "#92400e" }}
+                                            >
+                                                <div className="w-3.5" />
+                                                <span>Baseline Projection</span>
+                                                <span className="ml-auto text-[8px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-bold tracking-wide">AUTO</span>
+                                            </td>
+                                            {weeks.map((w: any) => {
+                                                const amount = w.breakdown.outflows
+                                                    .filter((i: any) => i.sourceType === "baseline")
+                                                    .reduce((s: number, i: any) => s + i.amount, 0);
+                                                return (
+                                                    <td
+                                                        key={w.weekNumber}
+                                                        className="px-3 py-2 border-b border-r text-right text-xs"
+                                                        style={{ borderColor: "var(--border-subtle)", color: amount > 0 ? "#92400e" : undefined }}
+                                                        title={amount > 0 ? "Engine-projected outflow based on 52-week bank history" : undefined}
+                                                    >
+                                                        {amount === 0
+                                                            ? <span style={{ color: "var(--text-muted)", opacity: 0.3 }}>—</span>
+                                                            : <span className="font-financial tracking-tight font-medium italic">{fmt(amount)}</span>}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    )}
                                 </>
                             )}
 
