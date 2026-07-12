@@ -42,15 +42,21 @@ Recover and document the architecture, state, and decision boundaries of the Cas
   - Commit: b67ae66
   - Planned actions are archived to "missed" status on week close.
   - Historical actions are rendered as read-only in the UI.
+- Milestone 2, Slice 8B (Audit and Provenance Coverage) implemented and runtime-verified.
+  - Commit: 8694b70
+  - Plan approvals audited (INITIAL_PLAN_APPROVAL recorded on version 1).
+  - Automatic missed-action transitions audited (SYSTEM_AUTO_MISS_ACTIONS recorded on week roll).
+  - Runtime verification passed.
+  - No database migration required.
 
 ## Next Checkpoint
-- Milestone 2, Slice 8B or next phase.
+- Milestone 2, next phase.
 
 ## Handoff
 - Source branch: release-slice-7
 - Recovery branch: architecture-recovery
 - Canonical repository: flansalas/cashflow-decision-os
 - Phase 1 status: Completed
-- Next task: Milestone 2, Slice 8B or next phase.
+- Next task: Milestone 2, next phase.
 - Do not merge, push, or resume implementation until approved.
 

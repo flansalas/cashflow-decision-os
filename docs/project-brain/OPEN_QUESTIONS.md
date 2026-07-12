@@ -28,5 +28,6 @@
 - Action completion and actual-effect review (Slice 6) is implemented and runtime-verified on the authorized Preview database.
 - Controlled learning from action outcomes (Slice 7) is implemented and runtime-verified on the authorized Preview database (code commit: 27a9519, runtime verification commit: 64a9172).
 - Historical Action Outcomes (Slice 8A) are implemented and runtime-verified (commit: b67ae66). Planned actions are archived as missed on week close, and historical actions are rendered read-only in the UI.
+- Audit and Provenance Coverage (Slice 8B) is implemented and runtime-verified (commit: 8694b70). Plan approvals and automatic missed-action transitions are fully audited, with forecast version hashes correctly resolved.
 - Owner-cockpit simplification and broader AI remain later work.
 
