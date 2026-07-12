@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { resolveTenant } from "@/lib/tenant";
 import prisma from "@/db/prisma";
 import { v4 as uuidv4 } from "uuid";
+import { resolveForecastHashAfter } from "@/services/forecast-hash";
 import { recordCustomerPaymentObservation, recordVendorPaymentObservation, PaymentObservationSource, VendorObservationSource } from "@/services/payment-memory";
 
 const VALID_TYPES = [
@@ -224,6 +225,10 @@ export async function POST(req: NextRequest) {
         console.error("Audit log failed for POST override:", e);
     }
 
+    if (changeLogId) {
+        await resolveForecastHashAfter(tenantId, changeLogId);
+    }
+
     return NextResponse.json({ id: created.id, changeLogId, ok: true });
 }
 
@@ -284,7 +289,7 @@ export async function DELETE(req: NextRequest) {
             const mappedTargetType = existing.targetType === "receivable_invoice" ? "invoice" :
                                      existing.targetType === "payable_bill" ? "bill" :
                                      existing.targetType;
-            await logAuditEvent({
+            const logResult = await logAuditEvent({
                 companyId: existing.companyId,
                 targetId: targetId || "unknown",
                 targetType: mappedTargetType as any,
@@ -296,6 +301,8 @@ export async function DELETE(req: NextRequest) {
                 newValue: "removed",
                 reasoning: "User restored original value"
             });
+
+            await resolveForecastHashAfter(tenantId, logResult.id);
         } catch (e) {
             console.error("Audit log failed for DELETE override:", e);
         }

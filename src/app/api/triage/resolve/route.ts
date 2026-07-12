@@ -10,6 +10,7 @@ import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
 import { recordCustomerPaymentObservation, recordVendorPaymentObservation } from "@/services/payment-memory";
 import { logAuditEvent } from "@/services/audit";
+import { resolveForecastHashAfter } from "@/services/forecast-hash";
 
 type TriageAction = {
     id: string;
@@ -30,6 +31,8 @@ export async function POST(req: NextRequest) {
     let resolved = 0;
     let snoozed = 0;
     let markedPaid = 0;
+
+    let lastChangeLogId: string | null = null;
 
     let userId = null;
     try {
@@ -95,7 +98,7 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            await logAuditEvent({
+            const logResult = await logAuditEvent({
                 companyId,
                 targetId: a.id,
                 targetType: a.kind === "ar" ? "invoice" : "bill",
@@ -107,6 +110,7 @@ export async function POST(req: NextRequest) {
                 newValue: "paid",
                 reasoning: "User resolved triage backlog",
             });
+            lastChangeLogId = logResult.id;
 
             markedPaid++;
             resolved++;
@@ -134,7 +138,7 @@ export async function POST(req: NextRequest) {
                 },
             });
 
-            await logAuditEvent({
+            const logResult = await logAuditEvent({
                 companyId,
                 targetId: a.id,
                 targetType: a.kind === "ar" ? "invoice" : "bill",
@@ -146,10 +150,15 @@ export async function POST(req: NextRequest) {
                 newValue: newDate.toISOString(),
                 reasoning: "User snoozed triage backlog",
             });
+            lastChangeLogId = logResult.id;
 
             snoozed++;
             resolved++;
         }
+    }
+
+    if (lastChangeLogId) {
+        await resolveForecastHashAfter(companyId, lastChangeLogId);
     }
 
     return NextResponse.json({ ok: true, resolved, snoozed, markedPaid });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { resolveTenant } from "@/lib/tenant";
 import prisma from "@/db/prisma";
+import { resolveForecastHashAfter } from "@/services/forecast-hash";
 
 export async function POST(req: NextRequest) {
     try {
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        await prisma.changeLog.create({
+        const cl = await prisma.changeLog.create({
             data: {
                 companyId: tenantId,
                 action: "UPDATE_ASSUMPTIONS",
@@ -43,9 +44,12 @@ export async function POST(req: NextRequest) {
             }
         });
 
+
         // Also trigger a re-run of the forecast by ensuring cash snapshot timestamp is updated
         // Actually, we don't strictly need to do this, Dashboard re-fetches and re-computes on the fly.
         // But if there are saved actions/scenarios we might just need to reload.
+
+        await resolveForecastHashAfter(tenantId, cl.id);
 
         return NextResponse.json({ success: true, assumption: updated });
     } catch (e: any) {

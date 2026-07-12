@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
+import { resolveForecastHashAfter } from "@/services/forecast-hash";
 
 /** Mirrors forecast.ts getMonday — returns UTC-midnight Monday for a given date. */
 function getMondayUTC(d: Date): Date {
@@ -53,7 +54,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             const impact = newVal - oldVal;
 
             if (impact !== 0 || body.label || targetDate) {
-                await logAuditEvent({
+                const logResult = await logAuditEvent({
                     companyId: updated.companyId,
                     targetId: id,
                     targetType: "forecast_week" as any,
@@ -64,6 +65,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
                     newValue: newVal,
                     reasoning: updated.label
                 });
+                
+                await resolveForecastHashAfter(updated.companyId, logResult.id);
             }
         }
 
@@ -88,7 +91,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         await prisma.cashFlowEntry.delete({ where: { id } });
 
         if (entry) {
-            await logAuditEvent({
+            const logResult = await logAuditEvent({
                 companyId: entry.companyId,
                 targetId: id,
                 targetType: "forecast_week" as any,
@@ -99,6 +102,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
                 newValue: 0,
                 reasoning: entry.label
             });
+            
+            await resolveForecastHashAfter(entry.companyId, logResult.id);
         }
 
         return NextResponse.json({ ok: true });

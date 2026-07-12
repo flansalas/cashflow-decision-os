@@ -6,6 +6,7 @@ import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
 import { v4 as uuidv4 } from "uuid";
 import { resolveTenant } from "@/lib/tenant";
+import { resolveForecastHashAfter } from "@/services/forecast-hash";
 
 /** Mirrors forecast.ts getMonday — returns UTC-midnight Monday for a given date. */
 function getMondayUTC(d: Date): Date {
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
             include: { category: true },
         });
 
-        await logAuditEvent({
+        const logResult = await logAuditEvent({
             companyId: tenantId,
             targetId: created.id,
             targetType: "forecast_week", // Use this or a new type for cash entry. Wait, logAuditEvent expects specific targetTypes. Let's use "cash_entry" if we can, or just cast to any.
@@ -93,6 +94,8 @@ export async function POST(req: NextRequest) {
             newValue: created.category.direction === "inflow" ? created.amount : -created.amount,
             reasoning: created.label
         });
+
+        await resolveForecastHashAfter(tenantId, logResult.id);
 
         return NextResponse.json({ ...created, weekNumber });
     } catch (error) {
