@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     if (!isSaturday) {
         warningMsg = "Rolling the week requires your bank balance as of Saturday night. Using today's balance will skew your variance analysis.";
     }
-    
+
     let bankDataMissing = false;
     let finalBreakdownJson = priorWeekForecast?.breakdownJson || null;
 
@@ -184,11 +184,12 @@ export async function POST(req: NextRequest) {
                         adjustmentsCount: adjustments.length,
                         preRollMutationSnapshot
                     }),
-                    forecastVersionHashAfter: "pending", 
+                    forecastVersionHashAfter: "pending",
                 }
             });
 
-            
+
+            let autoMissChangeLogId: string | null = null;
             // ── Mark ExecutionPlan as Reviewed inside the atomic transaction ───────
             if (executionPlanId) {
                 await tx.executionPlan.update({
@@ -200,16 +201,39 @@ export async function POST(req: NextRequest) {
                     }
                 });
 
-                await tx.actionItem.updateMany({
+                const plannedActions = await tx.actionItem.findMany({
                     where: {
                         companyId,
                         executionPlanId: executionPlanId,
                         status: "planned"
                     },
-                    data: {
-                        status: "missed"
-                    }
+                    select: { id: true }
                 });
+
+                if (plannedActions.length > 0) {
+                    await tx.actionItem.updateMany({
+                        where: {
+                            companyId,
+                            executionPlanId: executionPlanId,
+                            status: "planned"
+                        },
+                        data: {
+                            status: "missed"
+                        }
+                    });
+
+                    const autoMissLog = await tx.changeLog.create({
+                        data: {
+                            companyId,
+                            source: "system",
+                            action: "SYSTEM_AUTO_MISS_ACTIONS",
+                            inputText: `Automatically marked ${plannedActions.length} planned action(s) as missed during week roll`,
+                            diffJson: JSON.stringify({ affectedActionIds: plannedActions.map(a => a.id) }),
+                            forecastVersionHashAfter: "pending"
+                        }
+                    });
+                    autoMissChangeLogId = autoMissLog.id;
+                }
             } else if (priorWeekForecast?.weekStart) {
                 // Fallback: find the latest plan for the rolled week
                 const plans = await tx.executionPlan.findMany({
@@ -235,10 +259,10 @@ export async function POST(req: NextRequest) {
             try {
                 const weekStart = new Date(priorWeekForecast.weekStart);
                 const weekEnd = new Date(priorWeekForecast.weekEnd);
-                
+
                 // 1. Get Projected Baseline from prior week forecast
                 const breakdown = JSON.parse(priorWeekForecast.breakdownJson);
-                
+
                 const baselineOutflowItem = breakdown.outflows?.find((item: any) => item.sourceType === "baseline");
                 const projectedOutflow = baselineOutflowItem ? baselineOutflowItem.amount : 0;
 
@@ -306,7 +330,7 @@ export async function POST(req: NextRequest) {
             const unexplainedGap = bankBalance - priorWeekForecast.endCashExpected;
             try {
                 const breakdown = JSON.parse(finalBreakdownJson || "{}");
-                
+
                 if (breakdown.inflows) {
                     breakdown.inflows = breakdown.inflows.map((item: any) => ({
                         ...item,
@@ -379,8 +403,8 @@ export async function POST(req: NextRequest) {
                 throw new Error("Missing or invalid required forecast fields for checkpoint preservation.");
             }
         }
-        
-        return { snapshot, changeLogId: changeLog.id, checkpoint };
+
+        return { snapshot, changeLogId: changeLog.id, checkpoint, autoMissChangeLogId };
         }); // End of transaction
 
         let checkpoint = coreResult.checkpoint;
@@ -390,7 +414,7 @@ export async function POST(req: NextRequest) {
             await prisma.$transaction(async (tx) => {
                 if (priorWeekForecast?.weekStart) {
                     const weekStart = new Date(priorWeekForecast.weekStart);
-                    
+
                     const actions = await tx.actionItem.findMany({
                         where: {
                             companyId,
@@ -445,9 +469,16 @@ export async function POST(req: NextRequest) {
             postRollHashWarning = "Failed to generate true post-roll hash; ChangeLog left as error.";
         }
 
-        return NextResponse.json({ 
-            ok: true, 
-            snapshotId: coreResult.snapshot.id, 
+        if (coreResult.autoMissChangeLogId) {
+            const missSuccess = await resolveForecastHashAfter(companyId, coreResult.autoMissChangeLogId);
+            if (!missSuccess) {
+                postRollHashWarning = (postRollHashWarning ? postRollHashWarning + " " : "") + "Failed to generate hash for auto-missed actions.";
+            }
+        }
+
+        return NextResponse.json({
+            ok: true,
+            snapshotId: coreResult.snapshot.id,
             asOfDate: coreResult.snapshot.asOfDate,
             checkpoint,
             warning: postRollHashWarning || warningMsg

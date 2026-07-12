@@ -128,7 +128,21 @@ export async function POST(req: Request) {
                         action: "PLAN_REVISION",
                         inputText: revisionReason,
                         diffJson: JSON.stringify({ version: newVersion, previousVersion: existing.version }),
-                        forecastVersionHashAfter: "pending"
+                        forecastVersionHashAfter: "pending",
+                        userId: userId
+                    }
+                });
+                changeLogId = cl.id;
+            } else {
+                const cl = await tx.changeLog.create({
+                    data: {
+                        companyId: company.id,
+                        source: "user_ui",
+                        action: "INITIAL_PLAN_APPROVAL",
+                        inputText: "Approved initial weekly execution plan",
+                        diffJson: JSON.stringify({ planId: newPlan.id, version: newVersion }),
+                        forecastVersionHashAfter: "pending",
+                        userId: userId
                     }
                 });
                 changeLogId = cl.id;
