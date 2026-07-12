@@ -65,16 +65,62 @@ export async function GET(req: NextRequest) {
 
         const historicalReviews = [];
         for (const [w, wPlans] of Array.from(historicalByWeek.entries()).slice(0, 13)) {
+            const weekStart = new Date(w);
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekEnd.getDate() + 7);
+
             // find checkpoint
             const checkpoint = await prisma.forecastCheckpoint.findFirst({
-                where: { companyId, weekStart: new Date(w) },
-                orderBy: { generatedAt: 'desc' }
+                where: { companyId, weekStart },
+                orderBy: { generatedAt: 'desc' },
+                include: { cashSnapshot: true }
             });
+
+            const actualEndingCash = checkpoint?.cashSnapshot?.bankBalance ?? wPlans[wPlans.length - 1]?.actualEndingCash ?? 0;
+
+            const priorWeekStart = new Date(weekStart);
+            priorWeekStart.setDate(priorWeekStart.getDate() - 7);
+            const priorCheckpoint = await prisma.forecastCheckpoint.findFirst({
+                where: { companyId, weekStart: priorWeekStart },
+                orderBy: { generatedAt: 'desc' },
+                include: { cashSnapshot: true }
+            });
+
+            let actualStartCash = priorCheckpoint?.cashSnapshot?.bankBalance;
+            if (actualStartCash === undefined) {
+                const fallbackSnapshot = await prisma.cashSnapshot.findFirst({
+                    where: { companyId, asOfDate: { lte: weekStart } },
+                    orderBy: { asOfDate: 'desc' }
+                });
+                actualStartCash = fallbackSnapshot?.bankBalance ?? 0;
+            }
+
+            const txs = await prisma.bankTransaction.groupBy({
+                by: ['direction'],
+                where: {
+                    companyId,
+                    txDate: { gte: weekStart, lt: weekEnd }
+                },
+                _sum: { amount: true }
+            });
+
+            const actualInflows = txs.find(t => t.direction === 'inflow')?._sum.amount ?? 0;
+            const actualOutflows = txs.find(t => t.direction === 'outflow')?._sum.amount ?? 0;
+
+            const reconciliationDifference = actualEndingCash - (actualStartCash + actualInflows - actualOutflows);
+
             historicalReviews.push({
                 weekStart: w,
                 originalPlan: wPlans[0],
                 revisedPlan: wPlans.length > 1 ? wPlans[wPlans.length - 1] : null,
-                checkpoint
+                checkpoint,
+                actuals: {
+                    startCash: actualStartCash,
+                    inflowsExpected: actualInflows,
+                    outflowsExpected: actualOutflows,
+                    endCashExpected: actualEndingCash,
+                    reconciliationDifference
+                }
             });
         }
 
