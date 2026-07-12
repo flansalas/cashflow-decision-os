@@ -199,6 +199,17 @@ export async function POST(req: NextRequest) {
                         actualEndingCash: bankBalance // Fixed semantic: exactly the entered actual balance
                     }
                 });
+
+                await tx.actionItem.updateMany({
+                    where: {
+                        companyId,
+                        executionPlanId: executionPlanId,
+                        status: "planned"
+                    },
+                    data: {
+                        status: "missed"
+                    }
+                });
             } else if (priorWeekForecast?.weekStart) {
                 // Fallback: find the latest plan for the rolled week
                 const plans = await tx.executionPlan.findMany({

@@ -274,11 +274,12 @@ function ReviewPageInner() {
                 )}
 
                 {/* Committed Actions Review */}
-                {!isHistorical && data?.priorWeekActions && data.priorWeekActions.length > 0 && (
+                {((!isHistorical && data?.priorWeekActions && data.priorWeekActions.length > 0) || (isHistorical && activeData.actions && activeData.actions.length > 0)) && (
                     <CommittedActionsReview
-                        actions={data.priorWeekActions}
+                        actions={isHistorical ? activeData.actions : data.priorWeekActions}
                         customerObservations={data.customerObservations || []}
                         vendorObservations={data.vendorObservations || []}
+                        readOnly={isHistorical}
                     />
                 )}
 

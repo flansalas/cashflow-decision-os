@@ -77,6 +77,7 @@ export async function GET(req: NextRequest) {
                 weekStart: { lt: currentWeekStart }
             },
             orderBy: [{ weekStart: 'desc' }, { version: 'asc' }],
+            include: { actionItems: true }
         });
 
         // Group historical by weekStart
@@ -143,10 +144,14 @@ export async function GET(req: NextRequest) {
                 histRevisedPlan = { ...histRevisedPlan, forecastStateJson: extractWeekFromPlan(histRevisedPlan, w) };
             }
 
+            const activePlanForActions = histRevisedPlan || histOriginalPlan;
+            const actions = activePlanForActions ? activePlanForActions.actionItems || [] : [];
+
             historicalReviews.push({
                 weekStart: w,
                 originalPlan: histOriginalPlan,
                 revisedPlan: histRevisedPlan,
+                actions,
                 checkpoint,
                 actuals: {
                     startCash: actualStartCash,

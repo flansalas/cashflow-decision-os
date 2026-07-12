@@ -6,7 +6,7 @@ function fmt(n: number | null | undefined) {
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 }
 
-export function CommittedActionsReview({ actions, customerObservations, vendorObservations }: { actions: any[], customerObservations: any[], vendorObservations: any[] }) {
+export function CommittedActionsReview({ actions, customerObservations, vendorObservations, readOnly }: { actions: any[], customerObservations: any[], vendorObservations: any[], readOnly?: boolean }) {
     if (!actions || actions.length === 0) return null;
 
     return (
@@ -21,6 +21,7 @@ export function CommittedActionsReview({ actions, customerObservations, vendorOb
                         action={action}
                         customerObservations={customerObservations}
                         vendorObservations={vendorObservations}
+                        readOnly={readOnly}
                     />
                 ))}
             </div>
@@ -28,7 +29,7 @@ export function CommittedActionsReview({ actions, customerObservations, vendorOb
     );
 }
 
-function ActionReviewRow({ action, customerObservations, vendorObservations }: { action: any, customerObservations: any[], vendorObservations: any[] }) {
+function ActionReviewRow({ action, customerObservations, vendorObservations, readOnly }: { action: any, customerObservations: any[], vendorObservations: any[], readOnly?: boolean }) {
     const [status, setStatus] = useState(action.status || "planned");
     const [completionNote, setCompletionNote] = useState(action.completionNote || "");
     const [actualEffect, setActualEffect] = useState<string>(action.actualAmountImpact !== null ? String(action.actualAmountImpact) : "");
@@ -110,51 +111,71 @@ function ActionReviewRow({ action, customerObservations, vendorObservations }: {
                     <label className="text-xs font-semibold text-slate-700">Status</label>
                     <span className="text-xs font-medium text-slate-500">{statusLabel}</span>
                 </div>
-                <select
-                    value={status}
-                    onChange={e => setStatus(e.target.value)}
-                    className="w-full text-sm border-slate-200 rounded-md shadow-sm"
-                >
-                    <option value="planned">Planned</option>
-                    <option value="completed">Completed</option>
-                    <option value="missed">Missed</option>
-                    <option value="cancelled">Cancelled</option>
-                </select>
+                {readOnly ? (
+                    <div className="w-full text-sm font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-md px-3 py-2 cursor-not-allowed opacity-80">
+                        {statusLabel}
+                    </div>
+                ) : (
+                    <select
+                        value={status}
+                        onChange={e => setStatus(e.target.value)}
+                        className="w-full text-sm border-slate-200 rounded-md shadow-sm"
+                    >
+                        <option value="planned">Planned</option>
+                        <option value="completed">Completed</option>
+                        <option value="missed">Missed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                )}
 
                 <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-700">Completion Note</label>
-                    <textarea
-                        value={completionNote}
-                        onChange={e => setCompletionNote(e.target.value)}
-                        placeholder="Add a note..."
-                        className="w-full text-sm border-slate-200 rounded-md shadow-sm"
-                        rows={2}
-                    />
+                    {readOnly ? (
+                        <div className="w-full text-sm bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-slate-700 min-h-[50px] whitespace-pre-wrap cursor-not-allowed opacity-80">
+                            {completionNote || <span className="text-slate-400 italic">No note</span>}
+                        </div>
+                    ) : (
+                        <textarea
+                            value={completionNote}
+                            onChange={e => setCompletionNote(e.target.value)}
+                            placeholder="Add a note..."
+                            className="w-full text-sm border-slate-200 rounded-md shadow-sm"
+                            rows={2}
+                        />
+                    )}
                 </div>
 
                 {status === "completed" && (
                     <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-slate-700">Verified Actual Effect ($)</label>
-                        <input
-                            type="number"
-                            value={actualEffect}
-                            onChange={e => setActualEffect(e.target.value)}
-                            placeholder="Leave empty if unverified"
-                            className="w-full text-sm border-slate-200 rounded-md shadow-sm font-financial"
-                        />
+                        {readOnly ? (
+                            <div className="w-full text-sm font-financial bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-slate-700 cursor-not-allowed opacity-80">
+                                {actualEffect !== "" ? actualEffect : <span className="text-slate-400 italic">Unverified</span>}
+                            </div>
+                        ) : (
+                            <input
+                                type="number"
+                                value={actualEffect}
+                                onChange={e => setActualEffect(e.target.value)}
+                                placeholder="Leave empty if unverified"
+                                className="w-full text-sm border-slate-200 rounded-md shadow-sm font-financial"
+                            />
+                        )}
                     </div>
                 )}
 
-                <div className="flex items-center justify-between pt-2">
-                    <div className="text-xs text-red-600 font-medium">{error}</div>
-                    <button
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="px-3 py-1.5 bg-slate-900 text-white text-xs font-medium rounded shadow-sm hover:bg-slate-800 disabled:opacity-50"
-                    >
-                        {saving ? "Saving..." : "Save Outcome"}
-                    </button>
-                </div>
+                {!readOnly && (
+                    <div className="flex items-center justify-between pt-2">
+                        <div className="text-xs text-red-600 font-medium">{error}</div>
+                        <button
+                            onClick={handleSave}
+                            disabled={saving}
+                            className="px-3 py-1.5 bg-slate-900 text-white text-xs font-medium rounded shadow-sm hover:bg-slate-800 disabled:opacity-50"
+                        >
+                            {saving ? "Saving..." : "Save Outcome"}
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
