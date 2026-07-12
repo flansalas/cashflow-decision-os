@@ -7,7 +7,7 @@
 - **Release Gate A Finding 1 (Resolved and Verified):** Sources, Settings, and standalone Scenarios expect `data.companyId` while the dashboard API returns `data.company.id`. Standardized on `data.company.id` contract.
 
 ## Data and forecasting
-- **Release Gate A Finding 2 (Open/Unapproved):** `forecast-assembly.ts` builds `skipDatesByPattern` but does not consistently apply it to Managed recurring items.
+- **Release Gate A Finding 2 (Resolved and Verified):** `forecast-assembly.ts` builds `skipDatesByPattern` but does not consistently apply it to Managed recurring items. Managed recurring forecasts now apply `skip_recurring_occurrence` dates. Organic forecasts intentionally ignore management skip overrides.
 
 ## Weekly decision loop
 - **Release Gate A Finding 3 (Open/Unapproved):** The cash-check-in learning path reads `amountExpected` while forecast breakdowns use `amount`.
