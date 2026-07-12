@@ -32,18 +32,20 @@ Recover and document the architecture, state, and decision boundaries of the Cas
 - Gate A Slice 4 (Checkpoint Preservation at Week Close) resolved and verified.
 - Milestone 2, Slice 5 (Committed Action Accountability) implemented and verified.
 - Milestone 2, Slice 6 (Action Completion and Actual-Effect Review) implemented and runtime-verified on the authorized Preview database.
-  - Migration 20260712143000_add_actual_amount_impact applied to Preview only (Production has not received this migration or code).
-  - Completed, missed, and cancelled outcomes preserve the intended actualAmountImpact semantics.
-  - Payment observations are read-only evidence and do not establish automatic causality.
-  - Runtime persistence was verified; browser verification of the endpoint/UI remains pending.
+  - Migration 20260712143000_add_actual_amount_impact applied to Preview only.
+- Milestone 2, Slice 7 (Controlled Learning from Action Outcomes) implemented and runtime-verified on the authorized Preview database.
+  - Code commit: 27a9519
+  - Runtime verification commit: 64a9172
+  - Migration 20260712144800_add_learning_proposal applied to Preview database only.
+  - Controlled proposal lifecycle and stale-assumption protection verified.
 
 ## Next Checkpoint
-- Milestone 2, Slice 7: controlled learning from action outcomes.
+- Milestone 2, Slice 8.
 
 ## Handoff
 - Source branch: release-slice-7
 - Recovery branch: architecture-recovery
 - Canonical repository: flansalas/cashflow-decision-os
 - Phase 1 status: Completed
-- Next task: Milestone 2, Slice 7 — controlled learning from action outcomes.
+- Next task: Milestone 2, Slice 8.
 - Do not merge, push, or resume implementation until approved.
