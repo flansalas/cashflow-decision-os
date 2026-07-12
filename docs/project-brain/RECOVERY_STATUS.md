@@ -8,7 +8,7 @@ Recover and document the architecture, state, and decision boundaries of the Cas
 - Active branch: architecture-recovery
 - Recovery baseline commit: 7419baa
 - Verified implementation baseline for Constitution reconciliation: c0e6d5fe43529ae7be030fd8b6de806f4ffecde0
-- Current blocker: Production promotion is blocked pending verification and resolution of the four Gate A findings. (Note: No Git merge is in progress and no tooling blocker exists; production promotion remains blocked solely by verification/reconciliation status.)
+- Current blocker: Production promotion is blocked pending verification and resolution of the remaining Gate A findings (Gate A Finding 1 is resolved and verified). (Note: No Git merge is in progress and no tooling blocker exists; production promotion remains blocked solely by verification/reconciliation status.)
   - Unfinished production merge was aborted; production remains unchanged.
   - release-slice-7 and its Preview represent a verified convergence checkpoint, not completion of the Constitution.
 
@@ -27,12 +27,13 @@ Recover and document the architecture, state, and decision boundaries of the Cas
 - Slices 3B, 4A, 5A, 5B, and 6A completed and verified within their tested scope
 
 ## Next Checkpoint
-- Review and verify the Constitution Reconciliation Map and the four Gate A findings before authorizing implementation.
+- Gate A Slice 1 (Company-ID Contract Repair) resolved and verified.
+- Next checkpoint: Gate A Slice 2: recurring skip-date handling.
 
 ## Handoff
 - Source branch: release-slice-7
 - Recovery branch: architecture-recovery
 - Canonical repository: flansalas/cashflow-decision-os
 - Phase 1 status: Completed
-- Next task: Review and verify the Constitution Reconciliation Map and the four Gate A findings.
+- Next task: Gate A Slice 2: recurring skip-date handling.
 - Do not merge, push, or resume implementation until approved.

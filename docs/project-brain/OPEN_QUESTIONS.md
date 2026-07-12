@@ -4,7 +4,7 @@
 - The approved CONSTITUTION.md is the canonical product vision. Implementation reconciliation remains incomplete.
 
 ## Software architecture
-- **Release Gate A Finding 1 (Open/Unapproved):** Sources, Settings, and standalone Scenarios expect `data.companyId` while the dashboard API returns `data.company.id`.
+- **Release Gate A Finding 1 (Resolved and Verified):** Sources, Settings, and standalone Scenarios expect `data.companyId` while the dashboard API returns `data.company.id`. Standardized on `data.company.id` contract.
 
 ## Data and forecasting
 - **Release Gate A Finding 2 (Open/Unapproved):** `forecast-assembly.ts` builds `skipDatesByPattern` but does not consistently apply it to Managed recurring items.
