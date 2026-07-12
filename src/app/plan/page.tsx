@@ -654,7 +654,7 @@ function PlanContent() {
                         weekStart={selectedWeek.weekStart}
                         companyId={effectiveCompanyId ?? ""}
                         scenarioItems={scenarioItems}
-                        viewMode={forecastView === "actions" || forecastView === "bar" ? "chart" : forecastView}
+                        viewMode={forecastView === "actions" || forecastView === "bar" || forecastView === "table" ? "chart" : forecastView}
                         buffer={data.assumptions.bufferMin}
                         macroMemory={data.macroMemory}
                         onReschedule={() => { setSelectedWeekNumber(null); fetchDashboard(); }}
