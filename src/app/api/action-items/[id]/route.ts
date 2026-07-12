@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { orgId, userId } = getAuth(req as any);
         if (!orgId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -13,7 +13,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
         if (!company) return NextResponse.json({ error: "Company not found" }, { status: 404 });
 
-        const { id } = params;
+        const { id } = await params;
         const body = await req.json();
         const { status, completionNote, actualAmountImpact } = body;
 
