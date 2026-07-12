@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
 
     const snapshotDate = asOfDate ? new Date(asOfDate) : new Date();
     const isSaturday = snapshotDate.getUTCDay() === 6;
-    let warningMsg = null;
+    let warningMsg: string | null = null;
     if (!isSaturday) {
         warningMsg = "Rolling the week requires your bank balance as of Saturday night. Using today's balance will skew your variance analysis.";
     }
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
 
     try {
         // ── Core rollover transaction ─────────────────────────────────────
-        // This must NEVER fail due to checkpoint issues.
+        // The entire rollover must fail if checkpoint preservation fails.
         const coreResult = await prisma.$transaction(async (tx) => {
             const snapshot = await tx.cashSnapshot.create({
                 data: { companyId, bankBalance, asOfDate: snapshotDate },
@@ -218,8 +218,6 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            return { snapshot, changeLogId: changeLog.id };
-        });
 
         // ── Macro-Memory: Grade Baseline Variance ───────────────────────
         if (priorWeekForecast && priorWeekForecast.breakdownJson) {
@@ -237,7 +235,7 @@ export async function POST(req: NextRequest) {
                 const projectedInflow = baselineInflowItem ? baselineInflowItem.amount : 0;
 
                 // 2. Get Actual Bank Txs for that week
-                const bankTxs = await prisma.bankTransaction.findMany({
+                const bankTxs = await tx.bankTransaction.findMany({
                     where: {
                         companyId,
                         txDate: { gte: weekStart, lte: weekEnd },
@@ -251,7 +249,7 @@ export async function POST(req: NextRequest) {
 
                 if (!bankDataMissing && (projectedOutflow > 0 || projectedInflow > 0)) {
                     // Filter out recurring patterns
-                    const patterns = await prisma.recurringPattern.findMany({
+                    const patterns = await tx.recurringPattern.findMany({
                         where: { companyId, isIncluded: true }
                     });
                     const recurringKeys = new Set(
@@ -275,7 +273,7 @@ export async function POST(req: NextRequest) {
                     const variancePct = projectedOutflow > 0 ? (actualOutflow - projectedOutflow) / projectedOutflow : 0;
                     const variancePctIn = projectedInflow > 0 ? (actualInflow - projectedInflow) / projectedInflow : null;
 
-                    await prisma.baselineVarianceLedger.create({
+                    await tx.baselineVarianceLedger.create({
                         data: {
                             companyId,
                             weekStart,
@@ -339,8 +337,8 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // ── Attempt ForecastCheckpoint (non-blocking) ─────────────────────
-        // Checkpoint failure must NEVER block the core rollover response.
+        // ── ForecastCheckpoint (BLOCKING) ─────────────────────
+        // Checkpoint preservation is required if a prior forecast exists.
         let checkpoint = null;
         if (priorWeekForecast) {
             const hasValidWeekStart = priorWeekForecast.weekStart && !isNaN(new Date(priorWeekForecast.weekStart).getTime());
@@ -350,35 +348,31 @@ export async function POST(req: NextRequest) {
             const hasValidOutflows = typeof priorWeekForecast.outflowsExpected === "number" && isFinite(priorWeekForecast.outflowsExpected);
 
             if (hasValidWeekStart && hasValidWeekEnd && hasValidEndCash && hasValidInflows && hasValidOutflows) {
-                try {
-                    checkpoint = await prisma.forecastCheckpoint.create({
-                        data: {
-                            companyId,
-                            cashSnapshotId: coreResult.snapshot.id,
-                            snapshotSource: (bankDataMissing || !isSaturday) ? "client_observed_unverified" : "client_observed_v1",
-                            forecastVersionHash: priorWeekForecast.forecastVersionHash || null,
-                            generatedAt: priorWeekForecast.generatedAt ? new Date(priorWeekForecast.generatedAt) : null,
-                            weekStart: new Date(priorWeekForecast.weekStart),
-                            weekEnd: new Date(priorWeekForecast.weekEnd),
-                            endCashExpected: priorWeekForecast.endCashExpected,
-                            inflowsExpected: priorWeekForecast.inflowsExpected,
-                            outflowsExpected: priorWeekForecast.outflowsExpected,
-                            breakdownJson: finalBreakdownJson,
-                        }
-                    });
-                } catch (cpError) {
-                    console.warn("ForecastCheckpoint creation failed (non-blocking):", cpError);
-                }
-            } else {
-                console.warn("ForecastCheckpoint skipped — missing or invalid fields:", {
-                    hasValidWeekStart,
-                    hasValidWeekEnd,
-                    hasValidEndCash,
-                    hasValidInflows,
-                    hasValidOutflows,
+                // Must succeed inside the transaction
+                checkpoint = await tx.forecastCheckpoint.create({
+                    data: {
+                        companyId,
+                        cashSnapshotId: snapshot.id, // coreResult isn't resolved yet
+                        snapshotSource: (bankDataMissing || !isSaturday) ? "client_observed_unverified" : "client_observed_v1",
+                        forecastVersionHash: priorWeekForecast.forecastVersionHash || null,
+                        generatedAt: priorWeekForecast.generatedAt ? new Date(priorWeekForecast.generatedAt) : null,
+                        weekStart: new Date(priorWeekForecast.weekStart),
+                        weekEnd: new Date(priorWeekForecast.weekEnd),
+                        endCashExpected: priorWeekForecast.endCashExpected,
+                        inflowsExpected: priorWeekForecast.inflowsExpected,
+                        outflowsExpected: priorWeekForecast.outflowsExpected,
+                        breakdownJson: finalBreakdownJson,
+                    }
                 });
+            } else {
+                throw new Error("Missing or invalid required forecast fields for checkpoint preservation.");
             }
         }
+        
+        return { snapshot, changeLogId: changeLog.id, checkpoint };
+        }); // End of transaction
+
+        let checkpoint = coreResult.checkpoint;
 
         
         // ── Post-roll hash generation (non-blocking) ──────────────────────
