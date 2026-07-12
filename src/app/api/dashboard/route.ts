@@ -73,6 +73,25 @@ export async function GET(req: NextRequest) {
             }),
         ]);
 
+        const [
+            latestBankUpload,
+            latestArUpload,
+            latestApUpload,
+        ] = await Promise.all([
+            prisma.importBatch.findFirst({
+                where: { companyId: cid, importType: "bank" },
+                orderBy: { uploadedAt: "desc" },
+            }),
+            prisma.importBatch.findFirst({
+                where: { companyId: cid, importType: "ar" },
+                orderBy: { uploadedAt: "desc" },
+            }),
+            prisma.importBatch.findFirst({
+                where: { companyId: cid, importType: "ap" },
+                orderBy: { uploadedAt: "desc" },
+            }),
+        ]);
+
         const d = new Date();
         const day = d.getUTCDay();
         const diff = day === 0 ? -6 : 1 - day;
@@ -722,6 +741,13 @@ export async function GET(req: NextRequest) {
             },
             zoneBoundary,
             lastUpdated: cashSnapshot.createdAt,
+            freshness: {
+                bankBalanceAsOf: cashSnapshot ? cashSnapshot.asOfDate.toISOString() : null,
+                bankLastImportedAt: latestBankUpload ? latestBankUpload.uploadedAt.toISOString() : null,
+                arLastImportedAt: latestArUpload ? latestArUpload.uploadedAt.toISOString() : null,
+                apLastImportedAt: latestApUpload ? latestApUpload.uploadedAt.toISOString() : null,
+                forecastCalculatedAt: new Date().toISOString(),
+            },
             onboardingCompleted: company.onboardingCompleted,
             executionPlan: activePlan ? {
                 id: activePlan.id,

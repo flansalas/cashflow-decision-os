@@ -187,6 +187,13 @@ interface DashboardData {
         createdAt: string;
         details: any;
     }>;
+    freshness?: {
+        bankBalanceAsOf: string | null;
+        bankLastImportedAt: string | null;
+        arLastImportedAt: string | null;
+        apLastImportedAt: string | null;
+        forecastCalculatedAt: string;
+    };
 }
 
 function PlanContent() {
@@ -436,6 +443,7 @@ function PlanContent() {
                         postApprovalChanges={data.postApprovalChanges}
                         forecastStateJson={data.forecast}
                         onPlanApproved={() => fetchDashboard(effectiveCompanyId)}
+                        freshness={data.freshness}
                     />
                 </div>
             </div>
