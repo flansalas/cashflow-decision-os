@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
         prisma.executionPlan.findFirst({ where: { companyId: cid, status: "active" }, orderBy: { version: "desc" } }),
         // For baseline computation (mirrors dashboard API)
         prisma.bankTransaction.findMany({
-            where: { companyId: cid, txDate: { gte: new Date(Date.now() - 84 * 86_400_000) } },
+            where: { companyId: cid, txDate: { gte: new Date(Date.now() - 365 * 86_400_000) } },
             select: { amount: true, txDate: true, description: true, direction: true },
         }),
         // For manual cash flow entries (mirrors dashboard API)

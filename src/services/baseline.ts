@@ -42,9 +42,10 @@ export interface BaselineAssumptions {
     rentDayOfMonth: number | null;
 }
 
-// Minimum weeks required to enable gap-fill projections (was 6, now 2 for always-on)
+// Minimum weeks required to enable gap-fill projections
 export const MIN_WEEKS_REQUIRED = 2;
-const WEEKS_TO_ANALYZE = 12;
+// Analyze up to 52 weeks (1 year) of history — recency weighting handles the bias
+const WEEKS_TO_ANALYZE = 52;
 
 function toBaselineTier(activeWeekCount: number): BaselineConfidenceTier {
     if (activeWeekCount >= 6) return "high";
@@ -160,24 +161,21 @@ export function computeBaseline(
     // Find weeks with at least some activity
     const activeWeeks = weekBuckets.filter(b => b.inflow > 0 || b.outflow > 0);
 
-    // SPAN-BASED FALLBACK: if transactions are concentrated in few weeks but the
-    // date range covers meaningful history, compute weekly average from total / span.
-    // This handles cases where bank data was uploaded as a batch (all same dates).
     if (activeWeeks.length < MIN_WEEKS_REQUIRED) {
-        // Measure span from the OLDEST transaction date to asOfDate
-        // (not min-to-max tx dates, which fails when all txs are the same day)
+        // SPAN-BASED FALLBACK: bucket-based approach fails when all transactions land
+        // in the same calendar week (e.g. a bank statement uploaded as a single batch).
+        // Instead, measure the window from oldest transaction → asOfDate and compute
+        // a weekly average from the totals over that span.
         const txDates = txs.map(t => t.date.getTime());
         const oldestTxDate = Math.min(...txDates);
         const daySpan = (asOfDate.getTime() - oldestTxDate) / 86_400_000;
-        
+
         if (daySpan >= 1) {
-            // We have a usable span — compute weekly average from totals over that span
             const weeksSpan = Math.max(1, daySpan / 7);
             const totalInflow = txs.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
             const totalOutflow = txs.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
 
-            // Subtract known recurring amounts from the total
-            // (rough estimate: N occurrences ≈ weeksSpan / cadence, conservative: weekly cadence)
+            // Subtract estimated recurring contribution over this span
             let recurringInflowTotal = 0;
             let recurringOutflowTotal = 0;
             for (const p of excludedPatterns) {
@@ -190,24 +188,23 @@ export function computeBaseline(
             const variableOutflow = Math.max(0, totalOutflow - recurringOutflowTotal);
             const weeklyInflow = variableInflow / weeksSpan;
             const weeklyOutflow = variableOutflow / weeksSpan;
-
             const tier = toBaselineTier(Math.max(1, Math.round(weeksSpan)));
 
             return {
                 variableOutflowWeekly: Math.round(weeklyOutflow * 100) / 100,
                 variableInflowWeekly: Math.round(weeklyInflow * 100) / 100,
-                variableOutflowBand: 0.35,   // wider band = more uncertainty
+                variableOutflowBand: 0.4,
                 variableInflowBand: 0.45,
                 weeksAnalyzed: Math.round(weeksSpan),
                 hasSufficientHistory: true,
                 baselineConfidenceTier: tier,
                 computedFrom: "bank_tx",
-                note: `Span-based estimate: ${Math.round(daySpan)}d window → $${Math.round(weeklyInflow).toLocaleString()} inflow/wk (${tier} confidence)`,
+                note: `Span-based: ${Math.round(daySpan)}d window → $${Math.round(weeklyInflow).toLocaleString()}/wk inflow (${tier} confidence). Upload more history for higher accuracy.`,
             };
         }
 
         return placeholderBaseline(
-            `Only ${activeWeeks.length} weeks of transaction history (need ${MIN_WEEKS_REQUIRED})`
+            `Only ${activeWeeks.length} active weeks found in 52-week history`
         );
     }
 
@@ -215,17 +212,19 @@ export function computeBaseline(
     const outflowValues: number[] = [];
     const weights: number[] = [];
 
-    // Compute weights and build arrays for robust statistics
+    // Recency-weighted: divide the 52-week window into tiers
+    // Most recent 4 weeks get full weight, older data decays
     for (let i = 0; i < WEEKS_TO_ANALYZE; i++) {
         const b = weekBuckets[i];
         if (b.inflow === 0 && b.outflow === 0) continue; // Skip inactive weeks
 
-        const ageWeeks = (WEEKS_TO_ANALYZE - 1) - i; 
+        const ageWeeks = (WEEKS_TO_ANALYZE - 1) - i;
         let weight = 1.0;
-        // Tiered weights: Most recent 4 weeks get highest weight
-        if (ageWeeks <= 3) weight = 1.5;         // Weeks 1-4
-        else if (ageWeeks <= 7) weight = 0.9;    // Weeks 5-8
-        else weight = 0.6;                       // Weeks 9-12
+        if (ageWeeks <= 3)  weight = 2.0;   // Weeks 1-4:   highest weight
+        else if (ageWeeks <= 7)  weight = 1.5;   // Weeks 5-8:   high weight
+        else if (ageWeeks <= 12) weight = 1.0;   // Weeks 9-12:  medium weight
+        else if (ageWeeks <= 25) weight = 0.7;   // Weeks 13-26: lower weight
+        else                     weight = 0.4;   // Weeks 27-52: background context
         
         inflowValues.push(b.inflow);
         outflowValues.push(b.outflow);

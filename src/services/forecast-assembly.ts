@@ -31,7 +31,7 @@ export async function assembleForecastData(companyId: string) {
         prisma.bankTransaction.findMany({
             where: {
                 companyId,
-                txDate: { gte: new Date(Date.now() - 84 * 86_400_000) },
+                txDate: { gte: new Date(Date.now() - 365 * 86_400_000) },
             },
             select: { amount: true, txDate: true, description: true, direction: true },
         }),

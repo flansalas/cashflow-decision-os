@@ -54,11 +54,11 @@ export async function GET(req: NextRequest) {
             prisma.assumption.findFirst({ where: { companyId: cid } }),
             prisma.recurringPattern.findMany({ where: { companyId: cid } }),
             prisma.override.findMany({ where: { companyId: cid, status: "active" }, orderBy: { createdAt: "desc" } }),
-            // Load bank txs for baseline computation (last 12 weeks = ~84 days)
+            // Load bank txs for baseline computation (last 52 weeks = ~365 days)
             prisma.bankTransaction.findMany({
                 where: {
                     companyId: cid,
-                    txDate: { gte: new Date(Date.now() - 84 * 86_400_000) },
+                    txDate: { gte: new Date(Date.now() - 365 * 86_400_000) },
                 },
                 select: { amount: true, txDate: true, description: true, direction: true },
             }),
