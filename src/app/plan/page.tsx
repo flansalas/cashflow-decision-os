@@ -493,8 +493,8 @@ function PlanContent() {
                                 {/* Unified View Segmented Control */}
                                 <div className="flex items-center gap-2 p-1 bg-white border shadow-sm rounded-[10px]" style={{ borderColor: "var(--border-subtle)" }}>
                                     {([
-                                        { id: "chart",   icon: <LineChart className="w-3.5 h-3.5" />, label: "Chart",   title: "Trend over time" },
-                                        { id: "actions", icon: <Target className="w-3.5 h-3.5" />, label: "Actions", title: "Card views + Inline fixes" },
+                                        { id: "chart",   icon: <LineChart className="w-3.5 h-3.5" />, label: "Chart",    title: "Trend over time" },
+                                        { id: "table",   icon: <ClipboardList className="w-3.5 h-3.5" />, label: "13-Week Table", title: "Full 13-week grid" },
                                     ] as const).map(v => (
                                         <button
                                             key={v.id}
@@ -511,24 +511,24 @@ function PlanContent() {
                                     
                                     <div className="relative flex items-center">
                                         <select
-                                            value={["chart", "actions"].includes(forecastView) ? "more" : forecastView}
+                                            value={["chart", "table"].includes(forecastView) ? "more" : forecastView}
                                             onChange={(e) => {
                                                 if (e.target.value !== "more") {
                                                     setForecastView(e.target.value as any);
                                                 }
                                             }}
                                             className="appearance-none bg-transparent pl-3 pr-8 py-1.5 rounded-[6px] text-xs font-bold transition-all focus:outline-none cursor-pointer"
-                                            style={!["chart", "actions"].includes(forecastView) 
+                                            style={!["chart", "table"].includes(forecastView) 
                                                 ? { background: "var(--color-primary)", color: "#ffffff", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }
                                                 : { color: "var(--text-muted)" }}
                                         >
                                             <option value="more" disabled>More Views...</option>
-                                            <option value="table">Table (13-Week Grid)</option>
+                                            <option value="actions">Actions (Weekly fixes)</option>
                                             <option value="runway">Runway (Health strip)</option>
                                             <option value="bar">Cash Flow (Inflow vs Outflow grid)</option>
                                             <option value="pulse">Waterfall (Pacing details)</option>
                                         </select>
-                                        <ChevronDown className="w-3 h-3 absolute right-2 pointer-events-none" style={{ color: !["chart", "actions"].includes(forecastView) ? "#fff" : "var(--text-muted)" }} />
+                                        <ChevronDown className="w-3 h-3 absolute right-2 pointer-events-none" style={{ color: !["chart", "table"].includes(forecastView) ? "#fff" : "var(--text-muted)" }} />
                                     </div>
                                 </div>
                             </div>
