@@ -236,17 +236,109 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
     const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
     const [mode, setMode] = useState<"select" | "approved" | "live">("select");
     const [isApproving, setIsApproving] = useState(false);
+    const [defaultOwner, setDefaultOwner] = useState("");
+    const [defaultDueDate, setDefaultDueDate] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 2);
+        return d.toISOString().split("T")[0];
+    });
 
     const handleApproveAndPrint = async () => {
         setIsApproving(true);
         try {
+            const actions = [];
+
+            for (const item of approvedToPay) {
+                if (excludedIds.has(item.id)) continue;
+                actions.push({
+                    type: "pay_ap",
+                    title: `Pay ${item.vendorName || item.label}`,
+                    description: `Release payment for ${item.billNo || "bill"}`,
+                    amountImpact: -Math.abs(item.amountOpen),
+                    constraintWeekStart: week1.weekStart,
+                    targetType: "bill",
+                    targetId: item.id,
+                    reasoningJson: { source: "approvedToPay" },
+                    ownerName: defaultOwner,
+                    dueDate: defaultDueDate
+                });
+            }
+
+            for (const item of collectionTargets) {
+                if (excludedIds.has(item.id)) continue;
+                actions.push({
+                    type: "collect_ar",
+                    title: `Collect from ${item.customerName || item.label}`,
+                    description: `Follow up on invoice ${item.invoiceNo || ""}`,
+                    amountImpact: Math.abs(item.amountOpen),
+                    constraintWeekStart: week1.weekStart,
+                    targetType: "invoice",
+                    targetId: item.id,
+                    reasoningJson: { source: "collectionTargets" },
+                    ownerName: defaultOwner,
+                    dueDate: defaultDueDate
+                });
+            }
+
+            for (const item of manualOutflows) {
+                const id = item.sourceId || item.label;
+                if (excludedIds.has(id)) continue;
+                actions.push({
+                    type: "manual_outflow",
+                    title: item.label,
+                    description: `Process manual outflow`,
+                    amountImpact: -Math.abs(item.amount),
+                    constraintWeekStart: week1.weekStart,
+                    targetType: item.sourceType === "recurring" ? "recurring" : "cash",
+                    targetId: item.sourceId || null,
+                    reasoningJson: { source: "manualOutflows" },
+                    ownerName: defaultOwner,
+                    dueDate: defaultDueDate
+                });
+            }
+
+            for (const item of manualInflows) {
+                const id = item.sourceId || item.label;
+                if (excludedIds.has(id)) continue;
+                actions.push({
+                    type: "manual_inflow",
+                    title: item.label,
+                    description: `Process manual inflow`,
+                    amountImpact: Math.abs(item.amount),
+                    constraintWeekStart: week1.weekStart,
+                    targetType: "cash",
+                    targetId: item.sourceId || null,
+                    reasoningJson: { source: "manualInflows" },
+                    ownerName: defaultOwner,
+                    dueDate: defaultDueDate
+                });
+            }
+
+            for (const { item, originalDue } of holdItems) {
+                if (excludedIds.has(item.id)) continue;
+                const isAR = item.kind === "ar";
+                actions.push({
+                    type: isAR ? "defer_ar" : "defer_ap",
+                    title: `Hold ${isAR ? item.customerName || item.label : item.vendorName || item.label}`,
+                    description: `Do not process ${isAR ? "invoice" : "bill"} ${item.invoiceNo || item.billNo || ""}`,
+                    amountImpact: isAR ? -Math.abs(item.amountOpen) : Math.abs(item.amountOpen),
+                    constraintWeekStart: week1.weekStart,
+                    targetType: isAR ? "invoice" : "bill",
+                    targetId: item.id,
+                    reasoningJson: { source: "holdItems", originalDue },
+                    ownerName: defaultOwner,
+                    dueDate: defaultDueDate
+                });
+            }
+
             const res = await fetch("/api/execution-plan", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     companyId,
                     weekStart: forecastStateJson?.weeks?.[0]?.weekStart,
-                    forecastStateJson
+                    forecastStateJson,
+                    actions
                 }),
             });
             if (res.ok) {
@@ -261,14 +353,14 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
 
     const isLive = mode === "live" || !executionPlan?.planForecast;
     const planForecast = executionPlan?.planForecast;
-    
+
     // Resolve which data to render
     const activeWeeks = isLive ? weeks : planForecast?.weeks || weeks;
     const activeInvoices = isLive ? invoices : planForecast?.invoices || invoices;
     const activeBills = isLive ? bills : planForecast?.bills || bills;
     const activeOpeningCash = isLive ? openingCash : planForecast?.input?.adjustedOpeningCash || openingCash;
     const activeBreakdown = isLive ? breakdown : planForecast?.weeks?.[0]?.breakdown || breakdown;
-    
+
     const toggleExclude = (id: string) => {
         setExcludedIds(prev => {
             const next = new Set(prev);
@@ -353,10 +445,10 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
         const mPay = manualOutflows.filter((i: any) => !excludedIds.has(i.sourceId || i.label)).reduce((s: number, i: any) => s + i.amount, 0);
         const aPay = automatedOutflows.filter((i: any) => !excludedIds.has(i.sourceId || i.label)).reduce((s: number, i: any) => s + i.amount, 0);
 
-        return { 
+        return {
             approvedToPay, collectionTargets, holdItems,
             manualOutflows, manualInflows, automatedOutflows,
-            totalCollect: baseTotalCollect + mCollect, 
+            totalCollect: baseTotalCollect + mCollect,
             totalPay: baseTotalPay + mPay,
             totalAutoOutflows: aPay
         };
@@ -364,6 +456,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
 
     const showAR = activeTab === "all" || activeTab === "ar";
     const showAP = activeTab === "all" || activeTab === "ap";
+    const hasActions = (approvedToPay.length + collectionTargets.length + manualOutflows.length + manualInflows.length + holdItems.length) > 0;
 
     if (mode === "select") {
         return (
@@ -387,7 +480,25 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            <button onClick={() => handleApproveAndPrint()} disabled={isApproving} className="w-full text-left p-4 rounded-lg border border-indigo-200 bg-indigo-50 hover:border-indigo-500 hover:bg-indigo-100 transition-colors">
+                            <div className="p-4 rounded-lg border border-slate-200 bg-slate-50 mb-4">
+                                <div className="text-sm font-bold text-slate-800 mb-2">Assignment Details</div>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Owner Name (Required)"
+                                        value={defaultOwner}
+                                        onChange={e => setDefaultOwner(e.target.value)}
+                                        className="flex-1 text-sm p-2 border rounded border-slate-300"
+                                    />
+                                    <input
+                                        type="date"
+                                        value={defaultDueDate}
+                                        onChange={e => setDefaultDueDate(e.target.value)}
+                                        className="w-36 text-sm p-2 border rounded border-slate-300"
+                                    />
+                                </div>
+                            </div>
+                            <button onClick={() => handleApproveAndPrint()} disabled={isApproving || (hasActions && (!defaultOwner || !defaultDueDate))} className="w-full text-left p-4 rounded-lg border border-indigo-200 bg-indigo-50 hover:border-indigo-500 hover:bg-indigo-100 transition-colors disabled:opacity-50">
                                 <div className="font-bold text-indigo-900">{isApproving ? "Approving..." : "Approve & Print Plan"}</div>
                                 <div className="text-xs text-indigo-700">Creates the initial baseline</div>
                             </button>

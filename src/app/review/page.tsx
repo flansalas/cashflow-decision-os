@@ -12,6 +12,8 @@ import { UpdateBalanceDialog } from "@/ui/UpdateBalanceDialog";
 import { VarianceDriverPanel } from "@/ui/VarianceDriverPanel";
 import type { VarianceDriverResult } from "@/services/variance-drivers";
 import { BacklogTriage } from "@/ui/BacklogTriage";
+import { CommittedActionsReview } from "@/ui/CommittedActionsReview";
+import { LearningProposals } from "@/ui/LearningProposals";
 
 function fmt(n: number) {
     if (n === null || n === undefined) return "-";
@@ -261,6 +263,24 @@ function ReviewPageInner() {
                             <VarianceDriverPanel data={driverData} />
                         </div>
                     </div>
+                )}
+
+                {/* Learning Proposals */}
+                {!isHistorical && data?.learningProposals && data.learningProposals.length > 0 && (
+                    <LearningProposals 
+                        proposals={data.learningProposals} 
+                        onAction={loadData} 
+                    />
+                )}
+
+                {/* Committed Actions Review */}
+                {((!isHistorical && data?.priorWeekActions && data.priorWeekActions.length > 0) || (isHistorical && activeData.actions && activeData.actions.length > 0)) && (
+                    <CommittedActionsReview
+                        actions={isHistorical ? activeData.actions : data.priorWeekActions}
+                        customerObservations={data.customerObservations || []}
+                        vendorObservations={data.vendorObservations || []}
+                        readOnly={isHistorical}
+                    />
                 )}
 
                 {/* Post-Approval Changes */}

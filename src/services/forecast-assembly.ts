@@ -156,6 +156,7 @@ export async function assembleForecastData(companyId: string) {
 
     const recurring: ForecastRecurring[] = recurringPatternsRaw.map(rp => ({
         id: rp.id, direction: rp.direction as "inflow" | "outflow", displayName: rp.displayName, typicalAmount: rp.typicalAmount, amountStdDev: rp.amountStdDev, cadence: rp.cadence, nextExpectedDate: rp.nextExpectedDate, confidence: rp.confidence as "high" | "med" | "low", category: rp.category, isIncluded: rp.isIncluded, isCritical: rp.isCritical,
+        skipDates: skipDatesByPattern.get(rp.id) ?? [],
     })).filter(rp => rp.isIncluded);
 
     // Apply adjust_amount overrides to recurring

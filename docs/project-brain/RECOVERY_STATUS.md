@@ -4,11 +4,13 @@
 Recover and document the architecture, state, and decision boundaries of the Cash Flow Decision OS.
 
 ## Current Status
-- Current phase: Recovery-control setup completed; ready to resume Phase 2 planning
+- Current phase: Constitution Reconciliation
 - Active branch: architecture-recovery
 - Recovery baseline commit: 7419baa
-- Latest recovery-control commit: 53192fe1ba8628a574062a65542ef20e438afa3b
-- Current blocker: None
+- Verified implementation baseline for Constitution reconciliation: c0e6d5fe43529ae7be030fd8b6de806f4ffecde0
+- Current blocker: Production promotion is blocked pending verification of Milestone 2. (Note: No Git merge is in progress and no tooling blocker exists; production promotion remains blocked; all four Gate A integrity findings are complete, but production promotion is still not authorized.)
+  - Unfinished production merge was aborted; production remains unchanged.
+  - release-slice-7 and its Preview represent a verified convergence checkpoint, not completion of the Constitution.
 
 ## Completed Checkpoints
 - Canonical repository identified
@@ -22,18 +24,39 @@ Recover and document the architecture, state, and decision boundaries of the Cas
 - Maintenance protocol committed at 6d279b1805558746b276a1a25e2fd58874398922
 - AGENTS.md Project Brain requirement committed at 53192fe1ba8628a574062a65542ef20e438afa3b
 - Recovery-control setup completed
+- Slices 3B, 4A, 5A, 5B, and 6A completed and verified within their tested scope
+
+- Gate A Slice 1 (Company-ID Contract Repair) resolved and verified.
+- Gate A Slice 2 (Recurring Skip-Date Handling) resolved and verified.
+- Gate A Slice 3 (Cash Check-in Learning Mismatch) resolved and verified.
+- Gate A Slice 4 (Checkpoint Preservation at Week Close) resolved and verified.
+- Milestone 2, Slice 5 (Committed Action Accountability) implemented and verified.
+- Milestone 2, Slice 6 (Action Completion and Actual-Effect Review) implemented and runtime-verified on the authorized Preview database.
+  - Migration 20260712143000_add_actual_amount_impact applied to Preview only.
+- Milestone 2, Slice 7 (Controlled Learning from Action Outcomes) implemented and runtime-verified on the authorized Preview database.
+  - Code commit: 27a9519
+  - Runtime verification commit: 64a9172
+  - Migration 20260712144800_add_learning_proposal applied to Preview database only.
+  - Controlled proposal lifecycle and stale-assumption protection verified.
+- Milestone 2, Slice 8A (Historical Action Outcomes) implemented and runtime-verified.
+  - Commit: b67ae66
+  - Planned actions are archived to "missed" status on week close.
+  - Historical actions are rendered as read-only in the UI.
+- Milestone 2, Slice 8B (Audit and Provenance Coverage) implemented and runtime-verified.
+  - Commit: 8694b70
+  - Plan approvals audited (INITIAL_PLAN_APPROVAL recorded on version 1).
+  - Automatic missed-action transitions audited (SYSTEM_AUTO_MISS_ACTIONS recorded on week roll).
+  - Runtime verification passed.
+  - No database migration required.
 
 ## Next Checkpoint
-- Return to the original audit thread.
-- Read the Project Brain before proceeding.
-- Define Phase 2 from the completed Phase 1 evidence inventory.
-- Keep audit and implementation separate.
-- Use Gemini 3.5 Flash for mechanical evidence collection and Gemini 3.1 Pro High only for architecture-sensitive interpretation.
+- Milestone 2, next phase.
 
 ## Handoff
 - Source branch: release-slice-7
 - Recovery branch: architecture-recovery
 - Canonical repository: flansalas/cashflow-decision-os
 - Phase 1 status: Completed
-- Next task: Design and execute Phase 2 of the evidence audit
-- Do not merge, push, or resume implementation until the audit plan is approved
+- Next task: Milestone 2, next phase.
+- Do not merge, push, or resume implementation until approved.
+

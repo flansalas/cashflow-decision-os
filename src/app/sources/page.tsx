@@ -13,8 +13,8 @@ export default function SourcesPage() {
         fetch("/api/dashboard")
             .then(res => res.json())
             .then(data => {
-                if (data.companyId) {
-                    setCompanyId(data.companyId);
+                if (data.company?.id) {
+                    setCompanyId(data.company.id);
                 }
             })
             .catch(console.error);

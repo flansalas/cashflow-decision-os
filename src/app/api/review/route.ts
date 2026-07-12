@@ -77,6 +77,7 @@ export async function GET(req: NextRequest) {
                 weekStart: { lt: currentWeekStart }
             },
             orderBy: [{ weekStart: 'desc' }, { version: 'asc' }],
+            include: { actionItems: true }
         });
 
         // Group historical by weekStart
@@ -143,10 +144,14 @@ export async function GET(req: NextRequest) {
                 histRevisedPlan = { ...histRevisedPlan, forecastStateJson: extractWeekFromPlan(histRevisedPlan, w) };
             }
 
+            const activePlanForActions = histRevisedPlan || histOriginalPlan;
+            const actions = activePlanForActions ? activePlanForActions.actionItems || [] : [];
+
             historicalReviews.push({
                 weekStart: w,
                 originalPlan: histOriginalPlan,
                 revisedPlan: histRevisedPlan,
+                actions,
                 checkpoint,
                 actuals: {
                     startCash: actualStartCash,
@@ -175,6 +180,40 @@ export async function GET(req: NextRequest) {
             }));
         }
 
+        const priorWeekStart = new Date(currentWeekStart);
+        priorWeekStart.setDate(priorWeekStart.getDate() - 7);
+        const priorWeekPlans = await prisma.executionPlan.findMany({
+            where: { companyId, weekStart: priorWeekStart },
+            orderBy: { version: 'desc' },
+            include: { actionItems: true },
+            take: 1
+        });
+        const priorWeekPlan = priorWeekPlans[0] || null;
+        const priorWeekActions = priorWeekPlan ? priorWeekPlan.actionItems : [];
+        let customerObservations: any[] = [];
+        let vendorObservations: any[] = [];
+
+        if (priorWeekActions.length > 0) {
+            const invoiceIds = priorWeekActions.filter((a: any) => a.targetType === 'invoice' && a.targetId).map((a: any) => a.targetId!);
+            const billIds = priorWeekActions.filter((a: any) => a.targetType === 'bill' && a.targetId).map((a: any) => a.targetId!);
+
+            if (invoiceIds.length > 0) {
+                 customerObservations = await prisma.customerPaymentObservation.findMany({
+                     where: { companyId, invoiceId: { in: invoiceIds } }
+                 });
+            }
+            if (billIds.length > 0) {
+                 vendorObservations = await prisma.vendorPaymentObservation.findMany({
+                     where: { companyId, billId: { in: billIds } }
+                 });
+            }
+        }
+
+        const learningProposals = await prisma.learningProposal.findMany({
+            where: { companyId, status: "pending" },
+            orderBy: { createdAt: "desc" }
+        });
+
         return NextResponse.json({
             active: {
                 weekStart: currentWeekStart,
@@ -184,6 +223,10 @@ export async function GET(req: NextRequest) {
                 changes
             },
             historical: historicalReviews,
+            priorWeekActions,
+            customerObservations,
+            vendorObservations,
+            learningProposals,
             cash,
             lastUpdated
         });

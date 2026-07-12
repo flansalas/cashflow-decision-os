@@ -68,17 +68,17 @@ export async function POST(req: NextRequest) {
 
     const snapshotDate = asOfDate ? new Date(asOfDate) : new Date();
     const isSaturday = snapshotDate.getUTCDay() === 6;
-    let warningMsg = null;
+    let warningMsg: string | null = null;
     if (!isSaturday) {
         warningMsg = "Rolling the week requires your bank balance as of Saturday night. Using today's balance will skew your variance analysis.";
     }
-    
+
     let bankDataMissing = false;
     let finalBreakdownJson = priorWeekForecast?.breakdownJson || null;
 
     try {
         // ── Core rollover transaction ─────────────────────────────────────
-        // This must NEVER fail due to checkpoint issues.
+        // The entire rollover must fail if checkpoint preservation fails.
         const coreResult = await prisma.$transaction(async (tx) => {
             const snapshot = await tx.cashSnapshot.create({
                 data: { companyId, bankBalance, asOfDate: snapshotDate },
@@ -184,11 +184,12 @@ export async function POST(req: NextRequest) {
                         adjustmentsCount: adjustments.length,
                         preRollMutationSnapshot
                     }),
-                    forecastVersionHashAfter: "pending", 
+                    forecastVersionHashAfter: "pending",
                 }
             });
 
-            
+
+            let autoMissChangeLogId: string | null = null;
             // ── Mark ExecutionPlan as Reviewed inside the atomic transaction ───────
             if (executionPlanId) {
                 await tx.executionPlan.update({
@@ -199,6 +200,40 @@ export async function POST(req: NextRequest) {
                         actualEndingCash: bankBalance // Fixed semantic: exactly the entered actual balance
                     }
                 });
+
+                const plannedActions = await tx.actionItem.findMany({
+                    where: {
+                        companyId,
+                        executionPlanId: executionPlanId,
+                        status: "planned"
+                    },
+                    select: { id: true }
+                });
+
+                if (plannedActions.length > 0) {
+                    await tx.actionItem.updateMany({
+                        where: {
+                            companyId,
+                            executionPlanId: executionPlanId,
+                            status: "planned"
+                        },
+                        data: {
+                            status: "missed"
+                        }
+                    });
+
+                    const autoMissLog = await tx.changeLog.create({
+                        data: {
+                            companyId,
+                            source: "system",
+                            action: "SYSTEM_AUTO_MISS_ACTIONS",
+                            inputText: `Automatically marked ${plannedActions.length} planned action(s) as missed during week roll`,
+                            diffJson: JSON.stringify({ affectedActionIds: plannedActions.map(a => a.id) }),
+                            forecastVersionHashAfter: "pending"
+                        }
+                    });
+                    autoMissChangeLogId = autoMissLog.id;
+                }
             } else if (priorWeekForecast?.weekStart) {
                 // Fallback: find the latest plan for the rolled week
                 const plans = await tx.executionPlan.findMany({
@@ -218,26 +253,24 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            return { snapshot, changeLogId: changeLog.id };
-        });
 
         // ── Macro-Memory: Grade Baseline Variance ───────────────────────
         if (priorWeekForecast && priorWeekForecast.breakdownJson) {
             try {
                 const weekStart = new Date(priorWeekForecast.weekStart);
                 const weekEnd = new Date(priorWeekForecast.weekEnd);
-                
+
                 // 1. Get Projected Baseline from prior week forecast
                 const breakdown = JSON.parse(priorWeekForecast.breakdownJson);
-                
+
                 const baselineOutflowItem = breakdown.outflows?.find((item: any) => item.sourceType === "baseline");
-                const projectedOutflow = baselineOutflowItem ? baselineOutflowItem.amountExpected : 0;
+                const projectedOutflow = baselineOutflowItem ? baselineOutflowItem.amount : 0;
 
                 const baselineInflowItem = breakdown.inflows?.find((item: any) => item.sourceType === "baseline");
-                const projectedInflow = baselineInflowItem ? baselineInflowItem.amountExpected : 0;
+                const projectedInflow = baselineInflowItem ? baselineInflowItem.amount : 0;
 
                 // 2. Get Actual Bank Txs for that week
-                const bankTxs = await prisma.bankTransaction.findMany({
+                const bankTxs = await tx.bankTransaction.findMany({
                     where: {
                         companyId,
                         txDate: { gte: weekStart, lte: weekEnd },
@@ -251,7 +284,7 @@ export async function POST(req: NextRequest) {
 
                 if (!bankDataMissing && (projectedOutflow > 0 || projectedInflow > 0)) {
                     // Filter out recurring patterns
-                    const patterns = await prisma.recurringPattern.findMany({
+                    const patterns = await tx.recurringPattern.findMany({
                         where: { companyId, isIncluded: true }
                     });
                     const recurringKeys = new Set(
@@ -275,7 +308,7 @@ export async function POST(req: NextRequest) {
                     const variancePct = projectedOutflow > 0 ? (actualOutflow - projectedOutflow) / projectedOutflow : 0;
                     const variancePctIn = projectedInflow > 0 ? (actualInflow - projectedInflow) / projectedInflow : null;
 
-                    await prisma.baselineVarianceLedger.create({
+                    await tx.baselineVarianceLedger.create({
                         data: {
                             companyId,
                             weekStart,
@@ -297,7 +330,7 @@ export async function POST(req: NextRequest) {
             const unexplainedGap = bankBalance - priorWeekForecast.endCashExpected;
             try {
                 const breakdown = JSON.parse(finalBreakdownJson || "{}");
-                
+
                 if (breakdown.inflows) {
                     breakdown.inflows = breakdown.inflows.map((item: any) => ({
                         ...item,
@@ -339,8 +372,8 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // ── Attempt ForecastCheckpoint (non-blocking) ─────────────────────
-        // Checkpoint failure must NEVER block the core rollover response.
+        // ── ForecastCheckpoint (BLOCKING) ─────────────────────
+        // Checkpoint preservation is required if a prior forecast exists.
         let checkpoint = null;
         if (priorWeekForecast) {
             const hasValidWeekStart = priorWeekForecast.weekStart && !isNaN(new Date(priorWeekForecast.weekStart).getTime());
@@ -350,37 +383,85 @@ export async function POST(req: NextRequest) {
             const hasValidOutflows = typeof priorWeekForecast.outflowsExpected === "number" && isFinite(priorWeekForecast.outflowsExpected);
 
             if (hasValidWeekStart && hasValidWeekEnd && hasValidEndCash && hasValidInflows && hasValidOutflows) {
-                try {
-                    checkpoint = await prisma.forecastCheckpoint.create({
-                        data: {
-                            companyId,
-                            cashSnapshotId: coreResult.snapshot.id,
-                            snapshotSource: (bankDataMissing || !isSaturday) ? "client_observed_unverified" : "client_observed_v1",
-                            forecastVersionHash: priorWeekForecast.forecastVersionHash || null,
-                            generatedAt: priorWeekForecast.generatedAt ? new Date(priorWeekForecast.generatedAt) : null,
-                            weekStart: new Date(priorWeekForecast.weekStart),
-                            weekEnd: new Date(priorWeekForecast.weekEnd),
-                            endCashExpected: priorWeekForecast.endCashExpected,
-                            inflowsExpected: priorWeekForecast.inflowsExpected,
-                            outflowsExpected: priorWeekForecast.outflowsExpected,
-                            breakdownJson: finalBreakdownJson,
-                        }
-                    });
-                } catch (cpError) {
-                    console.warn("ForecastCheckpoint creation failed (non-blocking):", cpError);
-                }
-            } else {
-                console.warn("ForecastCheckpoint skipped — missing or invalid fields:", {
-                    hasValidWeekStart,
-                    hasValidWeekEnd,
-                    hasValidEndCash,
-                    hasValidInflows,
-                    hasValidOutflows,
+                // Must succeed inside the transaction
+                checkpoint = await tx.forecastCheckpoint.create({
+                    data: {
+                        companyId,
+                        cashSnapshotId: snapshot.id, // coreResult isn't resolved yet
+                        snapshotSource: (bankDataMissing || !isSaturday) ? "client_observed_unverified" : "client_observed_v1",
+                        forecastVersionHash: priorWeekForecast.forecastVersionHash || null,
+                        generatedAt: priorWeekForecast.generatedAt ? new Date(priorWeekForecast.generatedAt) : null,
+                        weekStart: new Date(priorWeekForecast.weekStart),
+                        weekEnd: new Date(priorWeekForecast.weekEnd),
+                        endCashExpected: priorWeekForecast.endCashExpected,
+                        inflowsExpected: priorWeekForecast.inflowsExpected,
+                        outflowsExpected: priorWeekForecast.outflowsExpected,
+                        breakdownJson: finalBreakdownJson,
+                    }
                 });
+            } else {
+                throw new Error("Missing or invalid required forecast fields for checkpoint preservation.");
             }
         }
 
-        
+        return { snapshot, changeLogId: changeLog.id, checkpoint, autoMissChangeLogId };
+        }); // End of transaction
+
+        let checkpoint = coreResult.checkpoint;
+
+        // ── Best-effort Learning Proposal Generation ──────────────────────
+        try {
+            await prisma.$transaction(async (tx) => {
+                if (priorWeekForecast?.weekStart) {
+                    const weekStart = new Date(priorWeekForecast.weekStart);
+
+                    const actions = await tx.actionItem.findMany({
+                        where: {
+                            companyId,
+                            status: "completed",
+                            actualAmountImpact: { not: null },
+                            executionPlan: { weekStart: weekStart }
+                        }
+                    });
+
+                    let expectedTotal = 0;
+                    let actualTotal = 0;
+                    let actionIds: string[] = [];
+                    for (const a of actions) {
+                        expectedTotal += a.amountImpact;
+                        actualTotal += a.actualAmountImpact!;
+                        actionIds.push(a.id);
+                    }
+
+                    if (expectedTotal > 0 && actualTotal < expectedTotal) {
+                        const variance = (expectedTotal - actualTotal) / expectedTotal;
+                        if (variance >= 0.10) {
+                            const assumption = await tx.assumption.findFirst({ where: { companyId } });
+                            if (assumption) {
+                                const currentSafetyMargin = assumption.projectionSafetyMargin;
+                                const proposedSafetyMargin = parseFloat((currentSafetyMargin * 1.05).toFixed(2));
+                                await tx.learningProposal.create({
+                                    data: {
+                                        companyId,
+                                        type: "safety_margin_increase",
+                                        proposedChangeJson: JSON.stringify({
+                                            field: "projectionSafetyMargin",
+                                            currentValue: currentSafetyMargin,
+                                            proposedValue: proposedSafetyMargin
+                                        }),
+                                        rationale: `Completed actions for week underperformed expected cash effect by ${(variance * 100).toFixed(1)}%. Recommend increasing safety margin to protect runway.`,
+                                        evidenceActionIds: JSON.stringify(actionIds)
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (proposalError) {
+            console.error("Best-effort learning proposal generation failed:", proposalError);
+        }
+
         // ── Post-roll hash generation (non-blocking) ──────────────────────
         let postRollHashWarning = null;
         const success = await resolveForecastHashAfter(companyId, coreResult.changeLogId);
@@ -388,9 +469,16 @@ export async function POST(req: NextRequest) {
             postRollHashWarning = "Failed to generate true post-roll hash; ChangeLog left as error.";
         }
 
-        return NextResponse.json({ 
-            ok: true, 
-            snapshotId: coreResult.snapshot.id, 
+        if (coreResult.autoMissChangeLogId) {
+            const missSuccess = await resolveForecastHashAfter(companyId, coreResult.autoMissChangeLogId);
+            if (!missSuccess) {
+                postRollHashWarning = (postRollHashWarning ? postRollHashWarning + " " : "") + "Failed to generate hash for auto-missed actions.";
+            }
+        }
+
+        return NextResponse.json({
+            ok: true,
+            snapshotId: coreResult.snapshot.id,
             asOfDate: coreResult.snapshot.asOfDate,
             checkpoint,
             warning: postRollHashWarning || warningMsg

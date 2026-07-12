@@ -1,22 +1,33 @@
 # Open Questions
 
 ## Product vision
-- Not yet verified through the recovery audit.
+- The approved CONSTITUTION.md is the canonical product vision. Implementation reconciliation remains incomplete.
 
 ## Software architecture
-- Not yet verified through the recovery audit.
+- **Release Gate A Finding 1 (Resolved and Verified):** Sources, Settings, and standalone Scenarios expect `data.companyId` while the dashboard API returns `data.company.id`. Standardized on `data.company.id` contract.
 
 ## Data and forecasting
-- Not yet verified through the recovery audit.
+- **Release Gate A Finding 2 (Resolved and Verified):** `forecast-assembly.ts` builds `skipDatesByPattern` but does not consistently apply it to Managed recurring items. Managed recurring forecasts now apply `skip_recurring_occurrence` dates. Organic forecasts intentionally ignore management skip overrides.
 
 ## Weekly decision loop
-- Not yet verified through the recovery audit.
+- **Release Gate A Finding 3 (Resolved and Verified):** The cash-check-in learning path reads `amountExpected` while forecast breakdowns use `amount`. Cash check-ins now read `WeekBreakdownItem.amount` (expected baseline values no longer silently default to zero).
+- **Release Gate A Finding 4 (Resolved and Verified):** Week close now requires successful checkpoint preservation. A failed checkpoint rolls back the week-close transaction and returns non-success. All four Gate A integrity findings are complete.
 
 ## AI and learning
-- Not yet verified through the recovery audit.
+- Hidden CFO AI is not implemented. Deterministic explanations and recommendations are partial. Financial and behavioral memory exist partially, but controlled outcome learning is not operational.
 
 ## Deployment and tenancy
-- Not yet verified through the recovery audit.
+- The authenticated Preview tenant behavior and the specifically audited Slice 1A/4A mutation routes were verified.
+- Complete tenant coverage across every route and environment remains unverified.
 
 ## Documentation and knowledge
 - Not yet verified through the recovery audit.
+
+## Milestone 2: Action Accountability
+- The next checkpoint is Milestone 2, Slice 8B or next phase.
+- Action completion and actual-effect review (Slice 6) is implemented and runtime-verified on the authorized Preview database.
+- Controlled learning from action outcomes (Slice 7) is implemented and runtime-verified on the authorized Preview database (code commit: 27a9519, runtime verification commit: 64a9172).
+- Historical Action Outcomes (Slice 8A) are implemented and runtime-verified (commit: b67ae66). Planned actions are archived as missed on week close, and historical actions are rendered read-only in the UI.
+- Audit and Provenance Coverage (Slice 8B) is implemented and runtime-verified (commit: 8694b70). Plan approvals and automatic missed-action transitions are fully audited, with forecast version hashes correctly resolved.
+- Owner-cockpit simplification and broader AI remain later work.
+
