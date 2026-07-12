@@ -4,11 +4,13 @@
 Recover and document the architecture, state, and decision boundaries of the Cash Flow Decision OS.
 
 ## Current Status
-- Current phase: Recovery-control setup completed; ready to resume Phase 2 planning
+- Current phase: Constitution Reconciliation
 - Active branch: architecture-recovery
 - Recovery baseline commit: 7419baa
-- Latest recovery-control commit: 53192fe1ba8628a574062a65542ef20e438afa3b
-- Current blocker: None
+- Verified implementation baseline for Constitution reconciliation: c0e6d5fe43529ae7be030fd8b6de806f4ffecde0
+- Current blocker: Production promotion is blocked pending verification and resolution of the four Gate A findings. (Note: No Git merge is in progress and no tooling blocker exists; production promotion remains blocked solely by verification/reconciliation status.)
+  - Unfinished production merge was aborted; production remains unchanged.
+  - release-slice-7 and its Preview represent a verified convergence checkpoint, not completion of the Constitution.
 
 ## Completed Checkpoints
 - Canonical repository identified
@@ -22,18 +24,15 @@ Recover and document the architecture, state, and decision boundaries of the Cas
 - Maintenance protocol committed at 6d279b1805558746b276a1a25e2fd58874398922
 - AGENTS.md Project Brain requirement committed at 53192fe1ba8628a574062a65542ef20e438afa3b
 - Recovery-control setup completed
+- Slices 3B, 4A, 5A, 5B, and 6A completed and verified within their tested scope
 
 ## Next Checkpoint
-- Return to the original audit thread.
-- Read the Project Brain before proceeding.
-- Define Phase 2 from the completed Phase 1 evidence inventory.
-- Keep audit and implementation separate.
-- Use Gemini 3.5 Flash for mechanical evidence collection and Gemini 3.1 Pro High only for architecture-sensitive interpretation.
+- Review and verify the Constitution Reconciliation Map and the four Gate A findings before authorizing implementation.
 
 ## Handoff
 - Source branch: release-slice-7
 - Recovery branch: architecture-recovery
 - Canonical repository: flansalas/cashflow-decision-os
 - Phase 1 status: Completed
-- Next task: Design and execute Phase 2 of the evidence audit
-- Do not merge, push, or resume implementation until the audit plan is approved
+- Next task: Review and verify the Constitution Reconciliation Map and the four Gate A findings.
+- Do not merge, push, or resume implementation until approved.
