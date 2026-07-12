@@ -181,6 +181,17 @@ export async function GET(req: NextRequest) {
             rentDayOfMonth: assumptions.rentDayOfMonth,
         });
         const hasBankBaseline = baseline.hasSufficientHistory;
+        // DEBUG: log baseline stats so we can verify projection activation
+        console.log("[baseline-debug]", {
+            companyId: cid,
+            bankTxCount: bankTxs.length,
+            hasSufficientHistory: baseline.hasSufficientHistory,
+            weeksAnalyzed: baseline.weeksAnalyzed,
+            variableInflowWeekly: baseline.variableInflowWeekly,
+            variableOutflowWeekly: baseline.variableOutflowWeekly,
+            baselineConfidenceTier: baseline.baselineConfidenceTier,
+            note: baseline.note,
+        });
 
         // ── Apply Macro-Memory Variance Multipliers (8-week recency-weighted) ─
         //
@@ -395,6 +406,7 @@ export async function GET(req: NextRequest) {
                 projectionSafetyMargin: assumptions.projectionSafetyMargin,
             },
             hasBankBaseline,
+            baselineConfidenceTier: baseline.baselineConfidenceTier,
             variableOutflowWeekly: baseline.variableOutflowWeekly,
             variableOutflowBand: baseline.variableOutflowBand,
             baselineInflowWeekly: baseline.variableInflowWeekly,
