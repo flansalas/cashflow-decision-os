@@ -448,6 +448,40 @@ function PlanContent() {
 
             <main className="max-w-[88rem] mx-auto px-6 py-6 space-y-6">
 
+                {/* Drift Indicator */}
+                {data.executionPlan?.planForecast && (
+                    (() => {
+                        const approvedLowest = data.executionPlan.planForecast.lowestExpectedBalance;
+                        const liveLowest = data.forecast.lowestExpectedBalance;
+                        const drift = liveLowest - approvedLowest;
+                        const isSevereDrift = drift < -5000 || (approvedLowest > 0 && drift / approvedLowest < -0.1);
+
+                        if (isSevereDrift) {
+                            return (
+                                <div className="rounded-xl border p-4 flex items-start gap-4 mb-6 shadow-sm"
+                                    style={{ background: "#fff1f2", borderColor: "#fecdd3" }}>
+                                    <AlertTriangle className="w-6 h-6 text-rose-600 shrink-0 mt-0.5" />
+                                    <div>
+                                        <h3 className="text-sm font-bold text-rose-900 flex items-center gap-2">
+                                            Forecast Drift Alert
+                                            <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-rose-200 text-rose-800">
+                                                Action Required
+                                            </span>
+                                        </h3>
+                                        <p className="text-sm text-rose-800 mt-1">
+                                            The live forecast is projecting a lowest expected balance of <span className="font-bold">{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(liveLowest)}</span>, which is significantly lower than the <span className="font-bold">{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(approvedLowest)}</span> from your Approved Execution Plan.
+                                        </p>
+                                        <p className="text-xs text-rose-700 mt-2 font-medium">
+                                            Review recent anomalies or missing payments, or head to the Weekly Review to formally revise the plan.
+                                        </p>
+                                    </div>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()
+                )}
+
                 {/* ── Dashboard Pulse Grid ─────────────────────────── */}
                 <div className="flex flex-col gap-5">
                     {/* FULL WIDTH: The Pulse (Chart) */}
@@ -546,6 +580,7 @@ function PlanContent() {
                             {forecastView === "pulse" && (
                                 <ForecastPulseView
                                     weeks={data.forecast.weeks}
+                                    organicWeeks={data.organicForecast?.weeks}
                                     buffer={data.assumptions.bufferMin}
                                     constraintWeek={data.forecast.constraintWeek}
                                     scenarioItems={scenarioItems}

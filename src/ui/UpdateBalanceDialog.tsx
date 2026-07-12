@@ -38,6 +38,7 @@ interface Props {
     companyId: string;
     executionPlanId?: string;
     priorWeekData?: any;
+    priorWeekActions?: any[];
     lastUpdated?: string | null;
     onSaved: () => void;
     onCancel: () => void;
@@ -50,12 +51,13 @@ export function UpdateBalanceDialog({
                     
     executionPlanId,
     priorWeekData,
+    priorWeekActions = [],
     lastUpdated,
     onSaved,
     onCancel,
 }: Props) {
     const todayISO = new Date().toISOString().slice(0, 10);
-    const [step, setStep] = useState<"upload" | "bank" | "balance" | "preview" | "triage" | "summary">("upload");
+    const [step, setStep] = useState<"upload" | "bank" | "balance" | "preview" | "actions" | "triage" | "summary">("upload");
     const [balance, setBalance] = useState(currentBalance.toString());
     const [asOfDate, setAsOfDate] = useState(todayISO);
     const [saving, setSaving] = useState(false);
@@ -76,6 +78,7 @@ export function UpdateBalanceDialog({
     const [triageItems, setTriageItems] = useState<TriageItem[]>([]);
     const [weekOptions, setWeekOptions] = useState<WeekOption[]>([]);
     const [decisions, setDecisions] = useState<Record<string, TriageDecision>>({});
+    const [actionDecisions, setActionDecisions] = useState<Record<string, "completed" | "missed" | "deferred">>({});
     const [triageLoading, setTriageLoading] = useState(false);
     const [triageSaving, setTriageSaving] = useState(false);
 
@@ -175,7 +178,9 @@ export function UpdateBalanceDialog({
             setWeekOptions(triageData.weekOptions || []);
             setTriageItems(allSlipped);
 
-            if (allSlipped.length === 0) {
+            if (priorWeekActions.length > 0) {
+                setStep("actions");
+            } else if (allSlipped.length === 0) {
                 setSummary({ snoozed: 0, markedPaid: 0, dismissed: 0, newBalance: parsedBalance + adjTotal });
                 setStep("summary");
             } else {
@@ -665,6 +670,89 @@ export function UpdateBalanceDialog({
                     >Cancel</button>
                 </div>
             </div>
+        );
+    }
+
+    if (step === "actions") {
+        const allDecided = priorWeekActions.every(a => actionDecisions[a.id]);
+
+        const handleActionsSubmit = async () => {
+            // In a real app we'd save these via a new endpoint /api/actions/resolve.
+            // For now, we capture them in state and move to triage.
+            if (triageItems.length === 0) {
+                setSummary({ snoozed: 0, markedPaid: 0, dismissed: 0, newBalance: parsedBalance + adjTotal });
+                setStep("summary");
+            } else {
+                setStep("triage");
+            }
+        };
+
+        return shell(
+            <>
+                <div className="px-7 pt-7 pb-4">
+                    <p className="text-xs font-bold uppercase tracking-widest mb-1 text-indigo-600">Action Accountability</p>
+                    <h2 className="text-lg font-bold leading-tight text-slate-900">Review Last Week's Plan</h2>
+                    <p className="text-xs mt-1 text-slate-500">
+                        Did you complete the actions you committed to last week?
+                    </p>
+                </div>
+
+                <div className="mx-7 border-t border-slate-200" />
+
+                <div className="px-7 py-4 max-h-[340px] overflow-y-auto space-y-3 custom-scrollbar">
+                    {priorWeekActions.map(action => {
+                        const dec = actionDecisions[action.id];
+                        return (
+                            <div key={action.id} className="rounded-xl border p-3 space-y-2 transition-colors border-slate-200 bg-slate-50">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-semibold text-slate-800">{action.title}</p>
+                                        <p className="text-xs mt-0.5 text-slate-500">{action.description}</p>
+                                    </div>
+                                    <p className={`text-sm font-financial font-bold shrink-0 ${action.amountImpact >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                        {action.amountImpact > 0 ? "+" : ""}{fmt(action.amountImpact)}
+                                    </p>
+                                </div>
+
+                                <div className="flex flex-wrap gap-1.5 pt-2">
+                                    <button onClick={() => setActionDecisions(prev => ({ ...prev, [action.id]: "completed" }))}
+                                        className="text-xs px-2.5 py-1 rounded-lg border font-semibold transition-colors"
+                                        style={{
+                                            borderColor: dec === "completed" ? "rgba(34,197,94,0.5)" : "var(--border-subtle)",
+                                            background: dec === "completed" ? "rgba(34,197,94,0.1)" : "var(--bg-surface)",
+                                            color: dec === "completed" ? "#15803d" : "var(--text-muted)",
+                                        }}>✓ Completed</button>
+                                    <button onClick={() => setActionDecisions(prev => ({ ...prev, [action.id]: "deferred" }))}
+                                        className="text-xs px-2.5 py-1 rounded-lg border font-semibold transition-colors"
+                                        style={{
+                                            borderColor: dec === "deferred" ? "rgba(245,158,11,0.5)" : "var(--border-subtle)",
+                                            background: dec === "deferred" ? "rgba(245,158,11,0.1)" : "var(--bg-surface)",
+                                            color: dec === "deferred" ? "#b45309" : "var(--text-muted)",
+                                        }}>→ Deferred</button>
+                                    <button onClick={() => setActionDecisions(prev => ({ ...prev, [action.id]: "missed" }))}
+                                        className="text-xs px-2.5 py-1 rounded-lg border font-semibold transition-colors"
+                                        style={{
+                                            borderColor: dec === "missed" ? "rgba(239,68,68,0.5)" : "var(--border-subtle)",
+                                            background: dec === "missed" ? "rgba(239,68,68,0.1)" : "var(--bg-surface)",
+                                            color: dec === "missed" ? "#b91c1c" : "var(--text-muted)",
+                                        }}>× Missed</button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                <div className="px-7 pb-7 pt-3 flex items-center gap-3">
+                    <button
+                        onClick={handleActionsSubmit}
+                        disabled={!allDecided}
+                        className="flex-1 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all active:scale-95 shadow-lg shadow-indigo-200"
+                        style={{ background: "var(--color-primary)" }}
+                    >
+                        Continue to Triage →
+                    </button>
+                </div>
+            </>
         );
     }
 

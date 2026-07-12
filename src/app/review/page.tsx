@@ -194,6 +194,37 @@ function ReviewPageInner() {
             </header>
 
             <main className="max-w-5xl mx-auto px-5 py-8 space-y-8">
+                {/* Plan vs Actual Summary Widget */}
+                {isHistorical && (
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex divide-x divide-slate-100">
+                        <div className="p-6 flex-1">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Approved Plan Ending Cash</p>
+                            <p className="text-3xl font-financial font-bold text-slate-700">
+                                {fmt(hasRevised ? getRevisedMetric("endCashExpected") : (hasOriginal ? getOriginalMetric("endCashExpected") : getForecastMetric("endCashExpected")))}
+                            </p>
+                        </div>
+                        <div className="p-6 flex-1">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Actual Ending Cash</p>
+                            <p className="text-3xl font-financial font-bold text-slate-900">
+                                {getActualMetric("endCashExpected") !== null ? fmt(getActualMetric("endCashExpected")) : <span className="text-slate-400 italic text-xl">Unverified</span>}
+                            </p>
+                        </div>
+                        <div className="p-6 flex-1 bg-slate-50">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Variance</p>
+                            <p className={`text-3xl font-financial font-bold ${
+                                ((getActualMetric("endCashExpected") ?? getForecastMetric("endCashExpected")) - (hasRevised ? getRevisedMetric("endCashExpected") : (hasOriginal ? getOriginalMetric("endCashExpected") : getForecastMetric("endCashExpected")))) < 0 ? 'text-red-600' : 'text-emerald-600'
+                            }`}>
+                                {(() => {
+                                    const base = hasRevised ? getRevisedMetric("endCashExpected") : (hasOriginal ? getOriginalMetric("endCashExpected") : getForecastMetric("endCashExpected"));
+                                    const target = getActualMetric("endCashExpected") ?? getForecastMetric("endCashExpected");
+                                    const v = target - base;
+                                    return v > 0 ? "+" + fmt(v) : fmt(v);
+                                })()}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 {/* Comparison Table */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
@@ -331,6 +362,7 @@ function ReviewPageInner() {
                     companyId={companyId!}
                     executionPlanId={data.active.revisedPlan?.id || data.active.originalPlan?.id}
                     priorWeekData={data.active.latestForecast}
+                    priorWeekActions={data.priorWeekActions || []}
                     lastUpdated={data.lastUpdated}
                     onSaved={handleRollComplete}
                     onCancel={() => setShowRoll(false)}

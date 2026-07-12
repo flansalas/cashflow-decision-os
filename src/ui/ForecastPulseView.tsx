@@ -24,6 +24,7 @@ interface WeekData {
 
 interface Props {
     weeks: WeekData[];
+    organicWeeks?: WeekData[];
     buffer: number;
     constraintWeek: number | null;
     scenarioItems?: ScenarioItem[];
@@ -41,8 +42,9 @@ function formatDate(dateStr: string): string {
     return (d.getUTCMonth() + 1) + "/" + d.getUTCDate();
 }
 
-export function ForecastPulseView({ weeks, buffer, constraintWeek, scenarioItems = [], onWeekClick }: Props) {
+export function ForecastPulseView({ weeks, organicWeeks, buffer, constraintWeek, scenarioItems = [], onWeekClick }: Props) {
     const hasScenario = scenarioItems.length > 0;
+    const hasOrganic = organicWeeks && organicWeeks.length === weeks.length;
     const CHART_HEIGHT = 260; // px, the drawable canvas height
 
     // Build per-week running scenario delta
@@ -54,13 +56,16 @@ export function ForecastPulseView({ weeks, buffer, constraintWeek, scenarioItems
     }
     const enriched = [];
     let accum = 0;
-    for (const w of weeks) {
+    for (let i = 0; i < weeks.length; i++) {
+        const w = weeks[i];
         const weekDelta = scenarioDeltaByWeek.get(w.weekNumber) ?? 0;
         accum += weekDelta;
+        const organicEnd = hasOrganic ? organicWeeks![i].endCashExpected : null;
         enriched.push({
             ...w,
             weekDelta,
-            scenarioEnd: hasScenario ? w.endCashExpected + accum : null
+            scenarioEnd: hasScenario ? w.endCashExpected + accum : null,
+            organicEnd,
         });
     }
 
@@ -71,6 +76,7 @@ export function ForecastPulseView({ weeks, buffer, constraintWeek, scenarioItems
         w.endCashBest,
         w.endCashWorst,
         w.startCash + w.inflowsExpected, // peak before outflows
+        ...(w.organicEnd !== null ? [w.organicEnd] : [])
     ]);
     const globalMax = Math.max(...allValues, buffer * 2, 1);
     const globalMin = Math.min(...allValues, 0);
@@ -107,15 +113,20 @@ export function ForecastPulseView({ weeks, buffer, constraintWeek, scenarioItems
                             <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> Sim Active</span>
                         </span>
                     )}
+                    {hasOrganic && (
+                        <span className="flex items-center gap-1.5 ml-2">
+                            <span className="w-3 h-0.5 border-t border-dashed inline-block" style={{ borderColor: "var(--text-faint)" }} /> Baseline (Organic)
+                        </span>
+                    )}
                 </div>
             </div>            {/* SVG Waterfall Chart */}
             <div className="relative w-full overflow-x-auto pt-4">
                 <svg
                     width="100%"
-                    viewBox={`0 0 ${weeks.length * 80} ${CHART_HEIGHT + 60}`}
+                    viewBox={`0 0 ${weeks.length * 80} ${CHART_HEIGHT + 70}`}
                     preserveAspectRatio="none"
                     className="w-full"
-                    style={{ minHeight: `${CHART_HEIGHT + 60}px` }}
+                    style={{ minHeight: `${CHART_HEIGHT + 70}px` }}
                 >
                     {/* Buffer line */}
                     <line
@@ -178,6 +189,7 @@ export function ForecastPulseView({ weeks, buffer, constraintWeek, scenarioItems
 
                         // Scenario dot Y
                         const scenarioY = w.scenarioEnd !== null ? toY(w.scenarioEnd) : null;
+                        const organicY = w.organicEnd !== null ? toY(w.organicEnd) : null;
 
                         return (
                             <g
@@ -252,6 +264,14 @@ export function ForecastPulseView({ weeks, buffer, constraintWeek, scenarioItems
                                     />
                                 )}
 
+                                {/* Organic baseline dot (gray outline) */}
+                                {organicY !== null && Math.abs(organicY - endY) > 2 && (
+                                    <circle
+                                        cx={barX + barW / 2} cy={organicY}
+                                        r={4} fill="none" stroke="var(--text-faint)" strokeWidth={1.5} strokeDasharray="2 2"
+                                    />
+                                )}
+
                                 {/* Constraint "OUT OF CASH" marker */}
                                 {isConstraint && (
                                     <text
@@ -276,13 +296,22 @@ export function ForecastPulseView({ weeks, buffer, constraintWeek, scenarioItems
                                     {formatDate(w.weekEnd)}
                                 </text>
 
-                                {/* Ending balance label */}
+                                {/* Beginning balance label */}
                                 <text
-                                    x={barX + barW / 2} y={CHART_HEIGHT + 36}
-                                    fill={isStale ? "var(--text-muted)" : endCashIsNegative ? "var(--color-danger)" : endCashBelowBuffer ? "#b45309" : "var(--color-positive)"}
-                                    fontSize={7.5} textAnchor="middle" fontWeight="bold"
+                                    x={barX + barW / 2} y={CHART_HEIGHT + 38}
+                                    fill={w.startCash < 0 ? "var(--color-danger)" : w.startCash < buffer ? "#b45309" : "var(--text-primary)"}
+                                    fontSize={9} textAnchor="middle" fontWeight="bold"
                                 >
-                                    {fmt(w.endCashExpected)}
+                                    {fmt(w.startCash)}
+                                </text>
+                                
+                                {/* Ending balance small label */}
+                                <text
+                                    x={barX + barW / 2} y={CHART_HEIGHT + 50}
+                                    fill="var(--text-muted)"
+                                    fontSize={6.5} textAnchor="middle"
+                                >
+                                    end: {fmt(w.endCashExpected)}
                                 </text>
                             </g>
                         );
