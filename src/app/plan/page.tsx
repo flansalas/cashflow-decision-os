@@ -94,6 +94,50 @@ interface DashboardData {
         lowestExpectedBalance: number;
         lowestWorstBalance: number;
     };
+    organicForecast: {
+        weeks: Array<{
+            weekNumber: number;
+            weekStart: string;
+            weekEnd: string;
+            startCash: number;
+            endCashExpected: number;
+            endCashBest: number;
+            endCashWorst: number;
+            inflowsExpected: number;
+            outflowsExpected: number;
+            inflowsBest: number;
+            outflowsBest: number;
+            inflowsWorst: number;
+            outflowsWorst: number;
+            zone: string;
+            confidenceScore: number;
+            breakdown: {
+                inflows: Array<{
+                    label: string;
+                    amount: number;
+                    type: string;
+                    sourceType: string;
+                    confidence: string;
+                    section?: string;
+                }>;
+                outflows: Array<{
+                    label: string;
+                    amount: number;
+                    type: string;
+                    sourceType: string;
+                    confidence: string;
+                    section?: string;
+                }>;
+            };
+            worstCaseDriver: string | null;
+        }>;
+        constraintWeek: number | null;
+        worstCaseConstraintWeek: number | null;
+        expectedRunOutWeek: number | null;
+        worstCaseRunOutWeek: number | null;
+        lowestExpectedBalance: number;
+        lowestWorstBalance: number;
+    };
     confidence: { score: number; label: string; reasons: string[] };
     anomalies: Array<{ id: string; type: string; severity: string; message: string }>;
     anomalyCount: number;
@@ -467,6 +511,7 @@ function PlanContent() {
                             {forecastView === "chart" && (
                                 <ForecastChart
                                     weeks={data.forecast.weeks}
+                                    organicWeeks={data.organicForecast?.weeks}
                                     planWeeks={data.executionPlan?.planForecast?.weeks}
                                     buffer={data.assumptions.bufferMin}
                                     constraintWeek={data.forecast.constraintWeek}

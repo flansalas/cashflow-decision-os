@@ -353,6 +353,59 @@ export async function GET(req: NextRequest) {
 
         const forecast = computeForecast(forecastInput);
 
+        const organicInvoices: ForecastInvoice[] = invoicesRaw.map(inv => {
+            const cp = customerMap.get(inv.customerName);
+            const ovs = overridesByTarget.get(inv.id) || [];
+            let markedPaid = false, overrideAmount: number | null = null, partialPayment: number | null = null, isExcluded = false;
+            for (const ov of ovs) {
+                if (ov.type === "mark_paid") markedPaid = true;
+                if (ov.type === "exclude") isExcluded = true;
+                if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
+                if (ov.type === "partial_payment" && ov.amount != null) partialPayment = ov.amount;
+            }
+            if (isExcluded) return null;
+            return {
+                id: inv.id, customerName: inv.customerName, invoiceNo: inv.invoiceNo, amountOpen: inv.amountOpen, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, daysPastDue: inv.daysPastDue, status: inv.status, metaJson: inv.metaJson, typicalDelayWeeks: cp?.typicalDelayWeeks, riskTag: cp?.riskTag, overrideExpectedDate: null, overrideAmount, markedPaid, partialPayment,
+            };
+        }).filter((inv): inv is NonNullable<typeof inv> => inv !== null);
+
+        const organicBills: ForecastBill[] = billsRaw.map(bill => {
+            const vp = vendorMap.get(bill.vendorName);
+            const ovs = overridesByTarget.get(bill.id) || [];
+            let markedPaid = false, overrideAmount: number | null = null, isExcluded = false;
+            for (const ov of ovs) {
+                if (ov.type === "mark_paid") markedPaid = true;
+                if (ov.type === "exclude") isExcluded = true;
+                if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
+            }
+            if (isExcluded) return null;
+            return {
+                id: bill.id, vendorName: bill.vendorName, billNo: bill.billNo, amountOpen: bill.amountOpen, billDate: bill.billDate, dueDate: bill.dueDate, daysPastDue: bill.daysPastDue, status: bill.status, criticality: vp?.criticality, overrideDueDate: null, overrideAmount, markedPaid,
+            };
+        }).filter((bill): bill is NonNullable<typeof bill> => bill !== null);
+
+        const organicRecurring: ForecastRecurring[] = recurringPatternsRaw.map(rp => ({
+            id: rp.id, direction: rp.direction as "inflow" | "outflow", displayName: rp.displayName, typicalAmount: rp.typicalAmount, amountStdDev: rp.amountStdDev, cadence: rp.cadence, nextExpectedDate: rp.nextExpectedDate, confidence: rp.confidence as "high" | "med" | "low", category: rp.category, isIncluded: rp.isIncluded, isCritical: rp.isCritical,
+            skipDates: []
+        })).filter(rp => rp.isIncluded);
+        for (const r of organicRecurring) {
+            const ovs = overridesByTarget.get(r.id) || [];
+            const adj = ovs.find(o => o.type === "adjust_amount");
+            if (adj && adj.amount != null) {
+                r.typicalAmount = adj.amount;
+            }
+        }
+
+        const organicInput: ForecastInput = {
+            ...forecastInput,
+            invoices: organicInvoices,
+            bills: organicBills,
+            recurring: organicRecurring,
+            oneTimeOutflows: []
+        };
+
+        const organicForecast = computeForecast(organicInput);
+
         // ── QA / Anomalies / Confidence ────────────────────────────────
         const payrollPattern = recurringPatternsRaw.find(
             rp => rp.category === "payroll" && rp.isIncluded
@@ -606,6 +659,7 @@ export async function GET(req: NextRequest) {
                 variableOutflowWeekly: baseline.variableOutflowWeekly,
                 variableInflowWeekly: baseline.variableInflowWeekly,
             },
+            organicForecast,
             forecast,
             confidence,
             dataQualityGate,
