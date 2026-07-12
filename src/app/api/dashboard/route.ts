@@ -73,6 +73,46 @@ export async function GET(req: NextRequest) {
             }),
         ]);
 
+        const d = new Date();
+        const day = d.getUTCDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        d.setUTCDate(d.getUTCDate() + diff);
+        const currentWeekStart = new Date(d.toISOString().slice(0, 10));
+
+        const activePlan = await prisma.executionPlan.findFirst({
+            where: { companyId: cid, weekStart: currentWeekStart, status: "approved" },
+            orderBy: { version: 'desc' }
+        });
+
+        let postApprovalChanges: any[] = [];
+        let planForecast = null;
+
+        if (activePlan) {
+            try {
+                if (activePlan.forecastStateJson) {
+                    planForecast = JSON.parse(activePlan.forecastStateJson);
+                }
+            } catch (e) {
+                console.error("Failed to parse forecastStateJson for active plan", e);
+            }
+
+            const rawChanges = await prisma.changeLog.findMany({
+                where: { companyId: cid, timestamp: { gt: activePlan.createdAt } },
+                orderBy: { timestamp: 'asc' }
+            });
+            postApprovalChanges = rawChanges.map(c => {
+                let details = {};
+                try {
+                    details = JSON.parse(c.diffJson);
+                } catch { }
+                return {
+                    id: c.id,
+                    createdAt: c.timestamp.toISOString(),
+                    details
+                };
+            });
+        }
+
         if (!cashSnapshot) {
             return NextResponse.json({ error: "No cash snapshot found. Complete onboarding first." }, { status: 400 });
         }
@@ -683,6 +723,14 @@ export async function GET(req: NextRequest) {
             zoneBoundary,
             lastUpdated: cashSnapshot.createdAt,
             onboardingCompleted: company.onboardingCompleted,
+            executionPlan: activePlan ? {
+                id: activePlan.id,
+                version: activePlan.version,
+                createdAt: activePlan.createdAt.toISOString(),
+                approvedBy: activePlan.approvedBy,
+                planForecast
+            } : null,
+            postApprovalChanges,
             backlog: {
                 overdueAP,
                 overdueAR,

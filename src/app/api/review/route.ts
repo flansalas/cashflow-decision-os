@@ -4,6 +4,22 @@ import { assembleForecastData } from "@/services/forecast-assembly";
 import { getAuditReason } from "@/utils/audit-helpers";
 import { resolveTenant } from "@/lib/tenant";
 
+function extractWeekFromPlan(plan: any, targetWeekStartStr: string) {
+    if (!plan || !plan.forecastStateJson) return null;
+    try {
+        const parsed = typeof plan.forecastStateJson === "string"
+            ? JSON.parse(plan.forecastStateJson)
+            : plan.forecastStateJson;
+
+        if (!parsed.weeks || !Array.isArray(parsed.weeks)) return null;
+
+        const normalizedTarget = new Date(targetWeekStartStr).getTime();
+        const matchingWeek = parsed.weeks.find((w: any) => new Date(w.weekStart).getTime() === normalizedTarget);
+        return matchingWeek || null;
+    } catch {
+        return null;
+    }
+}
 
 export async function GET(req: NextRequest) {
     const tenantId = await resolveTenant(req);
@@ -26,6 +42,14 @@ export async function GET(req: NextRequest) {
 
         let originalPlan = plans.length > 0 ? plans[0] : null;
         let revisedPlan = plans.length > 1 ? plans[plans.length - 1] : null;
+
+        const currentWeekStr = currentWeekStart.toISOString();
+        if (originalPlan) {
+            originalPlan = { ...originalPlan, forecastStateJson: extractWeekFromPlan(originalPlan, currentWeekStr) } as any;
+        }
+        if (revisedPlan) {
+            revisedPlan = { ...revisedPlan, forecastStateJson: extractWeekFromPlan(revisedPlan, currentWeekStr) } as any;
+        }
 
 
         // Get Cash state
@@ -52,7 +76,7 @@ export async function GET(req: NextRequest) {
                 reviewedAt: { not: null },
                 weekStart: { lt: currentWeekStart }
             },
-            orderBy: { weekStart: 'desc', version: 'asc' },
+            orderBy: [{ weekStart: 'desc' }, { version: 'asc' }],
         });
 
         // Group historical by weekStart
@@ -109,10 +133,20 @@ export async function GET(req: NextRequest) {
 
             const reconciliationDifference = actualEndingCash - (actualStartCash + actualInflows - actualOutflows);
 
+            let histOriginalPlan = wPlans[0] || null;
+            let histRevisedPlan = wPlans.length > 1 ? wPlans[wPlans.length - 1] : null;
+
+            if (histOriginalPlan) {
+                histOriginalPlan = { ...histOriginalPlan, forecastStateJson: extractWeekFromPlan(histOriginalPlan, w) };
+            }
+            if (histRevisedPlan) {
+                histRevisedPlan = { ...histRevisedPlan, forecastStateJson: extractWeekFromPlan(histRevisedPlan, w) };
+            }
+
             historicalReviews.push({
                 weekStart: w,
-                originalPlan: wPlans[0],
-                revisedPlan: wPlans.length > 1 ? wPlans[wPlans.length - 1] : null,
+                originalPlan: histOriginalPlan,
+                revisedPlan: histRevisedPlan,
                 checkpoint,
                 actuals: {
                     startCash: actualStartCash,
