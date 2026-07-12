@@ -112,13 +112,13 @@ function CategoryDonut({ items, size = 60 }: { items: BreakdownItem[]; size?: nu
     const total = items.reduce((s, i) => s + i.amount, 0);
     const radius = size / 2 - 6;
     const circumference = 2 * Math.PI * radius;
-    
+
     // Simple 2-category split for the pie
     const recurring = items.filter(i => i.sourceType === "recurring" || i.section?.includes("Recurring")).reduce((s, i) => s + i.amount, 0);
     const oneOff = total - recurring;
-    
+
     const recP = (recurring / total);
-    
+
     return (
         <div className="relative shrink-0" style={{ width: size, height: size }}>
             <svg width={size} height={size} className="transform -rotate-90">
@@ -148,7 +148,7 @@ function ViewContextHero({ week, viewMode, buffer }: { week: WeekData; viewMode:
     const bufferTarget = buffer ?? 0;
     const distFromBuffer = week.endCashExpected - bufferTarget;
     const fuel = bufferTarget > 0 ? Math.max(0, Math.min(1, week.endCashExpected / (bufferTarget * 2))) : 0;
-    
+
     const inflowTotal = week.inflowsExpected;
     const outflowTotal = week.outflowsExpected;
     const riskAmount = week.endCashExpected - week.endCashWorst;
@@ -158,18 +158,18 @@ function ViewContextHero({ week, viewMode, buffer }: { week: WeekData; viewMode:
         return (
             <div className="mx-6 mt-4">
                 <div className="rounded-xl px-5 py-6 border shadow-sm relative overflow-hidden" style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)" }}>
-                    
-                    {/* Primary Answer: Ending Cash */}
+
+                    {/* Primary Answer: Beginning Cash */}
                     <div className="mb-8">
                         <div className="flex items-center justify-between mb-3">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Position Analysis</p>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Beginning Cash</p>
                             <span className="text-[9px] px-2 py-0.5 rounded-full font-bold bg-slate-900 text-white uppercase tracking-[0.1em] border border-white/10">Engine Confidence: {week.breakdown.inflows[0]?.confidence || "High"}</span>
                         </div>
-                        <h3 className={`text-5xl font-bold font-financial tracking-tight leading-none ${week.endCashExpected < 0 ? "text-rose-600" : "text-slate-900"}`}>
-                            {fmt(week.endCashExpected)}
+                        <h3 className={`text-5xl font-bold font-financial tracking-tight leading-none ${week.startCash < 0 ? "text-rose-600" : "text-slate-900"}`}>
+                            {fmt(week.startCash)}
                         </h3>
                         <p className="text-sm mt-3 leading-relaxed text-slate-500 font-medium">
-                            Terminal position for period ending {new Date(week.weekEnd).toLocaleDateString("en-US", { timeZone: "UTC", month: 'short', day: 'numeric' })}. 
+                            Starting position for period ending {new Date(week.weekEnd).toLocaleDateString("en-US", { timeZone: "UTC", month: 'short', day: 'numeric' })}.
                             The net movement creates a <span className={`font-bold ${isPositiveWeek ? "text-emerald-700" : "text-rose-600"}`}>{fmt(Math.abs(net))} {isPositiveWeek ? "surplus" : "burn"}</span>.
                         </p>
                     </div>
@@ -177,7 +177,7 @@ function ViewContextHero({ week, viewMode, buffer }: { week: WeekData; viewMode:
                     {/* The "Math" (Linear Equation) */}
                     <div className="grid grid-cols-4 gap-0 rounded-2xl border overflow-hidden shadow-sm" style={{ background: "var(--bg-base)", borderColor: "var(--border-subtle)" }}>
                         <div className="p-4 bg-white/50 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Opening</p>
+                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Beginning</p>
                             <p className="text-sm font-bold font-financial text-slate-900">{fmt(week.startCash)}</p>
                         </div>
                         <div className="p-4 border-l bg-white/30 space-y-1" style={{ borderColor: "var(--border-subtle)" }}>
@@ -189,8 +189,8 @@ function ViewContextHero({ week, viewMode, buffer }: { week: WeekData; viewMode:
                             <p className="text-sm font-bold text-rose-600 font-financial">-{fmt(outflowTotal)}</p>
                         </div>
                         <div className="p-4 border-l bg-slate-50 space-y-1" style={{ borderColor: "var(--border-subtle)" }}>
-                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Worst-Case</p>
-                            <p className="text-sm font-bold font-financial text-slate-900">{fmt(week.endCashWorst)}</p>
+                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Ending</p>
+                            <p className="text-sm font-bold font-financial text-slate-900">{fmt(week.endCashExpected)}</p>
                         </div>
                     </div>
 
@@ -518,8 +518,8 @@ function SectionBlock({
                 <div className="space-y-2 mb-4">
                     {items.map((item, i) => (
                         <div key={i} className="group/row stagger-item" style={{ animationDelay: `${i * 40}ms` }}>
-                            <div 
-                                className={`flex items-center justify-between py-2.5 px-3.5 rounded-xl gap-2 border bg-white shadow-sm transition-all hover:shadow-md hover:scale-[1.01] hover-elevate ${isClickable(item) ? "cursor-pointer" : ""}`} 
+                            <div
+                                className={`flex items-center justify-between py-2.5 px-3.5 rounded-xl gap-2 border bg-white shadow-sm transition-all hover:shadow-md hover:scale-[1.01] hover-elevate ${isClickable(item) ? "cursor-pointer" : ""}`}
                                 style={{ borderColor: item.type === "rescheduled" ? "rgba(99,102,241,0.25)" : "var(--border-subtle)" }}
                                 onClick={(e) => isClickable(item) && handleRowClick(e, item)}
                             >
@@ -534,7 +534,7 @@ function SectionBlock({
                                             </span>
                                             <span className="text-xs" style={{ color: "var(--text-muted)" }}>{item.confidence} confidence</span>
                                         </div>
-                                        
+
                                         {/* Macro-Memory Auto-Correction Transparency Note */}
                                         {item.sourceType === "baseline" && macroMemory && macroMemory.weeksTracked > 0 && (
                                             <div className="mt-1.5 flex flex-col gap-0.5 text-[9px] uppercase tracking-wide font-semibold text-slate-400 bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 w-fit">
@@ -588,7 +588,7 @@ function SectionBlock({
                                         </button>
                                     )}
                                     {isClickable(item) && (
-                                        <div 
+                                        <div
                                             className="ml-1 opacity-0 group-hover/row:opacity-100 transition-opacity text-slate-300"
                                             title="View source"
                                         >
@@ -723,8 +723,8 @@ export function WeekDrawer({ week, weekNumber, weekStart, companyId, scenarioIte
                 </div>
 
                 {/* Inflows */}
-                <div 
-                    className="px-6 pt-5 transition-colors group/sec" 
+                <div
+                    className="px-6 pt-5 transition-colors group/sec"
                     onMouseEnter={() => setHoveredSection("in")}
                     onMouseLeave={() => setHoveredSection(null)}
                 >
@@ -749,7 +749,7 @@ export function WeekDrawer({ week, weekNumber, weekStart, companyId, scenarioIte
                 </div>
 
                 {/* Outflows */}
-                <div 
+                <div
                     className="px-6 pt-2 pb-6 group/sec"
                     onMouseEnter={() => setHoveredSection("out")}
                     onMouseLeave={() => setHoveredSection(null)}
@@ -758,7 +758,7 @@ export function WeekDrawer({ week, weekNumber, weekStart, companyId, scenarioIte
                         <p className="text-xs flex items-center gap-1.5 font-bold text-red-600 uppercase tracking-widest">
                             <ArrowDownRight className="w-3.5 h-3.5" /> Outflows — <span className="font-financial">{fmt(week.outflowsExpected)}</span> expected
                         </p>
-                        
+
                         {/* Composition Pie for Outflows */}
                         <div className="flex items-center gap-2 opacity-0 group-hover/sec:opacity-100 transition-opacity">
                             <div className="text-right">

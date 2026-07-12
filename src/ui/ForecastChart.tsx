@@ -101,14 +101,14 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
             outflow: w.outflowsExpected,
             expected: Math.round(w.startCash), // Main series now plots beginning cash
             expectedEnd: Math.round(w.endCashExpected),
-            best: Math.round(w.endCashBest),
-            worst: Math.round(w.endCashWorst),
-            scenarioEndCash: hasScenario ? Math.round(w.startCash + runningScenarioCash) : undefined,
+            best: Math.round(startCashBest),
+            worst: Math.round(startCashWorst),
+            scenario: hasScenario ? Math.round(w.startCash + currentScenarioCashForStart) : undefined,
             planExpected,
             organicExpected,
             zone: w.zone,
-            bandHigh: w.zone !== "committed" ? Math.round(w.endCashBest) : undefined,
-            bandLow: w.zone !== "committed" ? Math.round(w.endCashWorst) : undefined,
+            bandHigh: w.zone !== "committed" ? Math.round(startCashBest) : undefined,
+            bandLow: w.zone !== "committed" ? Math.round(startCashWorst) : undefined,
         };
     });
 
