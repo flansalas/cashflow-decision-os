@@ -24,4 +24,6 @@
 - Not yet verified through the recovery audit.
 
 ## Milestone 2: Action Accountability
-- Action completion, missed/cancelled status, and expected-versus-actual effect remain open.
+- The next checkpoint is Milestone 2, Slice 7: controlled learning from action outcomes.
+- Action completion and actual-effect review (Slice 6) is implemented and runtime-verified on the authorized Preview database.
+- Owner-cockpit simplification and broader AI remain later work.

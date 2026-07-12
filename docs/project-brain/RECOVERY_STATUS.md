@@ -30,18 +30,20 @@ Recover and document the architecture, state, and decision boundaries of the Cas
 - Gate A Slice 2 (Recurring Skip-Date Handling) resolved and verified.
 - Gate A Slice 3 (Cash Check-in Learning Mismatch) resolved and verified.
 - Gate A Slice 4 (Checkpoint Preservation at Week Close) resolved and verified.
-- Milestone 2, Slice 5 (Committed Action Accountability) implemented and runtime-verified on the authorized Preview database.
-  - Migration 20260712135004_persist_committed_actions applied to Preview only (Production has not received this migration or code).
-  - Approved plans persist committed ActionItems with owner, due date, expected week, signed cash effect, source target, and planned status.
-  - Plan revisions preserve separate action sets.
+- Milestone 2, Slice 5 (Committed Action Accountability) implemented and verified.
+- Milestone 2, Slice 6 (Action Completion and Actual-Effect Review) implemented and runtime-verified on the authorized Preview database.
+  - Migration 20260712143000_add_actual_amount_impact applied to Preview only (Production has not received this migration or code).
+  - Completed, missed, and cancelled outcomes preserve the intended actualAmountImpact semantics.
+  - Payment observations are read-only evidence and do not establish automatic causality.
+  - Runtime persistence was verified; browser verification of the endpoint/UI remains pending.
 
 ## Next Checkpoint
-- Milestone 2, Slice 6: action completion and actual-effect review.
+- Milestone 2, Slice 7: controlled learning from action outcomes.
 
 ## Handoff
 - Source branch: release-slice-7
 - Recovery branch: architecture-recovery
 - Canonical repository: flansalas/cashflow-decision-os
 - Phase 1 status: Completed
-- Next task: Milestone 2, Slice 6 — action completion and actual-effect review.
+- Next task: Milestone 2, Slice 7 — controlled learning from action outcomes.
 - Do not merge, push, or resume implementation until approved.
