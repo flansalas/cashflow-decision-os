@@ -359,6 +359,7 @@ model ActionItem {
   // Positive = cash increase (e.g. AR collection, AP deferral, manual inflow)
   // Negative = cash decrease (e.g. AP payment, AR deferral, manual outflow)
   amountImpact        Float
+  actualAmountImpact  Float?
   impactCertainty     String
   constraintWeekStart DateTime?
   targetType          String

@@ -175,6 +175,35 @@ export async function GET(req: NextRequest) {
             }));
         }
 
+        const priorWeekStart = new Date(currentWeekStart);
+        priorWeekStart.setDate(priorWeekStart.getDate() - 7);
+        const priorWeekPlans = await prisma.executionPlan.findMany({
+            where: { companyId, weekStart: priorWeekStart },
+            orderBy: { version: 'desc' },
+            include: { actionItems: true },
+            take: 1
+        });
+        const priorWeekPlan = priorWeekPlans[0] || null;
+        const priorWeekActions = priorWeekPlan ? priorWeekPlan.actionItems : [];
+        let customerObservations: any[] = [];
+        let vendorObservations: any[] = [];
+
+        if (priorWeekActions.length > 0) {
+            const invoiceIds = priorWeekActions.filter((a: any) => a.targetType === 'invoice' && a.targetId).map((a: any) => a.targetId!);
+            const billIds = priorWeekActions.filter((a: any) => a.targetType === 'bill' && a.targetId).map((a: any) => a.targetId!);
+
+            if (invoiceIds.length > 0) {
+                 customerObservations = await prisma.customerPaymentObservation.findMany({
+                     where: { companyId, invoiceId: { in: invoiceIds } }
+                 });
+            }
+            if (billIds.length > 0) {
+                 vendorObservations = await prisma.vendorPaymentObservation.findMany({
+                     where: { companyId, billId: { in: billIds } }
+                 });
+            }
+        }
+
         return NextResponse.json({
             active: {
                 weekStart: currentWeekStart,
@@ -184,6 +213,9 @@ export async function GET(req: NextRequest) {
                 changes
             },
             historical: historicalReviews,
+            priorWeekActions,
+            customerObservations,
+            vendorObservations,
             cash,
             lastUpdated
         });

@@ -12,6 +12,7 @@ import { UpdateBalanceDialog } from "@/ui/UpdateBalanceDialog";
 import { VarianceDriverPanel } from "@/ui/VarianceDriverPanel";
 import type { VarianceDriverResult } from "@/services/variance-drivers";
 import { BacklogTriage } from "@/ui/BacklogTriage";
+import { CommittedActionsReview } from "@/ui/CommittedActionsReview";
 
 function fmt(n: number) {
     if (n === null || n === undefined) return "-";
@@ -261,6 +262,15 @@ function ReviewPageInner() {
                             <VarianceDriverPanel data={driverData} />
                         </div>
                     </div>
+                )}
+
+                {/* Committed Actions Review */}
+                {!isHistorical && data?.priorWeekActions && data.priorWeekActions.length > 0 && (
+                    <CommittedActionsReview
+                        actions={data.priorWeekActions}
+                        customerObservations={data.customerObservations || []}
+                        vendorObservations={data.vendorObservations || []}
+                    />
                 )}
 
                 {/* Post-Approval Changes */}
