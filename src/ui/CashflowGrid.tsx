@@ -1047,7 +1047,6 @@ export function CashflowGrid({
             )}
         </div>
 
-        {/* Execution Plan Modal */}
         {showPlan && (
             <ExecutionPlanModal
                 companyId={companyId}
@@ -1058,7 +1057,6 @@ export function CashflowGrid({
                 breakdown={forecastBalances?.[0]?.breakdown}
                 onClose={() => setShowPlan(false)}
                 executionPlan={executionPlan}
-                companyId={companyId}
                 forecastStateJson={forecastStateJson}
                 onApprove={onRefresh}
             />
