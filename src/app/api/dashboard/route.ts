@@ -114,7 +114,13 @@ export async function GET(req: NextRequest) {
             amountStdDev: rp.amountStdDev,
         }));
 
-        const baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate);
+        const baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate, {
+            payrollAllInAmount: assumptions.payrollAllInAmount,
+            payrollNextDate: assumptions.payrollNextDate,
+            payrollCadence: assumptions.payrollCadence,
+            rentMonthlyAmount: assumptions.rentMonthlyAmount,
+            rentDayOfMonth: assumptions.rentDayOfMonth,
+        });
         const hasBankBaseline = baseline.hasSufficientHistory;
 
         // ── Apply Macro-Memory Variance Multipliers (8-week recency-weighted) ─

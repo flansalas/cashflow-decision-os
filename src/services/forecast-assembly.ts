@@ -77,7 +77,13 @@ export async function assembleForecastData(companyId: string) {
         amountStdDev: rp.amountStdDev,
     }));
 
-    const baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate);
+    const baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate, {
+        payrollAllInAmount: assumptions.payrollAllInAmount,
+        payrollNextDate: assumptions.payrollNextDate,
+        payrollCadence: assumptions.payrollCadence,
+        rentMonthlyAmount: assumptions.rentMonthlyAmount,
+        rentDayOfMonth: assumptions.rentDayOfMonth,
+    });
 
     let varianceMultiplier = 1.0;
     let varianceMultiplierIn = 1.0;
