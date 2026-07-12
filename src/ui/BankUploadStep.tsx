@@ -20,7 +20,7 @@ interface Props {
     onDone: () => void; // called after import or skip
 }
 
-type Phase = "upload" | "mapping" | "preview" | "done" | "detecting" | "review";
+type Phase = "upload" | "mapping" | "preview" | "done" | "detecting" | "detect-error" | "review";
 
 interface FileState {
     parsed: ParsedFile | null;
@@ -492,12 +492,16 @@ export function BankUploadStep({ companyId, onDone }: Props) {
 
     async function runDetection() {
         setPhase("detecting");
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20_000); // 20s timeout
         try {
             const r = await fetch("/api/upload/bank/detect", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ companyId }),
+                signal: controller.signal,
             });
+            clearTimeout(timeoutId);
             const d = await r.json();
             if (!r.ok) throw new Error(d.error ?? "Detection failed");
 
@@ -523,9 +527,12 @@ export function BankUploadStep({ companyId, onDone }: Props) {
             })));
 
             setPhase("review");
-        } catch {
-            // If detection fails, silently skip it and move on
-            onDone();
+        } catch (err: unknown) {
+            clearTimeout(timeoutId);
+            // Show detect-error phase rather than spinning forever
+            const isTimeout = err instanceof Error && (err.name === "AbortError" || err.message?.includes("abort"));
+            console.warn("Pattern detection failed:", isTimeout ? "timeout" : err);
+            setPhase("detect-error");
         }
     }
 
@@ -783,7 +790,38 @@ export function BankUploadStep({ companyId, onDone }: Props) {
                 </div>
             )}
 
-            {/* ── Phase: Review detected patterns ── */}
+            {/* ── Phase: Detect Error ── */}
+            {phase === "detect-error" && (
+                <div className="py-10 text-center space-y-4">
+                    <div className="w-12 h-12 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto">
+                        <span className="text-2xl">⏱</span>
+                    </div>
+                    <div>
+                        <p className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Pattern scan took too long</p>
+                        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+                            Your bank history is large — the scan timed out. Your transactions were uploaded successfully.
+                            You can retry the scan or go to the dashboard now.
+                        </p>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <button
+                            onClick={runDetection}
+                            className="w-full py-2.5 text-white text-sm font-semibold rounded-xl transition-all shadow-md"
+                            style={{ background: "var(--color-primary)" }}
+                        >
+                            Retry Scan
+                        </button>
+                        <button
+                            onClick={onDone}
+                            className="w-full py-2.5 rounded-xl text-sm transition-colors border"
+                            style={{ background: "var(--bg-surface)", color: "var(--text-secondary)", borderColor: "var(--border-default)" }}
+                        >
+                            Skip &amp; Go to Dashboard
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {phase === "review" && (
                 <>
                     <div>
