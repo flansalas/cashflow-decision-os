@@ -832,10 +832,10 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         // Variable outflow bucket — smoothly travels with the revenue.
         // We now fill the "Gap" between your real variable bills and the expected variable spend 
         // that typically accompanies your historical inflow average.
-        // FIXED BUG: Do not include Payroll, Rent, or Recurring in this sum! 
-        // Variable baseline is additive to fixed overhead.
+        // FIXED BUG: Do not include Payroll, Rent, Recurring, or Manual in this sum! 
+        // Variable baseline is additive to fixed overhead and one-off manual adjustments.
         const scheduledVariableOutflowSum = outflowBreakdown
-            .filter(i => !["payroll", "recurring", "assumption"].includes(i.sourceType))
+            .filter(i => !["payroll", "recurring", "assumption", "manual"].includes(i.sourceType))
             .reduce((s, i) => s + i.amount, 0);
 
         const baselineVarOutWeekly = (input.variableOutflowWeekly || 0) * outflowMultiplier;

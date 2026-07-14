@@ -9,6 +9,8 @@ import {
     type ForecastInvoice, type ForecastBill, type ForecastRecurring, type ForecastInput,
 } from "@/services/forecast";
 import { computeBaseline, type BankTxForBaseline, type RecurringPatternForBaseline } from "@/services/baseline";
+import { computeCOGSCorrelation } from "@/services/cogs-correlation";
+import { computeTypicalDelayWeeks } from "@/services/payment-memory";
 import { resolveTenant } from "@/lib/tenant";
 
 export async function GET(req: NextRequest) {
@@ -36,6 +38,8 @@ export async function GET(req: NextRequest) {
         executionPlan,
         bankTxs,
         cashFlowEntries,
+        varianceLedger,
+        customerPaymentObs,
     ] = await Promise.all([
         prisma.cashSnapshot.findFirst({ where: { companyId: cid }, orderBy: { asOfDate: "desc" } }),
         prisma.cashAdjustment.findMany({ where: { companyId: cid } }),
@@ -54,6 +58,15 @@ export async function GET(req: NextRequest) {
         }),
         // For manual cash flow entries (mirrors dashboard API)
         prisma.cashFlowEntry.findMany({ where: { companyId: cid }, include: { category: true } }),
+        prisma.baselineVarianceLedger.findMany({
+            where: { companyId: cid },
+            orderBy: { weekStart: "desc" },
+            take: 4,
+        }),
+        prisma.customerPaymentObservation.findMany({
+            where: { companyId: cid },
+            select: { customerName: true, daysEarlyOrLate: true },
+        }),
     ]);
 
     let executionPlanData = null;
@@ -122,6 +135,12 @@ export async function GET(req: NextRequest) {
     const customerMap = new Map(customerProfiles.map(c => [c.customerName, c]));
     const vendorMap = new Map(vendorProfiles.map(v => [v.vendorName, v]));
 
+    const obsByCustomer = new Map<string, Array<{ daysEarlyOrLate: number }>>();
+    for (const obs of customerPaymentObs) {
+        if (!obsByCustomer.has(obs.customerName)) obsByCustomer.set(obs.customerName, []);
+        obsByCustomer.get(obs.customerName)!.push(obs);
+    }
+
     // ─── Enrich invoices ──────────────────────────────────────────────────
     const enrichedInvoices = invoicesRaw
         .filter(inv => inv.status === "open")
@@ -156,7 +175,7 @@ export async function GET(req: NextRequest) {
                 daysPastDue: inv.daysPastDue,
                 status: inv.status,
                 metaJson: inv.metaJson,
-                typicalDelayWeeks: cp?.typicalDelayWeeks,
+                typicalDelayWeeks: cp?.typicalDelayWeeks ?? computeTypicalDelayWeeks(obsByCustomer.get(inv.customerName) || []),
                 riskTag: cp?.riskTag,
                 overrideExpectedDate,
                 overrideAmount,
@@ -483,6 +502,11 @@ export async function GET(req: NextRequest) {
         };
     });
 
+    const totalOpenAR = invoicesRaw.reduce((s, i) => s + i.amountOpen, 0);
+    const isARHeavy = totalOpenAR > (baseline.conservativeInflowWeekly || 0);
+
+    const cogsCorrelation = computeCOGSCorrelation(baseline.weeklyBuckets);
+
     const forecastInput: ForecastInput = {
         adjustedOpeningCash: openingCash,
         bankBalance,
@@ -504,10 +528,14 @@ export async function GET(req: NextRequest) {
             projectionSafetyMargin: assumptions.projectionSafetyMargin ?? 1.0,
         },
         hasBankBaseline: baseline.hasSufficientHistory,
-        variableOutflowWeekly: baseline.variableOutflowWeekly,
+        baselineConfidenceTier: baseline.baselineConfidenceTier,
+        variableOutflowWeekly: baseline.conservativeOutflowWeekly,
         variableOutflowBand: baseline.variableOutflowBand,
-        baselineInflowWeekly: baseline.variableInflowWeekly,
+        baselineInflowWeekly: baseline.conservativeInflowWeekly,
         baselineInflowBand: baseline.variableInflowBand,
+        cashMarginRatio: cogsCorrelation.cashMarginRatio,
+        cogsLagWeeks: cogsCorrelation.cogsLagWeeks,
+        isARHeavy,
         oneTimeOutflows,
         cashFlowEntries: cashFlowEntries.map((e: any) => ({
             categoryId: e.categoryId,
@@ -534,6 +562,7 @@ export async function GET(req: NextRequest) {
         forecast: {
             weeks: forecast.weeks.map(w => ({
                 weekNumber: w.weekNumber,
+                startCash: w.startCash,
                 endCashExpected: w.endCashExpected,
                 inflowsExpected: w.inflowsExpected,
                 outflowsExpected: w.outflowsExpected,
