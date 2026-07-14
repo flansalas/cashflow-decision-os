@@ -96,6 +96,7 @@ export interface ForecastInput {
     baselineInflowBand: number;        // +/- band
     cashMarginRatio?: number;          // Historical cash margin ratio (e.g. 0.3 for 30%)
     cogsLagWeeks?: number;             // Delay in weeks between revenue and COGS
+    isARHeavy?: boolean;               // If true, applies short-term baseline fade-in
     /** One-time outflows from rescheduled recurring items: { patternId, displayName, amount, weekStart, sourceWeekStart } */
     oneTimeOutflows?: Array<{ patternId: string; displayName: string; amount: number; weekStart: Date; sourceWeekStart?: string | null }>;
     /** Manual cash flow entries from the Cash Adjustments screen */
@@ -674,13 +675,29 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         let revenueFade = 1.0;
         let spendFade = 1.0;
         
-        if (w >= 4 && w <= 7) {
-            revenueFade = 0.85; // Weeks 5-8
-            spendFade = 1.0;    // Expected spend persists
-        } else if (w >= 8) {
-            revenueFade = 0.70; // Weeks 9-13
-            spendFade = 1.05;   // Expected spend slightly inflates due to uncertainty
+        // If the business relies heavily on AR, we don't want to slam the historical baseline
+        // into Week 1 or 2 if they have zero invoices scheduled. We fade it in to blend smoothly.
+        if (input.isARHeavy) {
+            if (w === 0) revenueFade = 0.25;
+            else if (w === 1) revenueFade = 0.50;
+            else if (w === 2) revenueFade = 0.75;
+            else if (w === 3) revenueFade = 1.0;
+            else if (w >= 4 && w <= 7) revenueFade = 0.85; // Weeks 5-8
+            else if (w >= 8) revenueFade = 0.70; // Weeks 9-13
+        } else {
+            // For retail/cash businesses, no short-term fade-in needed
+            if (w >= 4 && w <= 7) {
+                revenueFade = 0.85; // Weeks 5-8
+                spendFade = 1.0;    // Expected spend persists
+            } else if (w >= 8) {
+                revenueFade = 0.70; // Weeks 9-13
+                spendFade = 1.05;   // Expected spend slightly inflates due to uncertainty
+            }
         }
+
+        // Apply same spend fade logic for both
+        if (w >= 4 && w <= 7) spendFade = 1.0;
+        else if (w >= 8) spendFade = 1.05;
         
         const safetyMargin = input.assumptions.projectionSafetyMargin ?? 1.0;
         const inflowMultiplier = revenueFade * safetyMargin;
@@ -813,14 +830,19 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         }
 
         // Variable outflow bucket — smoothly travels with the revenue.
-        // We now fill the "Gap" between your real bills and the expected variable spend 
+        // We now fill the "Gap" between your real variable bills and the expected variable spend 
         // that typically accompanies your historical inflow average.
-        const scheduledOutflowAllSum = outflowBreakdown.reduce((s, i) => s + i.amount, 0);
+        // FIXED BUG: Do not include Payroll, Rent, or Recurring in this sum! 
+        // Variable baseline is additive to fixed overhead.
+        const scheduledVariableOutflowSum = outflowBreakdown
+            .filter(i => !["payroll", "recurring", "assumption"].includes(i.sourceType))
+            .reduce((s, i) => s + i.amount, 0);
+
         const baselineVarOutWeekly = (input.variableOutflowWeekly || 0) * outflowMultiplier;
         
         // Use the higher of historical baseline or COGS projected for this week
         const targetOutflow = Math.max(baselineVarOutWeekly, pendingCogs[w]);
-        const outflowGap = Math.max(0, targetOutflow - scheduledOutflowAllSum);
+        const outflowGap = Math.max(0, targetOutflow - scheduledVariableOutflowSum);
 
         if (input.hasBankBaseline && outflowGap > 0) {
             outflowExpected += outflowGap;

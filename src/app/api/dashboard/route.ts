@@ -397,6 +397,9 @@ export async function GET(req: NextRequest) {
         const adjustedOpeningCash = bankBalance + adjustmentsTotal;
 
         // ── Compute forecast ───────────────────────────────────────────
+        const totalOpenAR = invoicesRaw.reduce((s, i) => s + i.amountOpen, 0);
+        const isARHeavy = totalOpenAR > (baseline.variableInflowWeekly || 0);
+
         const forecastInput: ForecastInput = {
             adjustedOpeningCash,
             bankBalance,
@@ -425,6 +428,7 @@ export async function GET(req: NextRequest) {
             baselineInflowBand: baseline.variableInflowBand,
             cashMarginRatio: cogsCorrelation.cashMarginRatio,
             cogsLagWeeks: cogsCorrelation.cogsLagWeeks,
+            isARHeavy,
             oneTimeOutflows,
             cashFlowEntries: cashFlowEntries.map((e: any) => ({
                 categoryId: e.categoryId,

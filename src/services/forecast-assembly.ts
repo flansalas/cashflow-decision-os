@@ -200,9 +200,13 @@ export async function assembleForecastData(companyId: string) {
 
     const bankBalance = cashSnapshot.bankBalance;
     const adjustmentsTotal = cashAdjustments.reduce((s, a) => s + a.amount, 0);
+    const adjustedOpeningCash = bankBalance + adjustmentsTotal;
+
+    const totalOpenAR = invoicesRaw.reduce((s, i) => s + i.amountOpen, 0);
+    const isARHeavy = totalOpenAR > (baseline.variableInflowWeekly || 0);
 
     const input: ForecastInput = {
-        adjustedOpeningCash: bankBalance + adjustmentsTotal,
+        adjustedOpeningCash,
         bankBalance,
         adjustmentsTotal,
         asOfDate: cashSnapshot.asOfDate,
@@ -229,6 +233,7 @@ export async function assembleForecastData(companyId: string) {
         baselineInflowBand: baseline.variableInflowBand,
         cashMarginRatio: cogsCorrelation.cashMarginRatio,
         cogsLagWeeks: cogsCorrelation.cogsLagWeeks,
+        isARHeavy,
         oneTimeOutflows,
         cashFlowEntries: cashFlowEntries.map((e: any) => ({
             categoryId: e.categoryId,
