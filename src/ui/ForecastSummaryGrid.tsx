@@ -107,8 +107,8 @@ function ProvenanceCard({ info }: { info: HoveredInfo }) {
 
 export function ForecastSummaryGrid({ forecast, categories, onCellClick }: ForecastSummaryGridProps) {
     const weeks = useMemo(() => forecast?.weeks || [], [forecast]);
-    const [inflowsExpanded, setInflowsExpanded] = useState(true);
-    const [outflowsExpanded, setOutflowsExpanded] = useState(true);
+    const [inflowsExpanded, setInflowsExpanded] = useState(false);
+    const [outflowsExpanded, setOutflowsExpanded] = useState(false);
     const [hoveredInfo, setHoveredInfo] = useState<HoveredInfo | null>(null);
 
     if (!weeks.length) return null;
@@ -219,7 +219,7 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                     style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)", background: "var(--bg-base)" }}
                                 >
                                     {inflowsExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                                    Cash In
+                                    TOTAL INFLOW
                                 </td>
                                 {weeks.map((w: any) => {
                                     const scheduled = w.breakdown.inflows
@@ -257,50 +257,57 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
 
                             {inflowsExpanded && (
                                 <>
-                                    <tr className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
-                                        <td
-                                            className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs font-semibold flex items-center gap-2 w-[180px]"
-                                            style={{ background: "inherit", borderColor: "var(--border-subtle)" }}
-                                        >
-                                            <CornerDownRight className="w-3.5 h-3.5 text-emerald-500" /> AR Receipts
-                                        </td>
-                                        {weeks.map((w: any) => {
-                                            const amount = w.breakdown.inflows
-                                                .filter((i: any) => i.sourceType === "invoice")
-                                                .reduce((s: number, i: any) => s + i.amount, 0);
-                                            return renderCell(amount, "ar", w.weekNumber);
-                                        })}
-                                    </tr>
-                                    {inCategories.map(cat => (
-                                        <tr key={cat.id} className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
-                                            <td
-                                                className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs flex items-center gap-2 w-[180px]"
-                                                style={{ background: "inherit", borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
-                                            >
-                                                <div className="w-3.5" /> <span className="truncate">{cat.name}</span>
-                                            </td>
-                                            {weeks.map((w: any) => {
-                                                const amount = w.breakdown.inflows
-                                                    .filter((i: any) => i.section === `Cat: ${cat.name}`)
-                                                    .reduce((s: number, i: any) => s + i.amount, 0);
-                                                return renderCell(amount, "adjustments", w.weekNumber, cat.id);
-                                            })}
-                                        </tr>
-                                    ))}
-                                    <tr className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
-                                        <td
-                                            className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs flex items-center gap-2 w-[180px]"
-                                            style={{ background: "inherit", borderColor: "var(--border-subtle)" }}
-                                        >
-                                            <div className="w-3.5" /> Recurring Inflows
-                                        </td>
-                                        {weeks.map((w: any) => {
-                                            const amount = w.breakdown.inflows
-                                                .filter((i: any) => i.sourceType === "recurring")
-                                                .reduce((s: number, i: any) => s + i.amount, 0);
-                                            return renderCell(amount, "recurring-in", w.weekNumber);
-                                        })}
-                                    </tr>
+                                    {(() => {
+                                        const amounts = weeks.map((w: any) => w.breakdown.inflows
+                                            .filter((i: any) => i.sourceType === "invoice")
+                                            .reduce((s: number, i: any) => s + i.amount, 0));
+                                        if (!amounts.some((a: number) => Math.abs(a) > 0.01)) return null;
+                                        return (
+                                            <tr className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
+                                                <td
+                                                    className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs font-semibold flex items-center gap-2 w-[180px]"
+                                                    style={{ background: "inherit", borderColor: "var(--border-subtle)" }}
+                                                >
+                                                    <CornerDownRight className="w-3.5 h-3.5 text-emerald-500" /> AR Receipts
+                                                </td>
+                                                {amounts.map((amount: number, idx: number) => renderCell(amount, "ar", weeks[idx].weekNumber))}
+                                            </tr>
+                                        );
+                                    })()}
+                                    {inCategories.map(cat => {
+                                        const amounts = weeks.map((w: any) => w.breakdown.inflows
+                                            .filter((i: any) => i.section === `Cat: ${cat.name}`)
+                                            .reduce((s: number, i: any) => s + i.amount, 0));
+                                        if (!amounts.some((a: number) => Math.abs(a) > 0.01)) return null;
+                                        return (
+                                            <tr key={cat.id} className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
+                                                <td
+                                                    className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs flex items-center gap-2 w-[180px]"
+                                                    style={{ background: "inherit", borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                                                >
+                                                    <div className="w-3.5" /> <span className="truncate">{cat.name}</span>
+                                                </td>
+                                                {amounts.map((amount: number, idx: number) => renderCell(amount, "adjustments", weeks[idx].weekNumber, cat.id))}
+                                            </tr>
+                                        );
+                                    })}
+                                    {(() => {
+                                        const amounts = weeks.map((w: any) => w.breakdown.inflows
+                                            .filter((i: any) => i.sourceType === "recurring")
+                                            .reduce((s: number, i: any) => s + i.amount, 0));
+                                        if (!amounts.some((a: number) => Math.abs(a) > 0.01)) return null;
+                                        return (
+                                            <tr className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
+                                                <td
+                                                    className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs flex items-center gap-2 w-[180px]"
+                                                    style={{ background: "inherit", borderColor: "var(--border-subtle)" }}
+                                                >
+                                                    <div className="w-3.5" /> Recurring Inflows
+                                                </td>
+                                                {amounts.map((amount: number, idx: number) => renderCell(amount, "recurring-in", weeks[idx].weekNumber))}
+                                            </tr>
+                                        );
+                                    })()}
                                     {/* Baseline Projection row — only shown when engine has projected inflows */}
                                     {weeks.some((w: any) => w.breakdown.inflows.some((i: any) => i.sourceType === "baseline")) && (
                                         <tr className="hover:bg-emerald-50/60" style={{ background: "var(--bg-surface)" }}>
@@ -345,7 +352,7 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                     style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)", background: "var(--bg-base)" }}
                                 >
                                     {outflowsExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                                    Cash Out
+                                    TOTAL OUTFLOW
                                 </td>
                                 {weeks.map((w: any) => {
                                     const scheduled = w.breakdown.outflows
@@ -383,64 +390,74 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
 
                             {outflowsExpanded && (
                                 <>
-                                    <tr className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
-                                        <td
-                                            className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs font-semibold flex items-center gap-2 w-[180px]"
-                                            style={{ background: "inherit", borderColor: "var(--border-subtle)" }}
-                                        >
-                                            <CornerDownRight className="w-3.5 h-3.5 text-red-500" /> AP Bills
-                                        </td>
-                                        {weeks.map((w: any) => {
-                                            const amount = w.breakdown.outflows
-                                                .filter((i: any) => i.sourceType === "bill")
-                                                .reduce((s: number, i: any) => s + i.amount, 0);
-                                            return renderCell(amount, "ap", w.weekNumber);
-                                        })}
-                                    </tr>
-                                    <tr className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
-                                        <td
-                                            className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs font-semibold flex items-center gap-2 w-[180px]"
-                                            style={{ background: "inherit", borderColor: "var(--border-subtle)" }}
-                                        >
-                                            <div className="w-3.5" /> Payroll
-                                        </td>
-                                        {weeks.map((w: any) => {
-                                            const amount = w.breakdown.outflows
-                                                .filter((i: any) => i.label?.toLowerCase().includes("payroll"))
-                                                .reduce((s: number, i: any) => s + i.amount, 0);
-                                            return renderCell(amount, "recurring-payroll", w.weekNumber);
-                                        })}
-                                    </tr>
-                                    <tr className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
-                                        <td
-                                            className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs flex items-center gap-2 w-[180px]"
-                                            style={{ background: "inherit", borderColor: "var(--border-subtle)" }}
-                                        >
-                                            <div className="w-3.5" /> Recurring Expenses
-                                        </td>
-                                        {weeks.map((w: any) => {
-                                            const amount = w.breakdown.outflows
-                                                .filter((i: any) => i.sourceType === "recurring" && !i.label?.toLowerCase().includes("payroll"))
-                                                .reduce((s: number, i: any) => s + i.amount, 0);
-                                            return renderCell(amount, "recurring", w.weekNumber);
-                                        })}
-                                    </tr>
-                                    {outCategories.map(cat => (
-                                        <tr key={cat.id} className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
-                                            <td
-                                                className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs flex items-center gap-2 w-[180px]"
-                                                style={{ background: "inherit", borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
-                                            >
-                                                <div className="w-3.5" /> <span className="truncate">{cat.name}</span>
-                                            </td>
-                                            {weeks.map((w: any) => {
-                                                const amount = w.breakdown.outflows
-                                                    .filter((i: any) => i.section === `Cat: ${cat.name}`)
-                                                    .reduce((s: number, i: any) => s + i.amount, 0);
-                                                return renderCell(amount, "adjustments", w.weekNumber, cat.id);
-                                            })}
-                                        </tr>
-                                    ))}
+                                    {(() => {
+                                        const amounts = weeks.map((w: any) => w.breakdown.outflows
+                                            .filter((i: any) => i.sourceType === "bill")
+                                            .reduce((s: number, i: any) => s + i.amount, 0));
+                                        if (!amounts.some((a: number) => Math.abs(a) > 0.01)) return null;
+                                        return (
+                                            <tr className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
+                                                <td
+                                                    className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs font-semibold flex items-center gap-2 w-[180px]"
+                                                    style={{ background: "inherit", borderColor: "var(--border-subtle)" }}
+                                                >
+                                                    <CornerDownRight className="w-3.5 h-3.5 text-red-500" /> AP Bills
+                                                </td>
+                                                {amounts.map((amount: number, idx: number) => renderCell(amount, "ap", weeks[idx].weekNumber))}
+                                            </tr>
+                                        );
+                                    })()}
+                                    {(() => {
+                                        const amounts = weeks.map((w: any) => w.breakdown.outflows
+                                            .filter((i: any) => i.label?.toLowerCase().includes("payroll"))
+                                            .reduce((s: number, i: any) => s + i.amount, 0));
+                                        if (!amounts.some((a: number) => Math.abs(a) > 0.01)) return null;
+                                        return (
+                                            <tr className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
+                                                <td
+                                                    className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs font-semibold flex items-center gap-2 w-[180px]"
+                                                    style={{ background: "inherit", borderColor: "var(--border-subtle)" }}
+                                                >
+                                                    <div className="w-3.5" /> Payroll
+                                                </td>
+                                                {amounts.map((amount: number, idx: number) => renderCell(amount, "recurring-payroll", weeks[idx].weekNumber))}
+                                            </tr>
+                                        );
+                                    })()}
+                                    {(() => {
+                                        const amounts = weeks.map((w: any) => w.breakdown.outflows
+                                            .filter((i: any) => i.sourceType === "recurring" && !i.label?.toLowerCase().includes("payroll"))
+                                            .reduce((s: number, i: any) => s + i.amount, 0));
+                                        if (!amounts.some((a: number) => Math.abs(a) > 0.01)) return null;
+                                        return (
+                                            <tr className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
+                                                <td
+                                                    className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs flex items-center gap-2 w-[180px]"
+                                                    style={{ background: "inherit", borderColor: "var(--border-subtle)" }}
+                                                >
+                                                    <div className="w-3.5" /> Recurring Expenses
+                                                </td>
+                                                {amounts.map((amount: number, idx: number) => renderCell(amount, "recurring", weeks[idx].weekNumber))}
+                                            </tr>
+                                        );
+                                    })()}
+                                    {outCategories.map(cat => {
+                                        const amounts = weeks.map((w: any) => w.breakdown.outflows
+                                            .filter((i: any) => i.section === `Cat: ${cat.name}`)
+                                            .reduce((s: number, i: any) => s + i.amount, 0));
+                                        if (!amounts.some((a: number) => Math.abs(a) > 0.01)) return null;
+                                        return (
+                                            <tr key={cat.id} className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
+                                                <td
+                                                    className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs flex items-center gap-2 w-[180px]"
+                                                    style={{ background: "inherit", borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                                                >
+                                                    <div className="w-3.5" /> <span className="truncate">{cat.name}</span>
+                                                </td>
+                                                {amounts.map((amount: number, idx: number) => renderCell(amount, "adjustments", weeks[idx].weekNumber, cat.id))}
+                                            </tr>
+                                        );
+                                    })}
                                     {/* Baseline Projection row — only shown when engine has projected outflows */}
                                     {weeks.some((w: any) => w.breakdown.outflows.some((i: any) => i.sourceType === "baseline")) && (
                                         <tr className="hover:bg-amber-50/60" style={{ background: "var(--bg-surface)" }}>
