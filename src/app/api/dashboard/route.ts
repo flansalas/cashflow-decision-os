@@ -92,11 +92,7 @@ export async function GET(req: NextRequest) {
             }),
         ]);
 
-        const d = new Date();
-        const day = d.getUTCDay();
-        const diff = day === 0 ? -6 : 1 - day;
-        d.setUTCDate(d.getUTCDate() + diff);
-        const currentWeekStart = new Date(d.toISOString().slice(0, 10));
+        const currentWeekStart = getMonday(cashSnapshot ? new Date(cashSnapshot.asOfDate) : new Date());
 
         const activePlan = await prisma.executionPlan.findFirst({
             where: { companyId: cid, weekStart: currentWeekStart, status: "approved" },
