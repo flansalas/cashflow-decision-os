@@ -19,6 +19,7 @@ import {
 interface Props {
     companyId: string;
     onDone: () => void; // called after import or skip
+    doneButtonText?: string;
 }
 
 type Phase = "upload" | "mapping" | "preview" | "done";
@@ -230,7 +231,7 @@ function PreviewTable<T extends Record<string, unknown>>({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function ARAPUploadStep({ companyId, onDone }: Props) {
+export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
     const [phase, setPhase] = useState<Phase>("upload");
     const [ar, setAr] = useState<FileState>(emptyFile());
     const [ap, setAp] = useState<FileState>(emptyFile());
@@ -615,7 +616,7 @@ export function ARAPUploadStep({ companyId, onDone }: Props) {
                         className="w-full py-3 text-white font-semibold rounded-xl transition-all text-sm shadow-lg shadow-emerald-100"
                         style={{ background: "var(--color-positive)" }}
                     >
-                        Go to Dashboard <ArrowRight className="w-4 h-4 ml-1 inline-block" />
+                        {doneButtonText || "Go to Dashboard"} <ArrowRight className="w-4 h-4 ml-1 inline-block" />
                     </button>
                 </>
             )}

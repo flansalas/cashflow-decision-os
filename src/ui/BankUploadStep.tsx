@@ -17,7 +17,8 @@ import {
 
 interface Props {
     companyId: string;
-    onDone: () => void; // called after import or skip
+    onDone: (newBalance?: number) => void; // called after import or skip
+    skipButtonText?: string;
 }
 
 type Phase = "upload" | "mapping" | "preview" | "done" | "detecting" | "detect-error" | "review";
@@ -367,7 +368,7 @@ function PatternCard({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function BankUploadStep({ companyId, onDone }: Props) {
+export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
     const [phase, setPhase] = useState<Phase>("upload");
     const [bankFile, setBankFile] = useState<FileState>(emptyFile());
     const [submitting, setSubmitting] = useState(false);
@@ -617,7 +618,7 @@ export function BankUploadStep({ companyId, onDone }: Props) {
 
                     <div className="flex gap-3 pt-1">
                         <button
-                            onClick={onDone}
+                            onClick={() => onDone()}
                             className="px-4 py-2.5 rounded-xl text-sm transition-colors border shadow-sm"
                             style={{ background: "var(--bg-raised)", color: "var(--text-secondary)", borderColor: "var(--border-default)" }}
                         >
@@ -768,11 +769,11 @@ export function BankUploadStep({ companyId, onDone }: Props) {
                     </div>
 
                     <button
-                        onClick={onDone}
+                        onClick={() => onDone()}
                         className="w-full py-2.5 rounded-xl text-sm transition-colors border"
                         style={{ background: "var(--bg-surface)", color: "var(--text-secondary)", borderColor: "var(--border-default)" }}
                     >
-                        Skip & Go to Dashboard
+                        {skipButtonText || "Skip & Go to Dashboard"}
                     </button>
                 </>
             )}
@@ -812,11 +813,11 @@ export function BankUploadStep({ companyId, onDone }: Props) {
                             Retry Scan
                         </button>
                         <button
-                            onClick={onDone}
+                            onClick={() => onDone()}
                             className="w-full py-2.5 rounded-xl text-sm transition-colors border"
                             style={{ background: "var(--bg-surface)", color: "var(--text-secondary)", borderColor: "var(--border-default)" }}
                         >
-                            Skip &amp; Go to Dashboard
+                            {skipButtonText || "Skip & Go to Dashboard"}
                         </button>
                     </div>
                 </div>
@@ -895,7 +896,7 @@ export function BankUploadStep({ companyId, onDone }: Props) {
 
                     <div className="flex gap-3 pt-1">
                         <button
-                            onClick={onDone}
+                            onClick={() => onDone()}
                             className="px-4 py-2.5 rounded-xl text-sm transition-colors border shadow-sm"
                             style={{ background: "var(--bg-raised)", color: "var(--text-secondary)", borderColor: "var(--border-default)" }}
                         >

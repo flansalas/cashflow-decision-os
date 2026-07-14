@@ -278,7 +278,7 @@ export function UpdateBalanceDialog({
             </div>
             
             <div className="flex-1 overflow-y-auto px-8 py-6 custom-scrollbar bg-slate-50/50">
-                <ARAPUploadStep companyId={companyId} onDone={() => { setArapUploaded(true); setStep("bank"); }} />
+                <ARAPUploadStep companyId={companyId} onDone={() => { setArapUploaded(true); setStep("bank"); }} doneButtonText="Continue to Bank Transactions" />
             </div>
             
             <div className="px-8 py-4 border-t border-slate-100/60 bg-white flex justify-end">
@@ -346,6 +346,7 @@ export function UpdateBalanceDialog({
                     // ── BankUploadStep revealed after user clicks upload ────────────
                     <BankUploadStep
                         companyId={companyId}
+                        skipButtonText="Skip & Continue to Balance Review"
                         onDone={() => {
                             setBankUploaded(true);
                             setBankSkipped(false);
