@@ -1,23 +1,18 @@
-import { NextResponse } from "next/server";
-import { getAuth } from "@clerk/nextjs/server";
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
+import { resolveTenant } from "@/lib/tenant";
 import { resolveForecastHashAfter } from "@/services/forecast-hash";
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
     try {
-        const { orgId } = getAuth(req as any);
-        if (!orgId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-        const company = await prisma.company.findUnique({
-            where: { clerkOrgId: orgId },
-        });
-
-        if (!company) return NextResponse.json({ error: "Company not found" }, { status: 404 });
+        const tenantId = await resolveTenant(req);
+        if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const url = new URL(req.url);
         const weekStartStr = url.searchParams.get("weekStart");
 
-        let whereClause: any = { companyId: company.id };
+        let whereClause: any = { companyId: tenantId };
         if (weekStartStr) {
             whereClause.weekStart = new Date(weekStartStr);
         }
@@ -36,16 +31,13 @@ export async function GET(req: Request) {
     }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
     try {
-        const { orgId, userId } = getAuth(req as any);
-        if (!orgId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const tenantId = await resolveTenant(req);
+        if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const company = await prisma.company.findUnique({
-            where: { clerkOrgId: orgId },
-        });
-
-        if (!company) return NextResponse.json({ error: "Company not found" }, { status: 404 });
+        const authResult = await auth();
+        const userId = authResult?.userId;
 
         const body = await req.json();
         const { weekStart, forecastStateJson, revisionReason, actions } = body;
@@ -66,7 +58,7 @@ export async function POST(req: Request) {
         const result = await prisma.$transaction(async (tx) => {
             const existing = await tx.executionPlan.findFirst({
                 where: {
-                    companyId: company.id,
+                    companyId: tenantId,
                     weekStart: dateWeekStart,
                     status: "approved"
                 },
@@ -81,7 +73,7 @@ export async function POST(req: Request) {
 
             const newPlan = await tx.executionPlan.create({
                 data: {
-                    companyId: company.id,
+                    companyId: tenantId,
                     weekStart: dateWeekStart,
                     version: newVersion,
                     status: "approved",
@@ -90,7 +82,7 @@ export async function POST(req: Request) {
                     forecastStateJson: forecastStateJson ? JSON.stringify(forecastStateJson) : null,
                     actionItems: {
                         create: validActions.map(a => ({
-                            companyId: company.id,
+                            companyId: tenantId,
                             ownerName: a.ownerName,
                             dueDate: new Date(a.dueDate),
                             amountImpact: a.amountImpact,
@@ -123,7 +115,7 @@ export async function POST(req: Request) {
 
                 const cl = await tx.changeLog.create({
                     data: {
-                        companyId: company.id,
+                        companyId: tenantId,
                         source: "user_ui",
                         action: "PLAN_REVISION",
                         inputText: revisionReason,
@@ -136,7 +128,7 @@ export async function POST(req: Request) {
             } else {
                 const cl = await tx.changeLog.create({
                     data: {
-                        companyId: company.id,
+                        companyId: tenantId,
                         source: "user_ui",
                         action: "INITIAL_PLAN_APPROVAL",
                         inputText: "Approved initial weekly execution plan",
@@ -151,8 +143,11 @@ export async function POST(req: Request) {
             return { newPlan, changeLogId };
         });
 
-        if (result.changeLogId) {
-            await resolveForecastHashAfter(company.id, result.changeLogId);
+        // Also capture snapshot hash 
+        try {
+            await resolveForecastHashAfter(tenantId, result.changeLogId!);
+        } catch (e) {
+            console.error("Failed to capture forecast hash", e);
         }
 
         return NextResponse.json({ success: true, plan: result.newPlan });
