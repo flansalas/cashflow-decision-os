@@ -39,14 +39,14 @@ export function ForecastBanner({
     let icon;
 
     if (status === "exhausted") {
-        statusColor = "text-rose-800";
-        badgeColor = "bg-rose-100 border-rose-200 text-rose-700";
+        statusColor = "text-rose-900";
+        badgeColor = "bg-rose-200/50 border-rose-300 text-rose-900";
         headline = `Potential Gap: Week 1`;
         subtext = `Cash depletion is expected this week. Immediate action required.`;
         icon = <AlertTriangle className="w-3.5 h-3.5" />;
     } else if (status === "critical") {
-        statusColor = "text-rose-700";
-        badgeColor = "bg-rose-50 border-rose-100 text-rose-600";
+        statusColor = "text-rose-800";
+        badgeColor = "bg-rose-100 border-rose-200 text-rose-800";
         headline = `Potential Gap: Week ${expectedRunOutWeek}`;
         subtext = `Cash depletion by ${expectedDate}. Action recommended.`;
         icon = <AlertTriangle className="w-3.5 h-3.5" />;

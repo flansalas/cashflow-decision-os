@@ -128,8 +128,8 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
                         </div>
                         <div className="text-right">
                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 leading-none mb-1">Status</p>
-                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${data.expected < buffer ? "bg-rose-500/20 text-rose-300 border-rose-500/30" : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"}`}>
-                                {data.expected < 0 ? "DEPLETED" : data.expected < buffer ? "BELOW BUFFER" : "SAFE"}
+                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${data.expected < buffer ? "bg-rose-500/20 text-rose-100 border-rose-400" : "bg-emerald-500/20 text-emerald-100 border-emerald-400"}`}>
+                                 {data.expected < buffer ? "BELOW BUFFER" : "SAFE"}
                              </span>
                         </div>
                     </div>

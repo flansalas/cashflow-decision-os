@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { UserButton, OrganizationSwitcher, useOrganizationList, useOrganization } from "@clerk/nextjs";
 import {
     Box, BarChart3, ListFilter, Repeat2, Layers, Settings2,
-    ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft, Database, History, CheckCircle2
+    ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft, Database, History, CheckCircle2,
+    ArrowDownToLine, ArrowUpFromLine, GitBranch
 } from "lucide-react";
 
 interface NavItem {
@@ -111,13 +112,13 @@ export function AppSidebar() {
             section: "plan",
         },
         {
-            icon: <ListFilter className="w-[18px] h-[18px]" />,
+            icon: <ArrowDownToLine className="w-[18px] h-[18px]" />,
             label: "Receivables",
             href: "/receivables",
             section: "manage",
         },
         {
-            icon: <ListFilter className="w-[18px] h-[18px]" />,
+            icon: <ArrowUpFromLine className="w-[18px] h-[18px]" />,
             label: "Payables",
             href: "/payables",
             section: "manage",
@@ -135,7 +136,7 @@ export function AppSidebar() {
             section: "tools",
         },
         {
-            icon: <Box className="w-[18px] h-[18px]" />,
+            icon: <GitBranch className="w-[18px] h-[18px]" />,
             label: "Scenarios",
             href: "/scenarios",
             section: "tools",
@@ -184,25 +185,33 @@ export function AppSidebar() {
 
         // When collapsed: the whole sidebar expands on click — nav items must
         // stop propagation so they don't also navigate / fire their own handler.
+        const Component = item.href ? "a" : "button";
+        const props = item.href ? { href: item.href } : { onClick: item.onClick, type: "button" as const };
+
         if (collapsed) {
             return (
-                <div
+                <Component
                     key={idx}
+                    {...(props as any)}
                     title={item.label}
+                    onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        if (item.onClick) item.onClick();
+                    }}
                     className={`
-                        sidebar-nav-item group relative flex items-center justify-center rounded-xl transition-all duration-200
+                        sidebar-nav-item group relative flex items-center justify-center rounded-xl transition-all duration-200 cursor-pointer
                         w-10 h-10 mx-auto
                         ${active
                             ? "bg-indigo-50 text-indigo-700"
-                            : "text-slate-400"
+                            : "text-slate-400 hover:text-slate-800 hover:bg-slate-50"
                         }
                     `}
                 >
                     {active && (
                         <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-indigo-600" />
                     )}
-                    <span className="shrink-0">{item.icon}</span>
-                </div>
+                    <span className="shrink-0 transition-transform duration-200 group-hover:scale-110">{item.icon}</span>
+                </Component>
             );
         }
 

@@ -228,7 +228,9 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                     const recurring = w.breakdown.inflows
                                         .filter((i: any) => i.sourceType === "recurring")
                                         .reduce((s: number, i: any) => s + i.amount, 0);
-                                    const projected = Math.max(0, w.inflowsExpected - scheduled - recurring);
+                                    const projected = w.breakdown.inflows
+                                        .filter((i: any) => i.sourceType === "baseline")
+                                        .reduce((s: number, i: any) => s + i.amount, 0);
                                     return (
                                         <td
                                             key={w.weekNumber}
@@ -361,7 +363,9 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                     const recurring = w.breakdown.outflows
                                         .filter((i: any) => i.sourceType === "recurring")
                                         .reduce((s: number, i: any) => s + i.amount, 0);
-                                    const projected = Math.max(0, w.outflowsExpected - scheduled - recurring);
+                                    const projected = w.breakdown.outflows
+                                        .filter((i: any) => i.sourceType === "baseline")
+                                        .reduce((s: number, i: any) => s + i.amount, 0);
                                     return (
                                         <td
                                             key={w.weekNumber}
