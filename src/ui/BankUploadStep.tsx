@@ -21,7 +21,7 @@ interface Props {
     skipButtonText?: string;
 }
 
-type Phase = "upload" | "mapping" | "preview" | "done" | "detecting" | "detect-error" | "review";
+type Phase = "upload" | "mapping" | "preview" | "detecting" | "detect-error" | "review";
 
 interface FileState {
     parsed: ParsedFile | null;
@@ -481,7 +481,7 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
             }
 
             setResult(res);
-            setPhase("done");
+            void runDetection();
         } catch (e: unknown) {
             setSubmitError((e as Error).message);
         } finally {
@@ -740,48 +740,7 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
                 </>
             )}
 
-            {/* ── Phase: Done (import success, prompt for detection) ── */}
-            {phase === "done" && (
-                <>
-                    <div className="text-center space-y-3 py-2">
-                        <div className="flex justify-center mb-2"><CheckCircle className="w-12 h-12 text-emerald-500" /></div>
-                        <h3 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>Import Complete</h3>
-                        {result.bank && (
-                            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                                {result.bank.imported.toLocaleString()} transactions imported successfully.
-                            </p>
-                        )}
-                    </div>
 
-                    {/* Detection prompt */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-                        <div className="flex items-start gap-3">
-                            <Search className="w-6 h-6 shrink-0 mt-1 text-blue-500" />
-                            <div>
-                                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Detect Recurring Commitments</p>
-                                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                                    We can scan your transactions for recurring patterns — loans, subscriptions, insurance, utilities — and add them to your Commitments panel automatically. You&apos;ll review each suggestion before anything is saved.
-                                </p>
-                            </div>
-                        </div>
-                        <button
-                            onClick={runDetection}
-                            className="w-full py-2.5 text-white text-sm font-semibold rounded-xl transition-all shadow-md shadow-blue-100"
-                            style={{ background: "var(--color-primary)" }}
-                        >
-                            <Search className="w-4 h-4 inline-block mr-2" /> Scan for Recurring Commitments <ArrowRight className="w-4 h-4 ml-1 inline-block" />
-                        </button>
-                    </div>
-
-                    <button
-                        onClick={() => onDone()}
-                        className="w-full py-2.5 rounded-xl text-sm transition-colors border"
-                        style={{ background: "var(--bg-surface)", color: "var(--text-secondary)", borderColor: "var(--border-default)" }}
-                    >
-                        {skipButtonText || "Skip & Go to Dashboard"}
-                    </button>
-                </>
-            )}
 
             {/* ── Phase: Detecting (spinner) ── */}
             {phase === "detecting" && (
