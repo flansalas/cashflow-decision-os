@@ -216,9 +216,6 @@ export function AppSidebar() {
         }
 
         // Expanded: normal interactive item
-        const Component = item.href ? "a" : "button";
-        const props = item.href ? { href: item.href } : { onClick: item.onClick, type: "button" as const };
-
         return (
             <Component
                 key={idx}
