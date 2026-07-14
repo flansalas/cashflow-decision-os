@@ -140,6 +140,26 @@ export async function POST(req: NextRequest) {
                 });
             }
 
+            // Auto-apply valid new bank transactions since there is no manual review UI for bank imports yet.
+            const newTransactionsData = rows
+                .map((row, index) => ({ row, staged: stagedRowsData[index] }))
+                .filter(item => item.staged.proposedAction === "insert")
+                .map(item => {
+                    return {
+                        companyId,
+                        txDate: new Date(item.row.date!),
+                        description: item.row.description,
+                        amount: item.row.amount,
+                        direction: item.row.amount >= 0 ? "inflow" : "outflow",
+                    };
+                });
+
+            if (newTransactionsData.length > 0) {
+                await tx.bankTransaction.createMany({
+                    data: newTransactionsData
+                });
+            }
+
             return newBatch;
         });
 
@@ -147,10 +167,10 @@ export async function POST(req: NextRequest) {
             ok: true,
             status: batch.status,
             batchId: batch.id,
-            imported: 0,
+            imported: validCount,
             updated: 0,
             archived: 0,
-            total: 0
+            total: rows.length
         });
     } catch (err: unknown) {
         console.error("Bank confirm error:", err);
