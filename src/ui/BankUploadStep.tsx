@@ -696,7 +696,12 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
                         <PreviewTable
                             title="Bank Statement"
                             icon={<Landmark className="w-5 h-5" />}
-                            rows={bankRows as unknown as Record<string, unknown>[]}
+                            rows={bankRows.map(r => ({
+                                date: r.date,
+                                description: r.description,
+                                amount: r.amount > 0 ? r.amount : undefined,
+                                amountOut: r.amount < 0 ? Math.abs(r.amount) : undefined
+                            })) as unknown as Record<string, unknown>[]}
                             fields={BANK_FIELDS}
                             summary={bankSum}
                         />
