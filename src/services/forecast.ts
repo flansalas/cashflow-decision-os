@@ -94,6 +94,8 @@ export interface ForecastInput {
     variableOutflowBand: number;       // +/- band (e.g., 0.2 = 20%)
     baselineInflowWeekly: number;      // avg inflow from baseline
     baselineInflowBand: number;        // +/- band
+    cashMarginRatio?: number;          // Historical cash margin ratio (e.g. 0.3 for 30%)
+    cogsLagWeeks?: number;             // Delay in weeks between revenue and COGS
     /** One-time outflows from rescheduled recurring items: { patternId, displayName, amount, weekStart, sourceWeekStart } */
     oneTimeOutflows?: Array<{ patternId: string; displayName: string; amount: number; weekStart: Date; sourceWeekStart?: string | null }>;
     /** Manual cash flow entries from the Cash Adjustments screen */
@@ -578,6 +580,8 @@ export function computeForecast(input: ForecastInput): ForecastResult {
     let expectedRunOut: number | null = null;
     let worstRunOut: number | null = null;
 
+    const pendingCogs: number[] = new Array(13).fill(0);
+
     for (let w = 0; w < 13; w++) {
         const weekStart = addWeeks(currentMonday, w);
         const weekEnd = addDays(weekStart, 6);
@@ -722,6 +726,14 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         // flag for variable outflow logic later
         const addedAnyInflowBaseline = (input.hasBankBaseline && inflowGap > 0) || (input.hasBankBaseline && scheduledInflowSum === 0);
 
+        // COGS-linked outflow projection
+        const cashMarginRatio = input.cashMarginRatio ?? 1.0; 
+        const cogsLagWeeks = input.cogsLagWeeks ?? 0;
+        const cogsProjected = inflowExpected * (1 - cashMarginRatio);
+        if (w + cogsLagWeeks < 13) {
+            pendingCogs[w + cogsLagWeeks] += cogsProjected;
+        }
+
         // ── Outflows ────────────────────────────────────────────────
         const outflowBreakdown: WeekBreakdownItem[] = [];
         let outflowExpected = 0;
@@ -806,11 +818,11 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         const scheduledOutflowAllSum = outflowBreakdown.reduce((s, i) => s + i.amount, 0);
         const baselineVarOutWeekly = (input.variableOutflowWeekly || 0) * outflowMultiplier;
         
-        // Only top-up variable spend if we added an inflow baseline (meaning we are in 'projection' mode)
-        // and we haven't already exceeded the historical spend average with real bills.
-        const outflowGap = Math.max(0, baselineVarOutWeekly - scheduledOutflowAllSum);
+        // Use the higher of historical baseline or COGS projected for this week
+        const targetOutflow = Math.max(baselineVarOutWeekly, pendingCogs[w]);
+        const outflowGap = Math.max(0, targetOutflow - scheduledOutflowAllSum);
 
-        if (addedAnyInflowBaseline && outflowGap > 0) {
+        if (input.hasBankBaseline && outflowGap > 0) {
             outflowExpected += outflowGap;
             outflowBest += outflowGap * (1 - (input.variableOutflowBand || 0.1));
             outflowWorst += outflowGap * (1 + (input.variableOutflowBand || 0.2));

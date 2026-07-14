@@ -32,6 +32,7 @@ export interface QAInput {
     arRefreshDate: Date | null;
     apRefreshDate: Date | null;
     baseline: BaselineResult | null;
+    baselineDependencyPct?: number;
     cashMismatchUnreconciled?: boolean;
 }
 
@@ -297,6 +298,21 @@ export function computeConfidence(input: QAInput, anomalies: Anomaly[]): Confide
         const pct = Math.round((highRiskTotal / totalAR) * 100);
         score -= 15;
         reasons.push(`${pct}% of AR ($${highRiskTotal.toLocaleString()}) is 60+ days overdue (high-risk)`);
+    }
+
+    // ── Baseline Dependency Penalty ───────────────────────────────────
+    if (input.baselineDependencyPct !== undefined) {
+        if (input.baselineDependencyPct > 0.5) {
+            const pct = Math.round(input.baselineDependencyPct * 100);
+            score -= 15;
+            reasons.push(`Forecast is highly dependent (${pct}%) on historical baseline (gap-fill)`);
+        } else if (input.baselineDependencyPct > 0.25) {
+            const pct = Math.round(input.baselineDependencyPct * 100);
+            score -= 5;
+            reasons.push(`Forecast is partially dependent (${pct}%) on historical baseline`);
+        } else {
+            reasons.push(`Forecast is mostly driven by committed AR/AP`);
+        }
     }
 
     // ── Anomalies ──────────────────────────────────────────────────────

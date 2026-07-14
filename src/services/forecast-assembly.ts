@@ -1,6 +1,8 @@
 import prisma from "@/db/prisma";
 import { computeForecast, type ForecastInput, type ForecastInvoice, type ForecastBill, type ForecastRecurring } from "@/services/forecast";
 import { computeBaseline, type BankTxForBaseline, type RecurringPatternForBaseline } from "@/services/baseline";
+import { computeTypicalDelayWeeks } from "@/services/payment-memory";
+import { computeCOGSCorrelation } from "@/services/cogs-correlation";
 
 export async function assembleForecastData(companyId: string) {
     const [
@@ -18,6 +20,7 @@ export async function assembleForecastData(companyId: string) {
         cashFlowCategories,
         cashFlowEntries,
         varianceLedger,
+        customerPaymentObs,
     ] = await Promise.all([
         prisma.cashSnapshot.findFirst({ where: { companyId }, orderBy: { asOfDate: "desc" } }),
         prisma.cashAdjustment.findMany({ where: { companyId } }),
@@ -42,6 +45,10 @@ export async function assembleForecastData(companyId: string) {
             where: { companyId },
             orderBy: { weekStart: "desc" },
             take: 4,
+        }),
+        prisma.customerPaymentObservation.findMany({
+            where: { companyId },
+            select: { customerName: true, daysEarlyOrLate: true },
         }),
     ]);
 
@@ -85,6 +92,8 @@ export async function assembleForecastData(companyId: string) {
         rentDayOfMonth: assumptions.rentDayOfMonth,
     });
 
+    const cogsCorrelation = computeCOGSCorrelation(baseline.weeklyBuckets);
+
     let varianceMultiplier = 1.0;
     let varianceMultiplierIn = 1.0;
 
@@ -103,6 +112,13 @@ export async function assembleForecastData(companyId: string) {
 
     const customerMap = new Map(customerProfiles.map(c => [c.customerName, c]));
     const vendorMap = new Map(vendorProfiles.map(v => [v.vendorName, v]));
+
+    // Auto-populate typicalDelayWeeks from payment observations if not manually set
+    const obsByCustomer = new Map<string, Array<{ daysEarlyOrLate: number }>>();
+    for (const obs of customerPaymentObs) {
+        if (!obsByCustomer.has(obs.customerName)) obsByCustomer.set(obs.customerName, []);
+        obsByCustomer.get(obs.customerName)!.push(obs);
+    }
 
     const overridesByTarget = new Map<string, typeof overrides>();
     for (const ov of overrides) {
@@ -125,7 +141,7 @@ export async function assembleForecastData(companyId: string) {
         }
         if (isExcluded) return null;
         return {
-            id: inv.id, customerName: inv.customerName, invoiceNo: inv.invoiceNo, amountOpen: inv.amountOpen, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, daysPastDue: inv.daysPastDue, status: inv.status, metaJson: inv.metaJson, typicalDelayWeeks: cp?.typicalDelayWeeks, riskTag: cp?.riskTag, overrideExpectedDate, overrideAmount, markedPaid, partialPayment,
+            id: inv.id, customerName: inv.customerName, invoiceNo: inv.invoiceNo, amountOpen: inv.amountOpen, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, daysPastDue: inv.daysPastDue, status: inv.status, metaJson: inv.metaJson, typicalDelayWeeks: cp?.typicalDelayWeeks ?? computeTypicalDelayWeeks(obsByCustomer.get(inv.customerName) || []), riskTag: cp?.riskTag, overrideExpectedDate, overrideAmount, markedPaid, partialPayment,
         };
     }).filter((inv): inv is NonNullable<typeof inv> => inv !== null);
 
@@ -209,8 +225,10 @@ export async function assembleForecastData(companyId: string) {
         baselineConfidenceTier: baseline.baselineConfidenceTier,
         variableOutflowWeekly: baseline.variableOutflowWeekly,
         variableOutflowBand: baseline.variableOutflowBand,
-        baselineInflowWeekly: baseline.variableInflowWeekly,
+        baselineInflowWeekly: baseline.conservativeInflowWeekly,
         baselineInflowBand: baseline.variableInflowBand,
+        cashMarginRatio: cogsCorrelation.cashMarginRatio,
+        cogsLagWeeks: cogsCorrelation.cogsLagWeeks,
         oneTimeOutflows,
         cashFlowEntries: cashFlowEntries.map((e: any) => ({
             categoryId: e.categoryId,
@@ -237,7 +255,7 @@ export async function assembleForecastData(companyId: string) {
         }
         if (isExcluded) return null;
         return {
-            id: inv.id, customerName: inv.customerName, invoiceNo: inv.invoiceNo, amountOpen: inv.amountOpen, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, daysPastDue: inv.daysPastDue, status: inv.status, metaJson: inv.metaJson, typicalDelayWeeks: cp?.typicalDelayWeeks, riskTag: cp?.riskTag, overrideExpectedDate: null, overrideAmount, markedPaid, partialPayment,
+            id: inv.id, customerName: inv.customerName, invoiceNo: inv.invoiceNo, amountOpen: inv.amountOpen, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, daysPastDue: inv.daysPastDue, status: inv.status, metaJson: inv.metaJson, typicalDelayWeeks: cp?.typicalDelayWeeks ?? computeTypicalDelayWeeks(obsByCustomer.get(inv.customerName) || []), riskTag: cp?.riskTag, overrideExpectedDate: null, overrideAmount, markedPaid, partialPayment,
         };
     }).filter((inv): inv is NonNullable<typeof inv> => inv !== null);
 

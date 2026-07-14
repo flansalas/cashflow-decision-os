@@ -518,6 +518,16 @@ export async function GET(req: NextRequest) {
                 return isNaN(d.getTime()) ? null : d;
             })(),
             baseline,
+            baselineDependencyPct: (() => {
+                let totalOrganic = 0;
+                let totalBaseline = 0;
+                for (const w of forecast.weeks) {
+                    totalOrganic += w.inflowsExpected + w.outflowsExpected;
+                    totalBaseline += w.breakdown.inflows.filter(b => b.sourceType === "baseline").reduce((sum, b) => sum + b.amount, 0);
+                    totalBaseline += w.breakdown.outflows.filter(b => b.sourceType === "baseline").reduce((sum, b) => sum + b.amount, 0);
+                }
+                return totalOrganic > 0 ? totalBaseline / totalOrganic : 0;
+            })(),
             cashMismatchUnreconciled: companyNotes.some(n => n.noteText === "cash_mismatch_unreconciled"),
         };
 

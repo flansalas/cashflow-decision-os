@@ -133,6 +133,21 @@ export async function getCustomerPaymentStats(
     };
 }
 
+/**
+ * Compute the typical payment delay in weeks from observation data.
+ * Returns null if fewer than 2 observations (not enough signal).
+ * Uses median days late (more robust than mean for lumpy payers).
+ */
+export function computeTypicalDelayWeeks(
+    observations: Array<{ daysEarlyOrLate: number }>
+): number | null {
+    if (observations.length < 2) return null;
+    const days = observations.map(o => o.daysEarlyOrLate);
+    const med = median(days);
+    // Floor at 0: if they pay early on average, don't shift the date backward
+    return Math.max(0, Math.round(med / 7));
+}
+
 // ────────────────────────────────────────────────
 // Vendor Payment Observation
 // ────────────────────────────────────────────────

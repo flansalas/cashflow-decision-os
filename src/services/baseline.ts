@@ -27,6 +27,9 @@ export interface BaselineResult {
     variableInflowWeekly: number;
     variableOutflowBand: number;   // fractional stddev / mean
     variableInflowBand: number;
+    conservativeInflowWeekly: number;   // 25th percentile of weekly inflows
+    conservativeOutflowWeekly: number;  // 25th percentile of weekly outflows (lower = optimistic for outflows)
+    weeklyBuckets: Array<{ inflow: number; outflow: number }>; // raw weekly data for COGS correlation
     weeksAnalyzed: number;
     hasSufficientHistory: boolean; // true if >= 2 complete weeks of data
     baselineConfidenceTier: BaselineConfidenceTier; // "high" 6+ wks | "med" 3-5 | "low" 1-2 | "none" 0
@@ -195,6 +198,9 @@ export function computeBaseline(
                 variableInflowWeekly: Math.round(weeklyInflow * 100) / 100,
                 variableOutflowBand: 0.4,
                 variableInflowBand: 0.45,
+                conservativeInflowWeekly: Math.round(weeklyInflow * 0.7 * 100) / 100,
+                conservativeOutflowWeekly: Math.round(weeklyOutflow * 1.3 * 100) / 100,
+                weeklyBuckets: weekBuckets,
                 weeksAnalyzed: Math.round(weeksSpan),
                 hasSufficientHistory: true,
                 baselineConfidenceTier: tier,
@@ -231,17 +237,23 @@ export function computeBaseline(
         weights.push(weight);
     }
 
-    // Apply basic outlier shielding (cap at 2.5x median)
+    // Trim top/bottom 10% to remove spikes and dead weeks, then use median
+    const trimmedInflows = trimmedValues(inflowValues);
+    const trimmedOutflows = trimmedValues(outflowValues);
+
+    const variableInflowWeekly = median(trimmedInflows);
+    const variableOutflowWeekly = median(trimmedOutflows);
+
+    // Conservative = 25th percentile (anchor to honest, lower number for inflows)
+    const conservativeInflowWeekly = percentile(trimmedInflows, 25);
+    // For outflows, conservative = higher spend = 75th percentile
+    const conservativeOutflowWeekly = percentile(trimmedOutflows, 75);
+
+    // Keep stddev for band computation using the original weighted approach
     const cappedInflows = clipOutliers(inflowValues);
     const cappedOutflows = clipOutliers(outflowValues);
-
-    const calcStat = computeWeightedMeanAndStdDev(cappedInflows, weights);
-    const variableInflowWeekly = calcStat.mean;
-    const inflowStdDev = calcStat.stddev;
-
-    const calcOutStat = computeWeightedMeanAndStdDev(cappedOutflows, weights);
-    const variableOutflowWeekly = calcOutStat.mean;
-    const outflowStdDev = calcOutStat.stddev;
+    const inflowStdDev = computeWeightedMeanAndStdDev(cappedInflows, weights).stddev;
+    const outflowStdDev = computeWeightedMeanAndStdDev(cappedOutflows, weights).stddev;
 
     const variableInflowBand = variableInflowWeekly > 0
         ? Math.min(0.6, inflowStdDev / variableInflowWeekly)
@@ -256,6 +268,9 @@ export function computeBaseline(
         variableInflowWeekly: Math.round(variableInflowWeekly * 100) / 100,
         variableOutflowBand: Math.round(variableOutflowBand * 100) / 100,
         variableInflowBand: Math.round(variableInflowBand * 100) / 100,
+        conservativeInflowWeekly: Math.round(conservativeInflowWeekly * 100) / 100,
+        conservativeOutflowWeekly: Math.round(conservativeOutflowWeekly * 100) / 100,
+        weeklyBuckets: weekBuckets,
         weeksAnalyzed: activeWeeks.length,
         hasSufficientHistory: true,
         baselineConfidenceTier: toBaselineTier(activeWeeks.length),
@@ -272,6 +287,9 @@ function placeholderBaseline(reason: string): BaselineResult {
         variableInflowWeekly: 0,
         variableOutflowBand: 0.2,
         variableInflowBand: 0.3,
+        conservativeInflowWeekly: 0,
+        conservativeOutflowWeekly: 0,
+        weeklyBuckets: [],
         weeksAnalyzed: 0,
         hasSufficientHistory: false,
         baselineConfidenceTier: "none",
@@ -322,6 +340,23 @@ function median(values: number[]): number {
     const sorted = [...values].sort((a,b) => a - b);
     const mid = Math.floor(sorted.length / 2);
     return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function trimmedValues(values: number[], trimPct: number = 0.1): number[] {
+    if (values.length < 5) return values; // too few to trim
+    const sorted = [...values].sort((a, b) => a - b);
+    const trimCount = Math.max(1, Math.floor(sorted.length * trimPct));
+    return sorted.slice(trimCount, sorted.length - trimCount);
+}
+
+function percentile(values: number[], p: number): number {
+    if (values.length === 0) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const idx = (p / 100) * (sorted.length - 1);
+    const lower = Math.floor(idx);
+    const upper = Math.ceil(idx);
+    if (lower === upper) return sorted[lower];
+    return sorted[lower] + (sorted[upper] - sorted[lower]) * (idx - lower);
 }
 
 function clipOutliers(values: number[]): number[] {
