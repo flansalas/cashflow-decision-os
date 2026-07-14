@@ -542,9 +542,11 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
                         />
                     )}
 
+                    {arRows.length === 0 && apRows.length === 0 && (
                         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-700 flex items-center gap-2">
                             <AlertTriangle className="w-4 h-4" /> No valid rows after mapping. Check your column assignments.
                         </div>
+                    )}
 
                     {submitError && (
                         <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
