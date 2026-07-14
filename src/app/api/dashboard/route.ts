@@ -7,6 +7,8 @@ import { computeForecast, type ForecastInput, type ForecastInvoice, type Forecas
 import { detectAnomalies, computeConfidence, computeDataQualityGate, type QAInput } from "@/services/qa";
 import { generateActions } from "@/services/actions";
 import { computeBaseline, type BankTxForBaseline, type RecurringPatternForBaseline } from "@/services/baseline";
+import { computeCOGSCorrelation } from "@/services/cogs-correlation";
+import { computeTypicalDelayWeeks } from "@/services/payment-memory";
 import { computeExpectedPaymentDate, parsePaymentCurve, getMonday, addDays } from "@/services/forecast";
 import { resolveTenant } from "@/lib/tenant";
 import type { BusinessCashState } from "@/domain/types";
@@ -44,6 +46,7 @@ export async function GET(req: NextRequest) {
             cashFlowCategories,
             cashFlowEntries,
             varianceLedger,
+            customerPaymentObs,
         ] = await Promise.all([
             prisma.cashSnapshot.findFirst({ where: { companyId: cid }, orderBy: { asOfDate: "desc" } }),
             prisma.cashAdjustment.findMany({ where: { companyId: cid } }),
@@ -70,6 +73,10 @@ export async function GET(req: NextRequest) {
                 where: { companyId: cid },
                 orderBy: { weekStart: "desc" },
                 take: 8, // 8-week recency-weighted variance window
+            }),
+            prisma.customerPaymentObservation.findMany({
+                where: { companyId: cid },
+                select: { customerName: true, daysEarlyOrLate: true },
             }),
         ]);
 
@@ -177,6 +184,7 @@ export async function GET(req: NextRequest) {
             rentDayOfMonth: assumptions.rentDayOfMonth,
         });
         const hasBankBaseline = baseline.hasSufficientHistory;
+        const cogsCorrelation = computeCOGSCorrelation(baseline.weeklyBuckets);
         // DEBUG: log baseline stats so we can verify projection activation
         console.log("[baseline-debug]", {
             companyId: cid,
@@ -185,6 +193,8 @@ export async function GET(req: NextRequest) {
             weeksAnalyzed: baseline.weeksAnalyzed,
             variableInflowWeekly: baseline.variableInflowWeekly,
             variableOutflowWeekly: baseline.variableOutflowWeekly,
+            conservativeInflowWeekly: baseline.conservativeInflowWeekly,
+            conservativeOutflowWeekly: baseline.conservativeOutflowWeekly,
             baselineConfidenceTier: baseline.baselineConfidenceTier,
             note: baseline.note,
         });
@@ -229,7 +239,7 @@ export async function GET(req: NextRequest) {
             }
             averageVariancePct = weightedSumOut / sumWeights;
             varianceMultiplier = Math.max(0.5, Math.min(2.0, 1 + averageVariancePct));
-            baseline.variableOutflowWeekly = baseline.variableOutflowWeekly * varianceMultiplier;
+            baseline.conservativeOutflowWeekly = baseline.conservativeOutflowWeekly * varianceMultiplier;
 
             // Inflow variance (same weighting, only on rows that have inflow data)
             const inflowRows = varianceLedger
@@ -244,13 +254,19 @@ export async function GET(req: NextRequest) {
                 }
                 averageVariancePctIn = weightedSumIn / sumWIn;
                 varianceMultiplierIn = Math.max(0.5, Math.min(2.0, 1 + averageVariancePctIn));
-                baseline.variableInflowWeekly = baseline.variableInflowWeekly * varianceMultiplierIn;
+                baseline.conservativeInflowWeekly = baseline.conservativeInflowWeekly * varianceMultiplierIn;
             }
         }
 
         // ── Build customer/vendor lookup ────────────────────────────────
         const customerMap = new Map(customerProfiles.map(c => [c.customerName, c]));
         const vendorMap = new Map(vendorProfiles.map(v => [v.vendorName, v]));
+
+        const obsByCustomer = new Map<string, Array<{ daysEarlyOrLate: number }>>();
+        for (const obs of customerPaymentObs) {
+            if (!obsByCustomer.has(obs.customerName)) obsByCustomer.set(obs.customerName, []);
+            obsByCustomer.get(obs.customerName)!.push(obs);
+        }
 
         // ── Apply overrides to invoices ────────────────────────────────
         const overridesByTarget = new Map<string, typeof overrides>();
@@ -292,7 +308,7 @@ export async function GET(req: NextRequest) {
                 daysPastDue: inv.daysPastDue,
                 status: inv.status,
                 metaJson: inv.metaJson,
-                typicalDelayWeeks: cp?.typicalDelayWeeks,
+                typicalDelayWeeks: cp?.typicalDelayWeeks ?? computeTypicalDelayWeeks(obsByCustomer.get(inv.customerName) || []),
                 riskTag: cp?.riskTag,
                 overrideExpectedDate,
                 overrideAmount,
@@ -403,10 +419,12 @@ export async function GET(req: NextRequest) {
             },
             hasBankBaseline,
             baselineConfidenceTier: baseline.baselineConfidenceTier,
-            variableOutflowWeekly: baseline.variableOutflowWeekly,
+            variableOutflowWeekly: baseline.conservativeOutflowWeekly,
             variableOutflowBand: baseline.variableOutflowBand,
-            baselineInflowWeekly: baseline.variableInflowWeekly,
+            baselineInflowWeekly: baseline.conservativeInflowWeekly,
             baselineInflowBand: baseline.variableInflowBand,
+            cashMarginRatio: cogsCorrelation.cashMarginRatio,
+            cogsLagWeeks: cogsCorrelation.cogsLagWeeks,
             oneTimeOutflows,
             cashFlowEntries: cashFlowEntries.map((e: any) => ({
                 categoryId: e.categoryId,
