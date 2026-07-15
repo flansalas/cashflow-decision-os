@@ -13,6 +13,8 @@ interface PatchBody {
     nextExpectedDate?: string | null;
     displayName?: string;
     cadence?: string;
+    status?: string;
+    origin?: string;
 }
 
 export async function PATCH(
@@ -54,6 +56,8 @@ export async function PATCH(
                 typicalAmount: body.typicalAmount,
                 nextExpectedDate: body.nextExpectedDate ?? null,
                 cadence: body.cadence ?? "biweekly",
+                status: "active",
+                origin: "system",
             });
         }
 
@@ -69,10 +73,14 @@ export async function PATCH(
             nextExpectedDate: Date | null;
             displayName: string;
             cadence: string;
+            status: string;
+            origin: string;
         }> = {};
 
         if (body.isIncluded !== undefined) updateData.isIncluded = body.isIncluded;
         if (body.isCritical !== undefined) updateData.isCritical = body.isCritical;
+        if (body.status !== undefined) updateData.status = body.status;
+        if (body.origin !== undefined) updateData.origin = body.origin;
         if (body.displayName !== undefined) updateData.displayName = body.displayName.trim();
         if (body.typicalAmount !== undefined) {
             if (body.typicalAmount <= 0) {
@@ -114,6 +122,8 @@ export async function PATCH(
             typicalAmount: updated.typicalAmount,
             nextExpectedDate: updated.nextExpectedDate,
             cadence: updated.cadence,
+            status: updated.status,
+            origin: updated.origin,
         });
     } catch (error) {
         console.error("Commitments PATCH error:", error);

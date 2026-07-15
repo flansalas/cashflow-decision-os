@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { HelpBubble } from "@/ui/HelpBubble";
 import { CashImpactTable } from "@/ui/CashImpactTable";
+import { PlannedEventDrawer } from "@/ui/PlannedEventDrawer";
 import { useAuth, useOrganization } from "@clerk/nextjs";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -67,6 +68,11 @@ interface DashboardData {
         overdueAR: Array<{ id: string; customerName: string; invoiceNo: string; amountOpen: number; dueDate: string | null; daysPastDue: number | null; kind: "ar" }>;
         totalOverdueAP: number;
         totalOverdueAR: number;
+    };
+    cash?: {
+        adjustments?: Array<{
+            id: string; type: string; amount: number; note: string; date: string; status?: string; origin?: string;
+        }>;
     };
 }
 
@@ -580,18 +586,14 @@ function CommitmentRow({ c, highlightId, editingId, editState, saving, setEditin
     );
 }
 
-function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss, showAddForm, setShowAddForm }: {
+function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss }: {
     commitments: Commitment[]; companyId: string; onChanged?: () => void; highlightId?: string | null; onDismiss?: (id: string) => void;
-    showAddForm: boolean; setShowAddForm: (show: boolean) => void;
 }) {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editState, setEditState] = useState<EditState>({ amount: "", nextDate: "", displayName: "", cadence: "" });
     const [saving, setSaving] = useState<string | null>(null);
     const [localCommitments, setLocalCommitments] = useState<Commitment[]>(commitments);
     const [error, setError] = useState<string | null>(null);
-    const [addState, setAddState] = useState<AddState>(EMPTY_ADD);
-    const [addSaving, setAddSaving] = useState(false);
-    const [addError, setAddError] = useState<string | null>(null);
 
     useEffect(() => {
         if (editingId === null) setLocalCommitments(commitments);
@@ -631,33 +633,6 @@ function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss, 
         }
     };
 
-    const handleAddCommitment = async () => {
-        setAddError(null);
-        const amount = parseFloat(addState.amount);
-        if (!addState.displayName.trim()) { setAddError("Name is required"); return; }
-        if (isNaN(amount) || amount <= 0) { setAddError("Amount must be positive"); return; }
-        if (!addState.nextDate) { setAddError("Next date is required"); return; }
-
-        setAddSaving(true);
-        try {
-            const res = await fetch("/api/commitments", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ companyId, displayName: addState.displayName.trim(), category: addState.category, cadence: addState.cadence, typicalAmount: amount, nextExpectedDate: addState.nextDate, isCritical: addState.isCritical, direction: addState.direction }),
-            });
-            const data = await res.json();
-            if (!res.ok) { setAddError(data.error ?? "Failed to add"); return; }
-            setLocalCommitments(prev => [...prev, { ...data, direction: addState.direction }]);
-            setAddState(EMPTY_ADD);
-            setShowAddForm(false);
-            onChanged?.();
-        } catch {
-            setAddError("Network error — try again");
-        } finally {
-            setAddSaving(false);
-        }
-    };
-
     const sortedCommitments = [...localCommitments].sort((a, b) => {
         const aIsPayroll = a.category === "payroll" || a.displayName.toLowerCase().includes("payroll");
         const bIsPayroll = b.category === "payroll" || b.displayName.toLowerCase().includes("payroll");
@@ -671,69 +646,6 @@ function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss, 
             {error && (
                 <div className="text-xs text-red-700 border border-red-200 rounded px-3 py-2 mb-2 font-medium" style={{ background: "rgba(220,38,38,0.03)" }}>
                     {error}
-                </div>
-            )}
-
-            {showAddForm && (
-                <div className="border-b pb-5 mb-3 mt-1" style={{ borderColor: "var(--border-subtle)" }}>
-                    <p className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: "var(--color-primary)" }}>
-                        <Plus className="w-4 h-4" /> New Recurring Event
-                    </p>
-                    {addError && (
-                        <div className="text-xs text-red-700 border border-red-200 rounded px-3 py-2 mb-3 font-medium" style={{ background: "rgba(220,38,38,0.03)" }}>{addError}</div>
-                    )}
-                    <div className="space-y-2">
-                        <input type="text" value={addState.displayName} onChange={e => setAddState(s => ({ ...s, displayName: e.target.value }))}
-                            placeholder="Name (e.g. Office Rent, Insurance)"
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 shadow-sm"
-                            style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }} />
-                        <div className="grid grid-cols-2 gap-2">
-                            <input type="number" value={addState.amount} onChange={e => setAddState(s => ({ ...s, amount: e.target.value }))}
-                                placeholder="Amount ($)" min={0}
-                                className="border rounded-lg px-3 py-2 text-sm font-financial font-bold focus:outline-none focus:border-blue-500 shadow-sm"
-                                style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }} />
-                            <input type="date" value={addState.nextDate} onChange={e => setAddState(s => ({ ...s, nextDate: e.target.value }))}
-                                className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 shadow-sm"
-                                style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }} />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            <select value={addState.direction} onChange={e => setAddState(s => ({ ...s, direction: e.target.value }))}
-                                className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 shadow-sm"
-                                style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}>
-                                <option value="outflow">Money Out (Expense)</option>
-                                <option value="inflow">Money In (Revenue)</option>
-                            </select>
-                            <select value={addState.cadence} onChange={e => setAddState(s => ({ ...s, cadence: e.target.value }))}
-                                className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 shadow-sm"
-                                style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}>
-                                {CADENCES.map(c => <option key={c} value={c}>{c === "irregular" ? "one-time" : c}</option>)}
-                            </select>
-                            <select value={addState.category} onChange={e => setAddState(s => ({ ...s, category: e.target.value }))}
-                                className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 shadow-sm col-span-2"
-                                style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}>
-                                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                        </div>
-                        {addState.direction === "inflow" && (
-                            <div className="text-xs font-medium text-amber-800 bg-amber-50 px-3 py-2 rounded border border-amber-200 mt-2">
-                                <strong>Avoid double-counting AR:</strong> Uploaded customer invoices are already included in your forecast. Only add recurring inflows here if they are not already captured in AR invoices.
-                            </div>
-                        )}
-                        <button onClick={() => setAddState(s => ({ ...s, isCritical: !s.isCritical }))}
-                            className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded border ${addState.isCritical ? "border-red-200 text-red-800 bg-red-50" : "border-gray-200 text-gray-500 bg-gray-50"}`}>
-                            {addState.isCritical ? <><AlertTriangle className="w-3 h-3 inline-block mr-1" /> Critical — click to unmark</> : <><Circle className="w-3 h-3 inline-block mr-1" /> Mark as critical</>}
-                        </button>
-                        <div className="flex gap-2 pt-1">
-                            <button onClick={handleAddCommitment} disabled={addSaving} className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-lg disabled:opacity-40 shadow-sm flex items-center justify-center gap-1.5">
-                                {addSaving ? "Saving…" : <><CheckCircle2 className="w-4 h-4" /> Add to Forecast</>}
-                            </button>
-                            <button onClick={() => { setShowAddForm(false); setAddState(EMPTY_ADD); setAddError(null); }}
-                                className="px-4 py-2 text-sm rounded-lg border"
-                                style={{ color: "var(--text-secondary)", borderColor: "var(--border-default)", background: "var(--bg-raised)" }}>
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
                 </div>
             )}
 
@@ -755,17 +667,6 @@ function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss, 
                         onDismiss={onDismiss}
                     />
                 ))
-            )}
-
-            {!showAddForm && (
-                <button onClick={() => {
-                    setShowAddForm(true);
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-                    className="w-full mt-3 py-2.5 text-xs border border-dashed rounded-lg focus:outline-none transition-colors hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/50 flex items-center justify-center gap-1.5"
-                    style={{ color: "var(--text-muted)", borderColor: "var(--border-default)" }}>
-                    <Plus className="w-3.5 h-3.5" /> Add recurring event
-                </button>
             )}
         </div>
     );
@@ -854,6 +755,28 @@ function RecurringContent() {
             </div>
         );
     }
+    const plannedEvents = [
+        ...data.commitments,
+        ...(data.cash?.adjustments || []).map(a => ({
+            id: a.id,
+            displayName: a.note || "Adjustment",
+            category: a.type,
+            cadence: "one-time",
+            nextExpectedDate: a.date,
+            typicalAmount: Math.abs(a.amount),
+            direction: a.amount < 0 ? "outflow" : "inflow",
+            confidence: "high",
+            isIncluded: true,
+            isCritical: false,
+            status: a.status || "active",
+            origin: a.origin || "user",
+            isAdjustment: true
+        } as Commitment))
+    ].sort((a, b) => {
+        if (!a.nextExpectedDate) return 1;
+        if (!b.nextExpectedDate) return -1;
+        return new Date(a.nextExpectedDate).getTime() - new Date(b.nextExpectedDate).getTime();
+    });
 
     return (
         <div className="min-h-screen" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
@@ -872,12 +795,11 @@ function RecurringContent() {
                             onClick={() => {
                                 setTab("manage");
                                 setShowAddForm(true);
-                                window.scrollTo({ top: 0, behavior: "smooth" });
                             }}
                             className="px-3 py-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider rounded-lg shadow-sm transition-all"
                             style={{ background: "var(--color-primary)", color: "white" }}
                         >
-                            <Plus className="w-3.5 h-3.5" /> Add Recurring Cash
+                            <Plus className="w-3.5 h-3.5" /> Add Planned Event
                         </button>
                         <button onClick={fetchData} className="p-1.5 rounded-lg border text-sm" title="Refresh" style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)", color: "var(--text-muted)" }}>
                             <RefreshCw className="w-3.5 h-3.5" />
@@ -919,17 +841,25 @@ function RecurringContent() {
                         />
                     ) : (
                         <ManageTab
-                            commitments={data.commitments}
+                            commitments={plannedEvents}
                             companyId={data.company.id}
                             highlightId={dismissedHighlights.has(highlightId ?? "") ? null : highlightId}
                             onDismiss={handleDismiss}
                             onChanged={fetchData}
-                            showAddForm={showAddForm}
-                            setShowAddForm={setShowAddForm}
                         />
                     )}
                 </div>
             </main>
+            
+            <PlannedEventDrawer 
+                isOpen={showAddForm}
+                onClose={() => setShowAddForm(false)}
+                onSaved={() => {
+                    setShowAddForm(false);
+                    fetchData();
+                }}
+                companyId={data.company.id}
+            />
         </div>
     );
 }

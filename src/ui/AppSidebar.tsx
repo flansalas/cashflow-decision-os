@@ -125,14 +125,8 @@ export function AppSidebar() {
         },
         {
             icon: <Repeat2 className="w-[18px] h-[18px]" />,
-            label: "Recurring",
-            href: "/recurring",
-            section: "tools",
-        },
-        {
-            icon: <Layers className="w-[18px] h-[18px]" />,
-            label: "One-Time",
-            href: "/adjustments",
+            label: "Planned Events",
+            href: "/planned",
             section: "tools",
         },
         {
