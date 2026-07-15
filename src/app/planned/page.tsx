@@ -1,4 +1,4 @@
-// app/recurring/page.tsx — Recurring Commitments dedicated screen
+// app/planned/page.tsx — Planned Events dedicated screen
 "use client";
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
@@ -32,6 +32,7 @@ interface Commitment {
     direction: string;
     status?: string;
     origin?: string;
+    isAdjustment?: boolean;
 }
 
 interface WeekBreakdownItem {
@@ -304,11 +305,11 @@ function WeekScheduleCard({ week, recurringItems, outTotal, inTotal, companyId, 
                     <div className="flex items-center gap-2">
                         {deferredCount > 0 && (
                             <span className="text-[10px] px-1.5 py-0.5 flex items-center gap-0.5 rounded font-bold uppercase tracking-tight" style={{ color: "var(--color-primary)", background: "rgba(79,70,229,0.08)" }}>
-                                <Calendar className="w-2.5 h-2.5" /> {deferredCount} moved
+                                <ClipboardList className="w-2.5 h-2.5" /> {deferredCount} moved
                             </span>
                         )}
                         <span className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
-                            {recurringItems.length} recurring {recurringItems.length === 1 ? 'item' : 'items'}
+                            {recurringItems.length} planned events
                         </span>
                     </div>
                 </div>
@@ -350,31 +351,29 @@ function WeekScheduleCard({ week, recurringItems, outTotal, inTotal, companyId, 
                                 </span>
                             </div>
                             {item.sourceType === "recurring" && item.sourceId && item.type !== "rescheduled" && (
-                                <div className="flex gap-2 mt-2">
+                                <div className="flex gap-1.5 mt-2.5 opacity-60 group-hover:opacity-100 transition-opacity">
                                     <button onClick={() => {
                                         setReschedulingIdx(reschedulingIdx === `${idx}` ? null : `${idx}`);
                                         setDropdownTarget(null);
                                     }}
-                                        className="text-[11px] px-2 py-1 rounded border font-semibold flex items-center gap-1 transition-colors"
+                                        className="text-[11px] px-2.5 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-colors"
                                         style={{ 
                                             color: reschedulingIdx === `${idx}` ? "var(--color-primary)" : "var(--text-secondary)", 
-                                            borderColor: reschedulingIdx === `${idx}` ? "rgba(79,70,229,0.3)" : "var(--border-default)", 
-                                            background: reschedulingIdx === `${idx}` ? "rgba(79,70,229,0.05)" : "var(--bg-surface)" 
+                                            background: reschedulingIdx === `${idx}` ? "rgba(79,70,229,0.05)" : "transparent"
                                         }}>
-                                        <Calendar className="w-3 h-3" /> Move to date
+                                        <Calendar className="w-3 h-3" /> Date
                                     </button>
                                     <div>
                                         <button onClick={() => {
                                             setDropdownTarget(dropdownTarget?.idx === idx ? null : { idx, weekNum: "" });
                                             setReschedulingIdx(null);
                                         }}
-                                            className="text-[11px] px-2 py-1 rounded border font-semibold flex items-center gap-1 transition-colors"
+                                            className="text-[11px] px-2.5 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-colors"
                                             style={{ 
                                                 color: dropdownTarget?.idx === idx ? "var(--color-primary)" : "var(--text-secondary)", 
-                                                borderColor: dropdownTarget?.idx === idx ? "rgba(79,70,229,0.3)" : "var(--border-default)", 
-                                                background: dropdownTarget?.idx === idx ? "rgba(79,70,229,0.05)" : "var(--bg-surface)" 
+                                                background: dropdownTarget?.idx === idx ? "rgba(79,70,229,0.05)" : "transparent"
                                             }}>
-                                            <ArrowRight className="w-3 h-3" /> Move to week
+                                            <ArrowRight className="w-3 h-3" /> Week
                                         </button>
                                     </div>
                                 </div>
@@ -425,14 +424,13 @@ function WeekScheduleCard({ week, recurringItems, outTotal, inTotal, companyId, 
     );
 }
 
-function CommitmentRow({ c, highlightId, editingId, editState, saving, setEditingId, setEditState, handleDelete, patch, onDismiss }: {
-    c: Commitment; highlightId?: string | null; editingId: string | null; editState: EditState; saving: string | null;
-    setEditingId: (id: string | null) => void; setEditState: (s: EditState) => void;
-    handleDelete: (c: Commitment) => void; patch: (id: string, body: any) => Promise<boolean>;
+function CommitmentRow({ c, highlightId, saving, onEdit, patch, onDismiss }: {
+    c: Commitment; highlightId?: string | null; saving: string | null;
+    onEdit: (c: Commitment) => void;
+    patch: (id: string, body: any) => Promise<boolean>;
     onDismiss?: (id: string) => void;
 }) {
     const rowRef = useRef<HTMLDivElement>(null);
-    const isEditing = editingId === c.id;
     const isHighlighted = highlightId === c.id;
 
     useEffect(() => {
@@ -481,63 +479,6 @@ function CommitmentRow({ c, highlightId, editingId, editState, saving, setEditin
                 </div>
             </div>
 
-            {isEditing && (
-                <div className="mt-3 border rounded-lg p-3 space-y-2" style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)" }}>
-                    <div className="space-y-3">
-                        <div>
-                            <label className="text-xs block mb-1 uppercase tracking-wider font-semibold" style={{ color: "var(--text-muted)" }}>Name</label>
-                            <input type="text" value={editState.displayName} onChange={e => setEditState({ ...editState, displayName: e.target.value })}
-                                className="w-full border rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
-                                style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }} placeholder="e.g. Rent, Payroll" />
-                        </div>
-                        <div className="flex gap-3">
-                            <div className="flex-1">
-                                <label className="text-xs block mb-1 uppercase tracking-wider font-semibold" style={{ color: "var(--text-muted)" }}>Amount ($)</label>
-                                <input type="number" value={editState.amount} onChange={e => setEditState({ ...editState, amount: e.target.value })}
-                                    className="w-full border rounded px-3 py-1.5 text-sm font-financial font-bold focus:outline-none focus:border-blue-500"
-                                    style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }} min={0} step={100} />
-                            </div>
-                            <div className="flex-1">
-                                <label className="text-xs block mb-1 uppercase tracking-wider font-semibold" style={{ color: "var(--text-muted)" }}>Cadence</label>
-                                <select value={editState.cadence} onChange={e => setEditState({ ...editState, cadence: e.target.value })}
-                                    className="w-full border rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
-                                    style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}>
-                                    {CADENCES.map(cad => <option key={cad} value={cad}>{cad === "irregular" ? "one-time" : cad}</option>)}
-                                </select>
-                            </div>
-                            <div className="flex-1">
-                                <label className="text-xs block mb-1 uppercase tracking-wider font-semibold" style={{ color: "var(--text-muted)" }}>Next Date</label>
-                                <input type="date" value={editState.nextDate} onChange={e => setEditState({ ...editState, nextDate: e.target.value })}
-                                    className="w-full border rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
-                                    style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }} />
-                            </div>
-                        </div>
-                        {editState.cadence !== c.cadence && (
-                            <p className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1.5 rounded border border-amber-100">
-                                Changing cadence will reset any custom skipped or rescheduled dates for this commitment.
-                            </p>
-                        )}
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                        <button onClick={async () => {
-                            const amount = parseFloat(editState.amount);
-                            const ok = await patch(c.id, { 
-                                displayName: editState.displayName.trim(),
-                                typicalAmount: amount, 
-                                nextExpectedDate: editState.nextDate || null,
-                                cadence: editState.cadence
-                            });
-                            if (ok) setEditingId(null);
-                        }} disabled={saving === c.id}
-                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded font-semibold disabled:opacity-40 shadow-sm transition-colors">
-                            {saving === c.id ? "Saving…" : "Save"}
-                        </button>
-                        <button onClick={() => handleDelete(c)} disabled={saving === c.id} className="px-3 py-1.5 text-red-700 text-xs rounded border border-red-100 disabled:opacity-40 hover:bg-red-50 transition-colors shadow-sm" style={{ background: "var(--bg-surface)" }}>Delete</button>
-                        <button onClick={() => { setEditingId(null); }} className="px-3 py-1.5 text-xs rounded border hover:bg-black/5 transition-colors" style={{ color: "var(--text-muted)", background: "var(--bg-raised)", borderColor: "var(--border-default)" }}>Cancel</button>
-                    </div>
-                </div>
-            )}
-
             <div className="flex items-center gap-2 mt-2">
                 <button onClick={() => patch(c.id, { isIncluded: !c.isIncluded })} disabled={saving === c.id}
                     className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold border disabled:opacity-40 transition-all shadow-sm ${c.isIncluded ? "border-slate-300 text-slate-700 bg-slate-50" : "border-slate-200 text-slate-500 bg-slate-50"}`}>
@@ -567,16 +508,8 @@ function CommitmentRow({ c, highlightId, editingId, editState, saving, setEditin
                         <RefreshCw className="w-3.5 h-3.5" /> Restore
                     </button>
                 )}
-                {!isEditing && c.status !== "ignored" && (
-                    <button onClick={() => { 
-                        setEditingId(c.id); 
-                        setEditState({ 
-                            displayName: c.displayName,
-                            amount: String(c.typicalAmount), 
-                            cadence: c.cadence,
-                            nextDate: c.nextExpectedDate ? new Date(c.nextExpectedDate).toISOString().slice(0, 10) : "" 
-                        }); 
-                    }}
+                {c.status !== "ignored" && (
+                    <button onClick={() => onEdit(c)}
                         className="px-2 py-1 rounded text-xs border ml-auto" style={{ color: "var(--text-secondary)", borderColor: "var(--border-default)", background: "var(--bg-raised)" }}>
                         <Pencil className="w-3 h-3 inline-block mr-1" /> Edit
                     </button>
@@ -586,24 +519,23 @@ function CommitmentRow({ c, highlightId, editingId, editState, saving, setEditin
     );
 }
 
-function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss }: {
+function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss, onEdit }: {
     commitments: Commitment[]; companyId: string; onChanged?: () => void; highlightId?: string | null; onDismiss?: (id: string) => void;
+    onEdit: (c: Commitment) => void;
 }) {
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editState, setEditState] = useState<EditState>({ amount: "", nextDate: "", displayName: "", cadence: "" });
     const [saving, setSaving] = useState<string | null>(null);
     const [localCommitments, setLocalCommitments] = useState<Commitment[]>(commitments);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (editingId === null) setLocalCommitments(commitments);
-    }, [commitments, editingId]);
+        setLocalCommitments(commitments);
+    }, [commitments]);
 
     const patch = useCallback(async (id: string, body: Record<string, unknown>) => {
         setSaving(id);
         setError(null);
         try {
-            const res = await fetch(`/api/commitments/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            const res = await fetch(`/api/planned-events/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
             if (!res.ok) { const err = await res.json(); setError(err.error ?? "Save failed"); return false; }
             const updated = await res.json();
             setLocalCommitments(prev => prev.map(c => c.id === id ? { ...c, ...updated } : c));
@@ -621,10 +553,9 @@ function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss }
         if (!confirm(`Delete "${c.displayName}" permanently?`)) return;
         setSaving(c.id);
         try {
-            const res = await fetch(`/api/commitments/${c.id}`, { method: "DELETE" });
+            const res = await fetch(`/api/planned-events/${c.id}`, { method: "DELETE" });
             if (!res.ok) { setError("Failed to delete"); return; }
             setLocalCommitments(prev => prev.filter(x => x.id !== c.id));
-            setEditingId(null);
             onChanged?.();
         } catch {
             setError("Network error — try again");
@@ -657,12 +588,8 @@ function ManageTab({ commitments, companyId, onChanged, highlightId, onDismiss }
                         key={c.id} 
                         c={c} 
                         highlightId={highlightId} 
-                        editingId={editingId}
-                        editState={editState}
                         saving={saving}
-                        setEditingId={setEditingId}
-                        setEditState={setEditState}
-                        handleDelete={handleDelete}
+                        onEdit={onEdit}
                         patch={patch}
                         onDismiss={onDismiss}
                     />
@@ -690,6 +617,7 @@ function RecurringContent() {
     const [error, setError] = useState<string | null>(null);
     const [tab, setTab] = useState<"schedule" | "manage">("schedule");
     const [showAddForm, setShowAddForm] = useState(false);
+    const [editingItem, setEditingItem] = useState<any>(null);
     const [dismissedHighlights, setDismissedHighlights] = useState<Set<string>>(new Set());
 
     const handleDismiss = useCallback((id: string) => {
@@ -788,7 +716,7 @@ function RecurringContent() {
                             <ArrowLeft className="w-3 h-3" /> Dashboard
                         </a>
                         <span style={{ color: "var(--border-default)" }}>/</span>
-                        <span style={{ color: "var(--color-primary)" }} className="font-bold text-sm flex items-center gap-1.5"><Calendar className="w-4 h-4" /> Recurring Cash</span>
+                        <span style={{ color: "var(--color-primary)" }} className="font-bold text-sm flex items-center gap-1.5"><ClipboardList className="w-4 h-4" /> Planned Events</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
@@ -846,6 +774,10 @@ function RecurringContent() {
                             highlightId={dismissedHighlights.has(highlightId ?? "") ? null : highlightId}
                             onDismiss={handleDismiss}
                             onChanged={fetchData}
+                            onEdit={(item) => {
+                                setEditingItem(item);
+                                setShowAddForm(true);
+                            }}
                         />
                     )}
                 </div>
@@ -853,12 +785,17 @@ function RecurringContent() {
             
             <PlannedEventDrawer 
                 isOpen={showAddForm}
-                onClose={() => setShowAddForm(false)}
+                onClose={() => {
+                    setShowAddForm(false);
+                    setEditingItem(null);
+                }}
                 onSaved={() => {
                     setShowAddForm(false);
+                    setEditingItem(null);
                     fetchData();
                 }}
-                companyId={data.company.id}
+                companyId={data?.company.id ?? ""}
+                editingItem={editingItem}
             />
         </div>
     );

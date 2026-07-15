@@ -8,12 +8,13 @@ interface Props {
     onClose: () => void;
     onSaved: () => void;
     companyId: string;
+    editingItem?: any;
 }
 
 type EventType = "one-time" | "recurring";
 type Direction = "inflow" | "outflow";
 
-export function PlannedEventDrawer({ isOpen, onClose, onSaved, companyId }: Props) {
+export function PlannedEventDrawer({ isOpen, onClose, onSaved, companyId, editingItem }: Props) {
     const [type, setType] = useState<EventType>("one-time");
     const [direction, setDirection] = useState<Direction>("outflow");
     const [name, setName] = useState("");
@@ -24,19 +25,28 @@ export function PlannedEventDrawer({ isOpen, onClose, onSaved, companyId }: Prop
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Reset state when opened
     useEffect(() => {
         if (isOpen) {
-            setType("one-time");
-            setDirection("outflow");
-            setName("");
-            setAmount("");
-            setCategory("Uncategorized");
-            setDate(new Date().toISOString().slice(0, 10));
-            setCadence("monthly");
+            if (editingItem) {
+                setType(editingItem.isAdjustment ? "one-time" : (editingItem.cadence === "irregular" ? "one-time" : "recurring"));
+                setDirection(editingItem.direction || "outflow");
+                setName(editingItem.displayName || "");
+                setAmount(editingItem.typicalAmount ? String(editingItem.typicalAmount) : "");
+                setCategory(editingItem.category || "Uncategorized");
+                setDate(editingItem.nextExpectedDate ? new Date(editingItem.nextExpectedDate).toISOString().slice(0, 10) : "");
+                setCadence(editingItem.cadence && editingItem.cadence !== "irregular" ? editingItem.cadence : "monthly");
+            } else {
+                setType("one-time");
+                setDirection("outflow");
+                setName("");
+                setAmount("");
+                setCategory("Uncategorized");
+                setDate(new Date().toISOString().slice(0, 10));
+                setCadence("monthly");
+            }
             setError(null);
         }
-    }, [isOpen]);
+    }, [isOpen, editingItem]);
 
     if (!isOpen) return null;
 
@@ -50,19 +60,33 @@ export function PlannedEventDrawer({ isOpen, onClose, onSaved, companyId }: Prop
         setError(null);
 
         try {
-            const res = await fetch("/api/planned-events", {
-                method: "POST",
+            const url = editingItem ? `/api/planned-events/${editingItem.id}` : "/api/planned-events";
+            const method = editingItem ? "PATCH" : "POST";
+            
+            const payload: any = {
+                companyId,
+                direction,
+                amount: parseFloat(amount),
+                date,
+            };
+
+            if (editingItem) {
+                payload.displayName = name.trim();
+                payload.typicalAmount = parseFloat(amount);
+                payload.nextExpectedDate = date;
+                payload.cadence = type === "recurring" ? cadence : "irregular";
+                payload.type = category;
+            } else {
+                payload.name = name.trim();
+                payload.type = type;
+                payload.category = category;
+                payload.cadence = type === "recurring" ? cadence : "irregular";
+            }
+
+            const res = await fetch(url, {
+                method,
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    companyId,
-                    type,
-                    direction,
-                    name: name.trim(),
-                    amount: parseFloat(amount),
-                    category,
-                    date,
-                    cadence: type === "recurring" ? cadence : "irregular",
-                })
+                body: JSON.stringify(payload)
             });
 
             if (!res.ok) {
@@ -81,6 +105,28 @@ export function PlannedEventDrawer({ isOpen, onClose, onSaved, companyId }: Prop
     };
 
     // Natural Language Engine
+    const handleDelete = async () => {
+        if (!editingItem) return;
+        if (!confirm(`Delete permanently?`)) return;
+        
+        setSaving(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/planned-events/${editingItem.id}`, { method: "DELETE" });
+            if (!res.ok) {
+                const data = await res.json();
+                setError(data.error || "Failed to delete");
+                return;
+            }
+            onSaved();
+            onClose();
+        } catch (e) {
+            setError("Network error occurred.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
     let nlText = "Fill out the details above.";
     if (name && amount && date) {
         const amtStr = `$${parseFloat(amount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
@@ -106,7 +152,7 @@ export function PlannedEventDrawer({ isOpen, onClose, onSaved, companyId }: Prop
             <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 border-l border-slate-200">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-                    <h2 className="text-lg font-bold text-slate-800">Add Planned Event</h2>
+                    <h2 className="text-lg font-bold text-slate-800">{editingItem ? "Edit Planned Event" : "Add Planned Event"}</h2>
                     <button onClick={onClose} className="p-2 -mr-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors">
                         <X className="w-5 h-5" />
                     </button>
@@ -221,6 +267,15 @@ export function PlannedEventDrawer({ isOpen, onClose, onSaved, companyId }: Prop
 
                 {/* Footer */}
                 <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-3">
+                    {editingItem && (
+                        <button 
+                            onClick={handleDelete}
+                            disabled={saving}
+                            className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                        >
+                            Delete
+                        </button>
+                    )}
                     <button 
                         onClick={onClose}
                         className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
@@ -232,7 +287,7 @@ export function PlannedEventDrawer({ isOpen, onClose, onSaved, companyId }: Prop
                         disabled={saving}
                         className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-indigo-500 transition-colors disabled:opacity-50"
                     >
-                        {saving ? "Saving..." : "Add to Forecast"}
+                        {saving ? "Saving..." : editingItem ? "Save Changes" : "Add to Forecast"}
                     </button>
                 </div>
             </div>
