@@ -25,6 +25,16 @@ function fmtPct(pct: number) {
     return new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 1 }).format(pct / 100);
 }
 
+function formatWeekLabel(dateStr: string): string {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    const startOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", timeZone: "UTC" };
+    const endOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" };
+    // Add 6 days to Monday to get Sunday of the same week
+    const end = new Date(d.getTime() + 6 * 24 * 60 * 60 * 1000);
+    return `${d.toLocaleDateString("en-US", startOpts)} – ${end.toLocaleDateString("en-US", endOpts)}`;
+}
+
 export default function ReviewPage() {
     return (
         <Suspense fallback={<div className="p-8 text-center text-slate-500">Loading review...</div>}>
@@ -164,7 +174,7 @@ function ReviewPageInner() {
                         <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                         <h1 className="font-bold text-slate-900 text-lg tracking-tight">Weekly Review</h1>
                         <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-                            Week {new Date(activeData.weekStart).toLocaleDateString()}
+                            Week {formatWeekLabel(activeData.weekStart)}
                         </span>
                     </div>
 
@@ -176,7 +186,7 @@ function ReviewPageInner() {
                         >
                             <option value="">Active Review (Current Week)</option>
                             {historicalOptions.map((w: string) => (
-                                <option key={w} value={w}>Historical: {new Date(w).toLocaleDateString()}</option>
+                                <option key={w} value={w}>Historical: {formatWeekLabel(w)}</option>
                             ))}
                         </select>
                         {!isHistorical && (
