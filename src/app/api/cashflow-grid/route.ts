@@ -430,6 +430,8 @@ export async function GET(req: NextRequest) {
         category: rp.category,
         isIncluded: rp.isIncluded,
         isCritical: rp.isCritical,
+        status: rp.status,
+        origin: rp.origin,
         skipDates: skipDatesByPattern.get(rp.id) ?? [],
     }));
 

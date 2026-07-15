@@ -374,6 +374,8 @@ export async function GET(req: NextRequest) {
             category: rp.category,
             isIncluded: rp.isIncluded,
             isCritical: rp.isCritical,
+            status: rp.status,
+            origin: rp.origin,
             skipDates: skipDatesByPattern.get(rp.id) ?? [],
         }));
 
@@ -474,7 +476,7 @@ export async function GET(req: NextRequest) {
         }).filter((bill): bill is NonNullable<typeof bill> => bill !== null);
 
         const organicRecurring: ForecastRecurring[] = recurringPatternsRaw.map(rp => ({
-            id: rp.id, direction: rp.direction as "inflow" | "outflow", displayName: rp.displayName, typicalAmount: rp.typicalAmount, amountStdDev: rp.amountStdDev, cadence: rp.cadence, nextExpectedDate: rp.nextExpectedDate, confidence: rp.confidence as "high" | "med" | "low", category: rp.category, isIncluded: rp.isIncluded, isCritical: rp.isCritical,
+            id: rp.id, direction: rp.direction as "inflow" | "outflow", displayName: rp.displayName, typicalAmount: rp.typicalAmount, amountStdDev: rp.amountStdDev, cadence: rp.cadence, nextExpectedDate: rp.nextExpectedDate, confidence: rp.confidence as "high" | "med" | "low", category: rp.category, isIncluded: rp.isIncluded, isCritical: rp.isCritical, status: rp.status, origin: rp.origin,
             skipDates: []
         })).filter(rp => rp.isIncluded);
         for (const r of organicRecurring) {

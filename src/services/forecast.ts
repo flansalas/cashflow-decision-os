@@ -62,6 +62,8 @@ export interface ForecastRecurring {
     category: string;
     isIncluded: boolean;
     isCritical: boolean;
+    status: string;
+    origin: string;
     /** ISO date strings (week-start Mondays) for which this occurrence should be skipped */
     skipDates?: string[];
 }
@@ -386,6 +388,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
     // ─── Allocate recurring outflows to weeks ──────────────────────────
     for (const rec of input.recurring) {
         if (!rec.isIncluded) continue;
+        if (rec.status === "ignored") continue;
         if (rec.direction !== "outflow") continue;
 
         let nextDate = rec.nextExpectedDate ? new Date(rec.nextExpectedDate) : null;
@@ -433,8 +436,11 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             if (isInWeek(oto.weekStart, weekStart, weekEnd)) {
                 const originalPattern = input.recurring.find((r: ForecastRecurring) => r.id === oto.patternId);
                 const syntheticPattern: ForecastRecurring = {
-                    id: oto.patternId,
+                    ...originalPattern,
+                    id: `resched-${oto.patternId}-${w}`,
                     direction: "outflow",
+                    status: "active",
+                    origin: "system",
                     displayName: `${oto.displayName} (Rescheduled)`,
                     typicalAmount: oto.amount,
                     amountStdDev: 0,
@@ -477,6 +483,8 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             category: "payroll",
             isIncluded: true,
             isCritical: true,
+            status: "active",
+            origin: "system"
         };
 
         while (d <= endDate) {
@@ -515,6 +523,8 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             category: "rent",
             isIncluded: true,
             isCritical: true,
+            status: "active",
+            origin: "system"
         };
 
         let d = new Date(currentMonday);
@@ -540,6 +550,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
     // ─── Allocate recurring inflows to weeks ───────────────────────────
     for (const rec of input.recurring) {
         if (!rec.isIncluded) continue;
+        if (rec.status === "ignored") continue;
         if (rec.direction !== "inflow") continue;
 
         let nextDate = rec.nextExpectedDate ? new Date(rec.nextExpectedDate) : null;

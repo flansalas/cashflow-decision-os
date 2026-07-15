@@ -87,6 +87,8 @@ model CashAdjustment {
   amount        Float
   effectiveDate DateTime
   note          String?
+  origin        String   @default("system") // system | user
+  status        String   @default("active") // active | ignored
   createdAt     DateTime @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -241,6 +243,8 @@ model RecurringPattern {
   category         String    @default("other")
   isIncluded       Boolean   @default(true)
   isCritical       Boolean   @default(false)
+  origin           String    @default("system") // system | user
+  status           String    @default("active") // active | ignored
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

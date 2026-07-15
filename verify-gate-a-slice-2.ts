@@ -30,6 +30,8 @@ test('Verify skipDates behavior in computeForecast', () => {
         category: "rent",
         isIncluded: true,
         isCritical: true,
+        status: "active",
+        origin: "system"
     };
 
     const inputBase = {
