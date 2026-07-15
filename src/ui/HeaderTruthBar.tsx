@@ -207,7 +207,7 @@ export function HeaderTruthBar({
             <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
             
             {/* Top Row: Full Header / Command Strip Actions */}
-            <div className={`transition-all duration-500 origin-top flex flex-col overflow-hidden ${isCompact ? 'max-h-0 opacity-0 pointer-events-none border-b-0' : 'max-h-24 opacity-100 pointer-events-auto border-b border-slate-100'}`}>
+            <div className={`transition-all duration-500 origin-top flex flex-col ${isCompact ? 'overflow-hidden max-h-0 opacity-0 pointer-events-none border-b-0' : 'overflow-visible max-h-24 opacity-100 pointer-events-auto border-b border-slate-100'}`}>
                 <div className="flex items-center justify-between px-5 py-2.5 bg-slate-50/50 rounded-t-2xl">
                     <div className="flex items-center gap-2">
                         {isCompanyDemo && (
