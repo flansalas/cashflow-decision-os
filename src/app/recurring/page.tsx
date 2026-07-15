@@ -9,7 +9,8 @@ import {
     AlertTriangle, Users, Building2, Landmark, Package, Zap,
     Fuel, Wrench, ClipboardList, CreditCard, Pin, Clock,
     ArrowUpRight, ArrowDownLeft, CheckCircle2, RefreshCw,
-    GripVertical, TrendingDown, TrendingUp, BarChart3
+    GripVertical, TrendingDown, TrendingUp, BarChart3,
+    Bot, User, EyeOff
 } from "lucide-react";
 import { HelpBubble } from "@/ui/HelpBubble";
 import { CashImpactTable } from "@/ui/CashImpactTable";
@@ -28,6 +29,8 @@ interface Commitment {
     isIncluded: boolean;
     isCritical: boolean;
     direction: string;
+    status?: string;
+    origin?: string;
 }
 
 interface WeekBreakdownItem {
@@ -436,7 +439,7 @@ function CommitmentRow({ c, highlightId, editingId, editState, saving, setEditin
         <div 
             ref={rowRef}
             onClick={() => { if (isHighlighted) onDismiss?.(c.id); }}
-            className={`py-4 border-t first:border-t-0 px-4 -mx-2 rounded-2xl group transition-all duration-200 ${!c.isIncluded ? "opacity-30 grayscale" : "hover:bg-slate-50"} ${isHighlighted ? "persistent-focus-glow bg-indigo-50/30" : ""}`} 
+            className={`py-4 border-t first:border-t-0 px-4 -mx-2 rounded-2xl group transition-all duration-200 ${c.status === "ignored" ? "opacity-40 grayscale" : !c.isIncluded ? "opacity-60" : "hover:bg-slate-50"} ${isHighlighted ? "persistent-focus-glow bg-indigo-50/30" : ""}`} 
             style={{ borderColor: "var(--border-subtle)" }}>
             <div className="flex items-center gap-3">
                 <span className="text-lg shrink-0 flex items-center justify-center w-10 h-10 rounded-xl border shadow-sm transition-transform group-hover:scale-105" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
@@ -450,6 +453,13 @@ function CommitmentRow({ c, highlightId, editingId, editState, saving, setEditin
                         )}
                         {c.isCritical && (
                             <span className="text-[10px] px-1.5 py-0.5 bg-red-50 text-red-700 rounded border border-red-100 font-semibold">Critical</span>
+                        )}
+                        {c.status === "ignored" ? (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded border border-slate-200 font-semibold flex items-center gap-1"><EyeOff className="w-3 h-3"/> Dismissed</span>
+                        ) : c.origin === "system" ? (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded border border-amber-100 font-semibold flex items-center gap-1"><Bot className="w-3 h-3"/> Detected</span>
+                        ) : (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-100 font-semibold flex items-center gap-1"><User className="w-3 h-3"/> Verified</span>
                         )}
                     </div>
                     <div className="flex items-center gap-2 text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
@@ -533,7 +543,25 @@ function CommitmentRow({ c, highlightId, editingId, editState, saving, setEditin
                     <span>{c.isCritical ? <Circle className="w-3.5 h-3.5 fill-current text-red-600" /> : <Circle className="w-3.5 h-3.5 text-gray-400" />}</span>
                     <span>Critical</span>
                 </button>
-                {!isEditing && (
+                {c.origin === "system" && c.status !== "ignored" && (
+                    <>
+                        <button onClick={() => patch(c.id, { status: "ignored" })} disabled={saving === c.id}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold border border-slate-200 text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-40 transition-all shadow-sm">
+                            <EyeOff className="w-3.5 h-3.5" /> Dismiss
+                        </button>
+                        <button onClick={() => patch(c.id, { origin: "user", status: "active" })} disabled={saving === c.id}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-40 transition-all shadow-sm">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Verify
+                        </button>
+                    </>
+                )}
+                {c.status === "ignored" && (
+                    <button onClick={() => patch(c.id, { status: "active" })} disabled={saving === c.id}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40 transition-all shadow-sm">
+                        <RefreshCw className="w-3.5 h-3.5" /> Restore
+                    </button>
+                )}
+                {!isEditing && c.status !== "ignored" && (
                     <button onClick={() => { 
                         setEditingId(c.id); 
                         setEditState({ 
