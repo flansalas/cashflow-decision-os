@@ -82,6 +82,7 @@ function CashflowContent() {
     const highlightWeek = searchParams.get("highlightWeek") ? Number(searchParams.get("highlightWeek")) : null;
     const highlightId = searchParams.get("highlightId");
     const mode = searchParams.get("mode") as "ar" | "ap" | null;
+    const printPlan = searchParams.get("printPlan") === "true";
 
     // Called by CashflowGrid once the highlight is consumed — strips it from URL
     // so the glow stops and the drawer toggle works normally.
@@ -118,11 +119,14 @@ function CashflowContent() {
     }, []);
 
     useEffect(() => {
-        if (searchParams.get('open') === 'data') {
-            setShowDataPicker(true);
-            // Strip the param so bookmark/share URLs don't re-trigger
+        if (searchParams.get('open') === 'data' || searchParams.get('printPlan') === 'true') {
+            if (searchParams.get('open') === 'data') {
+                setShowDataPicker(true);
+            }
+            // Strip the params so bookmark/share URLs don't re-trigger
             const params = new URLSearchParams(searchParams.toString());
             params.delete('open');
+            params.delete('printPlan');
             router.replace(`/receivables${params.size > 0 ? `?${params}` : ''}`, { scroll: false });
         }
     }, [searchParams, router]);
@@ -247,6 +251,7 @@ function CashflowContent() {
                     forecastBalances={data.forecast?.weeks}
                     onRefresh={fetchGrid}
                     onClearHighlight={clearHighlight}
+                    initialShowPlan={printPlan}
                 />
             </main>
 

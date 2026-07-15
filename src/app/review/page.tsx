@@ -49,6 +49,7 @@ function ReviewPageInner() {
     const [viewHistorical, setViewHistorical] = useState<string | null>(null);
     const [driverData, setDriverData] = useState<VarianceDriverResult | null>(null);
     const [driverLoading, setDriverLoading] = useState(false); // null means Active
+    const [showAuditorView, setShowAuditorView] = useState(false);
 
     const loadData = () => {
         if (!companyId) return;
@@ -222,12 +223,52 @@ function ReviewPageInner() {
                         </div>
                     </div>
                 )}
+                
+                {/* Narrative Headline */}
+                {isHistorical && (() => {
+                    const base = hasRevised ? getRevisedMetric("endCashExpected") : (hasOriginal ? getOriginalMetric("endCashExpected") : getForecastMetric("endCashExpected"));
+                    const target = getActualMetric("endCashExpected") ?? getForecastMetric("endCashExpected");
+                    const variance = target - base;
+                    if (variance === 0) return null;
+                    return (
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center text-center">
+                            <h2 className="text-xl font-bold text-slate-800">
+                                This week, you ended with {fmt(Math.abs(variance))} {variance < 0 ? "less" : "more"} cash than planned.
+                            </h2>
+                            <p className="text-sm text-slate-500 mt-2">Here's the breakdown of what happened.</p>
+                        </div>
+                    );
+                })()}
 
-                {/* Comparison Table */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                        <h3 className="font-bold text-slate-800 text-sm">Forecast Comparison</h3>
+                {/* Variance Drivers (Moved to top as primary debrief) */}
+                {isHistorical && driverData && (
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-8">
+                        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                            <h3 className="font-bold text-slate-800 text-sm">Debrief: What Changed</h3>
+                        </div>
+                        <div className="p-6">
+                            <VarianceDriverPanel data={driverData} />
+                        </div>
                     </div>
+                )}
+
+                {/* Auditor Toggle */}
+                <div className="flex justify-center mt-8 mb-4">
+                    <button
+                        onClick={() => setShowAuditorView(!showAuditorView)}
+                        className="text-sm font-medium text-slate-500 hover:text-slate-800 flex items-center gap-1.5 transition-colors"
+                    >
+                        {showAuditorView ? <ChevronDown className="w-4 h-4 rotate-180 transition-transform" /> : <ChevronDown className="w-4 h-4 transition-transform" />}
+                        {showAuditorView ? "Hide Detailed Ledger" : "View Detailed Ledger"}
+                    </button>
+                </div>
+
+                {/* Comparison Table (Auditor View) */}
+                {showAuditorView && (
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                            <h3 className="font-bold text-slate-800 text-sm">Forecast Comparison</h3>
+                        </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
                             <thead>
@@ -280,17 +321,6 @@ function ReviewPageInner() {
                             </tbody>
                         </table>
                     </div>
-                </div>
-
-                {/* Variance Drivers */}
-                {isHistorical && driverData && (
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-8">
-                        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                            <h3 className="font-bold text-slate-800 text-sm">Variance Drivers</h3>
-                        </div>
-                        <div className="p-6">
-                            <VarianceDriverPanel data={driverData} />
-                        </div>
                     </div>
                 )}
 

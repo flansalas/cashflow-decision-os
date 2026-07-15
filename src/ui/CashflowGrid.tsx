@@ -45,6 +45,7 @@ interface Props {
         breakdown?: any;
     }>;
     forecastStateJson?: any;
+    initialShowPlan?: boolean;
 }
 
 function fmt(n: number): string {
@@ -63,7 +64,7 @@ export function CashflowGrid({
     weeks, invoices, bills, openingCash,
     weeklyRecurringOutflows, weeklyRecurringInflows,
     companyId, highlightWeek, highlightId, onRefresh, onClearHighlight,
-    forecastBalances, executionPlan, forecastStateJson
+    forecastBalances, executionPlan, forecastStateJson, initialShowPlan
 }: Props) {
     const router = useRouter();
     const [dropTargetWeek, setDropTargetWeek] = useState<number | null>(null);
@@ -71,7 +72,7 @@ export function CashflowGrid({
     const [dropping, setDropping] = useState(false);
     const [summaryView, setSummaryView] = useState(false);
     const [sortMode, setSortMode] = useState<"az" | "amount" | "aging">("aging");
-    const [showPlan, setShowPlan] = useState(false);
+    const [showPlan, setShowPlan] = useState(initialShowPlan || false);
     const [showExcluded, setShowExcluded] = useState(false);
     const [filterQuery, setFilterQuery] = useState("");
     const filterInputRef = useRef<HTMLInputElement>(null);

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, RotateCw, ChevronDown, ArrowRight, ListFilter, ClipboardList, TrendingUp, TrendingDown, Box, Settings2, Search, Trash2, CheckCircle2, ShieldCheck, ShieldAlert } from "lucide-react";
+import { AlertTriangle, RotateCw, ChevronDown, ArrowRight, ListFilter, ClipboardList, TrendingUp, TrendingDown, Box, Settings2, Search, Trash2, CheckCircle2, ShieldCheck, ShieldAlert, CheckCircle2 as CheckCircle2Icon, AlertCircle, X, ChevronRight, Check, Calendar, Plus, Info, HelpCircle, FileText, Upload, Download, Copy, Printer } from "lucide-react";
 import { RunwayMetric } from "./RunwayMetric";
 import { HelpBubble } from "./HelpBubble";
 import { GlobalSearch } from "./GlobalSearch";
@@ -109,6 +109,7 @@ export function HeaderTruthBar({
     
     // Plan Approval
     const [isApproving, setIsApproving] = useState(false);
+    const [approvalSuccess, setApprovalSuccess] = useState(false);
     const [showChangeSummary, setShowChangeSummary] = useState(false);
 
     // Edit Balance Popover
@@ -160,6 +161,7 @@ export function HeaderTruthBar({
                 }),
             });
             if (res.ok) {
+                setApprovalSuccess(true);
                 onPlanApproved?.();
             }
         } finally {
@@ -289,30 +291,35 @@ export function HeaderTruthBar({
                         </button>
                         
                         {/* Plan Approval Status */}
-                        {executionPlan ? (
+                        {(approvalSuccess || (executionPlan && postApprovalChanges.length === 0)) ? (
+                            <div className="hidden lg:flex items-center gap-2 mr-2">
+                                <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1.5 px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100 h-8">
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    Plan Approved
+                                </span>
+                                <a 
+                                    href="/payables?printPlan=true"
+                                    className="btn-pill !py-1 px-4 text-[11px] font-bold tracking-wider !bg-white !text-slate-700 !border-slate-300 hover:!bg-slate-50 hover:!text-slate-900 h-8 shadow-sm flex items-center gap-1.5 transition-colors"
+                                >
+                                    <Printer className="w-3.5 h-3.5" />
+                                    Print Execution Plan
+                                </a>
+                            </div>
+                        ) : executionPlan ? (
                             <div className="hidden lg:flex items-center gap-3 mr-2">
-                                {postApprovalChanges.length > 0 ? (
-                                    <>
-                                        <button 
-                                            onClick={() => setShowChangeSummary(!showChangeSummary)}
-                                            className="text-[10px] font-bold text-amber-600 hover:text-amber-700 hover:bg-amber-50 px-2 py-1 rounded transition-colors"
-                                        >
-                                            {postApprovalChanges.length} changes · ${Math.abs(postApprovalChanges.reduce((sum, c) => sum + (c.details.impact || 0), 0)).toLocaleString()}
-                                        </button>
-                                        <button 
-                                            onClick={handleApprovePlan}
-                                            disabled={isApproving}
-                                            className="btn-pill !py-1 px-4 text-[11px] font-bold tracking-wider !bg-white !text-slate-800 !border-slate-300 hover:!bg-slate-50 h-8 shadow-sm flex items-center disabled:opacity-50"
-                                        >
-                                            {isApproving ? "Approving..." : "Approve Revised"}
-                                        </button>
-                                    </>
-                                ) : (
-                                    <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1.5 px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100">
-                                        <CheckCircle2 className="w-3.5 h-3.5" />
-                                        Approved {new Date(executionPlan.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                                    </span>
-                                )}
+                                <button 
+                                    onClick={() => setShowChangeSummary(!showChangeSummary)}
+                                    className="text-[10px] font-bold text-amber-600 hover:text-amber-700 hover:bg-amber-50 px-2 py-1 rounded transition-colors"
+                                >
+                                    {postApprovalChanges.length} changes · ${Math.abs(postApprovalChanges.reduce((sum, c) => sum + (c.details.impact || 0), 0)).toLocaleString()}
+                                </button>
+                                <button 
+                                    onClick={handleApprovePlan}
+                                    disabled={isApproving}
+                                    className="btn-pill !py-1 px-4 text-[11px] font-bold tracking-wider !bg-white !text-slate-800 !border-slate-300 hover:!bg-slate-50 h-8 shadow-sm flex items-center disabled:opacity-50"
+                                >
+                                    {isApproving ? "Approving..." : "Approve Revised"}
+                                </button>
                             </div>
                         ) : (
                             <button 
