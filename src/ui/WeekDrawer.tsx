@@ -482,7 +482,7 @@ function SectionBlock({
         } else if (item.sourceType === "bill" && item.sourceId) {
             window.location.href = `/payables?highlightId=${item.sourceId}`;
         } else if (item.sourceType === "recurring" && item.sourceId) {
-            window.location.href = `/recurring?highlightId=${item.sourceId}`;
+            window.location.href = `/planned?highlightId=${item.sourceId}`;
         } else if (item.sourceType === "manual") {
             const dir = sign === "+" ? "in" : "out";
             window.location.href = `/adjustments?direction=${dir}&highlightWeek=${weekNumber}`;

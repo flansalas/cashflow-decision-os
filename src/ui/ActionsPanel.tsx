@@ -123,7 +123,7 @@ export function ActionsPanel({ actions }: Props) {
                                         href={
                                             action.type === "collect_ar" ? `/receivables?highlightId=${action.targetId}` :
                                             action.type === "delay_ap" ? `/payables?highlightId=${action.targetId}` :
-                                            action.type === "reduce_outflows" ? `/recurring?highlightId=${action.targetId}` :
+                                            action.type === "reduce_outflows" ? `/planned?highlightId=${action.targetId}` :
                                             action.type === "add_cash_adjustment" ? "/adjustments" :
                                             "/receivables"
                                         }

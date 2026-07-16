@@ -7,7 +7,7 @@ const isProtectedRoute = createRouteMatcher([
   "/plan(.*)",
   "/receivables(.*)",
   "/payables(.*)",
-  "/recurring(.*)",
+  "/planned(.*)",
   "/adjustments(.*)",
   "/scenarios(.*)",
   "/sources(.*)",

@@ -992,7 +992,11 @@ export function CashflowGrid({
 
                                             {/* Recurring summary */}
                                             {(recIn > 0 || recOut > 0) && (
-                                                <div className="rounded-lg border px-2 py-1.5 text-[10px] space-y-0.5" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border-subtle)' }}>
+                                                <div 
+                                                    className="rounded-lg border px-2 py-1.5 text-[10px] space-y-0.5 cursor-pointer hover:brightness-95 transition-all" 
+                                                    style={{ background: 'var(--bg-raised)', borderColor: 'var(--border-subtle)' }}
+                                                    onClick={() => router.push(`/planned?highlightWeek=${wk.weekNumber}`)}
+                                                >
                                                     {recIn > 0 && (
                                                         <div className="flex justify-between">
                                                             <span style={{ color: 'var(--text-muted)' }}>Recurring in</span>

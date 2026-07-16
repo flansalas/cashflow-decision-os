@@ -599,7 +599,7 @@ function PlanContent() {
                                             } else if (type === "ap") {
                                                 window.location.href = `/payables?highlightWeek=${week}`;
                                             } else if (type === "recurring" || type === "recurring-in" || type === "recurring-payroll") {
-                                                window.location.href = `/recurring?highlightWeek=${week}`;
+                                                window.location.href = `/planned?highlightWeek=${week}`;
                                             } else if (type === "adjustments") {
                                                 const dir = data.cashFlowCategories?.find(c => c.id === extraId)?.direction === "inflow" ? "in" : "out";
                                                 window.location.href = `/adjustments?direction=${dir}&highlightWeek=${week}&highlightCategory=${extraId}`;
@@ -639,7 +639,7 @@ function PlanContent() {
                                     hasARAPData={hasARAPData}
                                     hasBuffer={hasBuffer}
                                     onOpenSetup={() => setSetupOpen(true)}
-                                    onOpenCommitments={() => window.location.href = "/recurring"}
+                                    onOpenCommitments={() => window.location.href = "/planned"}
                                 />
                             </div>
                         </details>
