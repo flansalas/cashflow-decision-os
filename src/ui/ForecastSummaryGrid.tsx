@@ -439,7 +439,7 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                                     className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs flex items-center gap-2 w-[180px]"
                                                     style={{ background: "inherit", borderColor: "var(--border-subtle)" }}
                                                 >
-                                                    <div className="w-3.5" /> Recurring Expenses
+                                                    <div className="w-3.5" /> Planned Events
                                                 </td>
                                                 {amounts.map((amount: number, idx: number) => renderCell(amount, "recurring", weeks[idx].weekNumber))}
                                             </tr>
