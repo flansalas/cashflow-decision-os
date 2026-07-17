@@ -51,6 +51,7 @@ interface ForecastWeek {
     weekNumber: number;
     weekStart: string;
     weekEnd: string;
+    startCash: number;
     endCashExpected: number;
     inflowsExpected: number;
     outflowsExpected: number;
