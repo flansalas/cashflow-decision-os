@@ -64,7 +64,7 @@ function fmtDate(d: string): string {
 export function CashflowGrid({
     weeks, invoices, bills, openingCash,
     weeklyRecurringOutflows, weeklyRecurringInflows,
-    companyId, highlightWeek, highlightId, onRefresh, onClearHighlight,
+    companyId, highlightWeek, highlightId, onRefresh, onClearHighlight, onPlannedClick,
     forecastBalances, executionPlan, forecastStateJson, initialShowPlan
 }: Props) {
     const router = useRouter();
@@ -997,8 +997,8 @@ export function CashflowGrid({
                                                     className="rounded-lg border px-2 py-1.5 text-[10px] space-y-0.5 cursor-pointer hover:brightness-95 transition-all" 
                                                     style={{ background: 'var(--bg-raised)', borderColor: 'var(--border-subtle)' }}
                                                     onClick={() => {
-                                                        if (props.onPlannedClick) {
-                                                            props.onPlannedClick(wk.weekNumber);
+                                                        if (onPlannedClick) {
+                                                            onPlannedClick(wk.weekNumber);
                                                         } else {
                                                             router.push(`/planned?highlightWeek=${wk.weekNumber}`);
                                                         }
