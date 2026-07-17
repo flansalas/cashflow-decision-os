@@ -73,11 +73,12 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
         return 0;
     };
 
-    const renderRow = (c: Commitment) => {
+    const renderRow = (c: Commitment, index: number) => {
+        const rowBg = index % 2 === 0 ? "bg-white" : "bg-slate-50/30";
         return (
-            <tr key={c.id} className="group hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
+            <tr key={c.id} className={`group hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 ${rowBg}`}>
                 <td 
-                    className="px-3 py-1.5 whitespace-nowrap text-sm font-medium text-slate-800 border-r border-slate-200 cursor-pointer hover:text-indigo-600 transition-colors leading-snug"
+                    className={`px-3 py-1.5 whitespace-nowrap text-sm font-medium text-slate-800 border-r border-slate-200 cursor-pointer hover:text-indigo-600 transition-colors leading-snug sticky left-0 z-10 ${rowBg} shadow-[1px_0_0_0_#e2e8f0] group-hover:bg-slate-50`}
                     onClick={() => onEdit(c)}
                 >
                     <div>{c.displayName}</div>
@@ -98,7 +99,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                 <span className={c.direction === "inflow" ? "text-emerald-600" : "text-slate-700 font-semibold"}>
                                     {fmt(amt)}
                                 </span>
-                            ) : <span className="text-slate-300">—</span>}
+                            ) : <span className="text-slate-200 font-light">—</span>}
                         </td>
                     );
                 })}
@@ -165,11 +166,11 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                     </button>
                 </div>
                 
-                <div className="overflow-x-auto custom-scrollbar pb-2">
+                <div className="overflow-x-auto overflow-y-auto max-h-[70vh] custom-scrollbar pb-2">
                 <table className="w-full text-left border-collapse">
-                    <thead>
+                    <thead className="sticky top-0 z-20 shadow-md">
                         <tr className="bg-slate-50 border-b border-slate-200">
-                            <th className="px-3 py-2 w-48 min-w-[200px] font-bold text-xs uppercase tracking-widest text-slate-500 border-r border-slate-200">
+                            <th className="px-3 py-2 w-48 min-w-[200px] font-bold text-xs uppercase tracking-widest text-slate-500 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
                                 Commitment
                             </th>
                             {weeks.map(w => {
@@ -196,7 +197,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                         </tr>
                         {/* Summary Rows (Cash Impact) */}
                         <tr className="bg-slate-50 border-b border-slate-200">
-                            <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200">
+                            <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
                                 Beginning Cash
                             </td>
                             {weeks.map(w => (
@@ -206,7 +207,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                             ))}
                         </tr>
                         <tr className="bg-slate-50 border-b border-slate-200">
-                            <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200">
+                            <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
                                 Inflows
                             </td>
                             {weeks.map(w => (
@@ -216,7 +217,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                             ))}
                         </tr>
                         <tr className="bg-slate-50 border-b border-slate-300">
-                            <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200">
+                            <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
                                 Outflows
                             </td>
                             {weeks.map(w => (
@@ -226,7 +227,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                             ))}
                         </tr>
                         <tr className="bg-slate-100 border-b border-slate-300">
-                            <td className="px-3 py-2 text-xs font-bold text-slate-800 border-r border-slate-300">
+                            <td className="px-3 py-2 text-xs font-bold text-slate-800 border-r border-slate-300 sticky left-0 z-30 bg-slate-100 shadow-[1px_0_0_0_#cbd5e1]">
                                 Ending Cash
                             </td>
                             {weeks.map(w => {
@@ -244,7 +245,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                         </tr>
                         {/* Weekly Totals */}
                         <tr className="border-b-2 border-slate-300 bg-white shadow-sm">
-                            <td className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-800 border-r border-slate-200">
+                            <td className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-800 border-r border-slate-200 sticky left-0 z-30 bg-white shadow-[1px_0_0_0_#e2e8f0]">
                                 Total Out This Week
                             </td>
                             {weeks.map(w => {
@@ -264,21 +265,21 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                         {recurring.length > 0 && (
                             <>
                                 <tr className="bg-slate-200">
-                                    <td colSpan={14} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300">
+                                    <td colSpan={14} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-slate-200">
                                         — Recurring
                                     </td>
                                 </tr>
-                                {recurring.map(renderRow)}
+                                {recurring.map((c, i) => renderRow(c, i))}
                             </>
                         )}
                         {oneTime.length > 0 && (
                             <>
                                 <tr className="bg-slate-200">
-                                    <td colSpan={14} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300">
+                                    <td colSpan={14} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-slate-200">
                                         — One-Time
                                     </td>
                                 </tr>
-                                {oneTime.map(renderRow)}
+                                {oneTime.map((c, i) => renderRow(c, i))}
                             </>
                         )}
                     </tbody>
