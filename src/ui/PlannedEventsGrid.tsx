@@ -163,8 +163,8 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                 <table className="w-full text-left border-collapse">
                     <thead className="sticky top-0 z-20 shadow-md">
                         <tr className="bg-slate-50 border-b border-slate-200">
-                            <th className="px-3 py-2 font-bold text-xs uppercase tracking-widest text-slate-500 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
-                                <div className="resize-x overflow-hidden w-[200px] min-w-[150px] max-w-[500px]">Commitment</div>
+                            <th className="px-3 py-2 w-48 min-w-[200px] font-bold text-xs uppercase tracking-widest text-slate-500 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
+                                Commitment
                             </th>
                             {weeks.map(w => {
                                 const wExhausted = w.endCashExpected < 0;
@@ -190,7 +190,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                         </tr>
                         {/* Summary Rows (Cash Impact) */}
                         <tr className="bg-slate-100 border-y border-slate-300 shadow-sm cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}>
-                            <td colSpan={14} className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-700 sticky left-0 z-30 bg-inherit flex items-center gap-1">
+                            <td colSpan={14} className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-700 sticky left-0 z-30 bg-slate-100 flex items-center gap-1">
                                 {isSummaryExpanded ? <ChevronDown className="w-3.5 h-3.5"/> : <ChevronRight className="w-3.5 h-3.5"/>}
                                 Cash Impact Summary
                             </td>
@@ -202,7 +202,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                         Beginning Cash
                                     </td>
                                     {weeks.map(w => (
-                                        <td key={`beg-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial font-semibold text-slate-700 border-r border-slate-200 last:border-0">
+                                        <td key={`beg-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial font-semibold text-slate-700 border-r border-slate-200 last:border-0 bg-slate-50">
                                             ${w.startCash.toLocaleString()}
                                         </td>
                                     ))}
@@ -212,7 +212,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                         Inflows
                                     </td>
                                     {weeks.map(w => (
-                                        <td key={`in-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial text-emerald-600 border-r border-slate-200 last:border-0">
+                                        <td key={`in-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial text-emerald-600 border-r border-slate-200 last:border-0 bg-slate-50">
                                             +{fmt(w.inflowsExpected)}
                                         </td>
                                     ))}
@@ -222,7 +222,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                         Outflows
                                     </td>
                                     {weeks.map(w => (
-                                        <td key={`out-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial text-red-600 border-r border-slate-200 last:border-0">
+                                        <td key={`out-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial text-red-600 border-r border-slate-200 last:border-0 bg-slate-50">
                                             -{fmt(w.outflowsExpected)}
                                         </td>
                                     ))}
@@ -236,7 +236,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                             .filter(i => i.sourceType === "recurring" || i.sourceType === "assumption" || i.section?.includes("Recurring") || i.section?.includes("What-If"))
                                             .reduce((sum, i) => sum + i.amount, 0);
                                         return (
-                                            <td key={w.weekNumber} className="px-3 py-2 text-right text-sm font-bold font-financial text-rose-600 border-r border-slate-100 last:border-0">
+                                            <td key={w.weekNumber} className="px-3 py-2 text-right text-sm font-bold font-financial text-rose-600 border-r border-slate-100 last:border-0 bg-white">
                                                 {fmt(out)}
                                             </td>
                                         );
@@ -255,7 +255,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                 if (wExhausted) color = "text-red-700";
                                 else if (wBreached) color = "text-amber-700";
                                 return (
-                                    <td key={`end-${w.weekNumber}`} className={`px-3 py-2 text-right text-sm font-financial font-bold border-r border-slate-300 last:border-0 ${color}`}>
+                                    <td key={`end-${w.weekNumber}`} className={`px-3 py-2 text-right text-sm font-financial font-bold border-r border-slate-300 last:border-0 bg-slate-100 ${color}`}>
                                         ${w.endCashExpected.toLocaleString()}
                                     </td>
                                 );
@@ -266,7 +266,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                         {recurring.length > 0 && (
                             <>
                                 <tr className="bg-slate-200 cursor-pointer hover:bg-slate-300 transition-colors" onClick={() => setIsRecurringExpanded(!isRecurringExpanded)}>
-                                    <td colSpan={14} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-inherit">
+                                    <td colSpan={14} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-slate-200">
                                         <div className="flex items-center gap-1.5">
                                             {isRecurringExpanded ? <ChevronDown className="w-4 h-4"/> : <ChevronRight className="w-4 h-4"/>}
                                             — Recurring
@@ -279,7 +279,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                         {oneTime.length > 0 && (
                             <>
                                 <tr className="bg-slate-200 cursor-pointer hover:bg-slate-300 transition-colors" onClick={() => setIsOneTimeExpanded(!isOneTimeExpanded)}>
-                                    <td colSpan={14} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-inherit">
+                                    <td colSpan={14} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-slate-200">
                                         <div className="flex items-center gap-1.5">
                                             {isOneTimeExpanded ? <ChevronDown className="w-4 h-4"/> : <ChevronRight className="w-4 h-4"/>}
                                             — One-Time
