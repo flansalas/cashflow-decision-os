@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { Plus, AlertTriangle, CheckCircle2 } from "lucide-react";
+import React, { useState } from "react";
+import { Plus, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
 
 interface Commitment {
     id: string;
@@ -58,6 +58,10 @@ function fmt(n: number): string {
 }
 
 export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWeekClick, onAdd }: Props) {
+    const [isSummaryExpanded, setIsSummaryExpanded] = useState(true);
+    const [isRecurringExpanded, setIsRecurringExpanded] = useState(true);
+    const [isOneTimeExpanded, setIsOneTimeExpanded] = useState(true);
+
     const recurring = commitments.filter(c => c.cadence !== "one-time" && c.cadence !== "irregular" && !c.isAdjustment);
     const oneTime = commitments.filter(c => c.cadence === "one-time" || c.cadence === "irregular" || c.isAdjustment);
 
@@ -155,23 +159,12 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
             )}
 
             <div className="bg-white rounded-xl border shadow-sm overflow-hidden" style={{ borderColor: "var(--border-subtle)" }}>
-                <div className="flex items-center justify-between p-4 border-b bg-slate-50/50" style={{ borderColor: "var(--border-subtle)" }}>
-                    <h2 className="text-sm font-bold text-slate-800">Cash Commitments</h2>
-                    <button 
-                        onClick={onAdd}
-                        className="px-3 py-1.5 flex items-center gap-1.5 text-xs font-bold rounded-lg shadow-sm transition-all"
-                        style={{ background: "var(--color-primary)", color: "white" }}
-                    >
-                        <Plus className="w-3.5 h-3.5" /> Add Cash Commitment
-                    </button>
-                </div>
-                
                 <div className="overflow-x-auto overflow-y-auto max-h-[70vh] custom-scrollbar pb-2">
                 <table className="w-full text-left border-collapse">
                     <thead className="sticky top-0 z-20 shadow-md">
                         <tr className="bg-slate-50 border-b border-slate-200">
-                            <th className="px-3 py-2 w-48 min-w-[200px] font-bold text-xs uppercase tracking-widest text-slate-500 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
-                                Commitment
+                            <th className="px-3 py-2 font-bold text-xs uppercase tracking-widest text-slate-500 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
+                                <div className="resize-x overflow-hidden w-[200px] min-w-[150px] max-w-[500px]">Commitment</div>
                             </th>
                             {weeks.map(w => {
                                 const wExhausted = w.endCashExpected < 0;
@@ -196,37 +189,62 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                             })}
                         </tr>
                         {/* Summary Rows (Cash Impact) */}
-                        <tr className="bg-slate-50 border-b border-slate-200">
-                            <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
-                                Beginning Cash
+                        <tr className="bg-slate-100 border-y border-slate-300 shadow-sm cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}>
+                            <td colSpan={14} className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-700 sticky left-0 z-30 bg-inherit flex items-center gap-1">
+                                {isSummaryExpanded ? <ChevronDown className="w-3.5 h-3.5"/> : <ChevronRight className="w-3.5 h-3.5"/>}
+                                Cash Impact Summary
                             </td>
-                            {weeks.map(w => (
-                                <td key={`beg-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial font-semibold text-slate-700 border-r border-slate-200 last:border-0">
-                                    ${w.startCash.toLocaleString()}
-                                </td>
-                            ))}
                         </tr>
-                        <tr className="bg-slate-50 border-b border-slate-200">
-                            <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
-                                Inflows
-                            </td>
-                            {weeks.map(w => (
-                                <td key={`in-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial text-emerald-600 border-r border-slate-200 last:border-0">
-                                    +{fmt(w.inflowsExpected)}
-                                </td>
-                            ))}
-                        </tr>
-                        <tr className="bg-slate-50 border-b border-slate-300">
-                            <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
-                                Outflows
-                            </td>
-                            {weeks.map(w => (
-                                <td key={`out-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial text-red-600 border-r border-slate-200 last:border-0">
-                                    -{fmt(w.outflowsExpected)}
-                                </td>
-                            ))}
-                        </tr>
-                        <tr className="bg-slate-100 border-b border-slate-300">
+                        {isSummaryExpanded && (
+                            <>
+                                <tr className="bg-slate-50 border-b border-slate-200">
+                                    <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
+                                        Beginning Cash
+                                    </td>
+                                    {weeks.map(w => (
+                                        <td key={`beg-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial font-semibold text-slate-700 border-r border-slate-200 last:border-0">
+                                            ${w.startCash.toLocaleString()}
+                                        </td>
+                                    ))}
+                                </tr>
+                                <tr className="bg-slate-50 border-b border-slate-200">
+                                    <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
+                                        Inflows
+                                    </td>
+                                    {weeks.map(w => (
+                                        <td key={`in-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial text-emerald-600 border-r border-slate-200 last:border-0">
+                                            +{fmt(w.inflowsExpected)}
+                                        </td>
+                                    ))}
+                                </tr>
+                                <tr className="bg-slate-50 border-b border-slate-300">
+                                    <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
+                                        Outflows
+                                    </td>
+                                    {weeks.map(w => (
+                                        <td key={`out-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial text-red-600 border-r border-slate-200 last:border-0">
+                                            -{fmt(w.outflowsExpected)}
+                                        </td>
+                                    ))}
+                                </tr>
+                                <tr className="border-b-2 border-slate-300 bg-white shadow-sm">
+                                    <td className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-800 border-r border-slate-200 sticky left-0 z-30 bg-white shadow-[1px_0_0_0_#e2e8f0]">
+                                        Total Out This Week
+                                    </td>
+                                    {weeks.map(w => {
+                                        const out = w.breakdown.outflows
+                                            .filter(i => i.sourceType === "recurring" || i.sourceType === "assumption" || i.section?.includes("Recurring") || i.section?.includes("What-If"))
+                                            .reduce((sum, i) => sum + i.amount, 0);
+                                        return (
+                                            <td key={w.weekNumber} className="px-3 py-2 text-right text-sm font-bold font-financial text-rose-600 border-r border-slate-100 last:border-0">
+                                                {fmt(out)}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            </>
+                        )}
+                        <tr className="bg-slate-100 border-b border-slate-300 shadow-sm">
                             <td className="px-3 py-2 text-xs font-bold text-slate-800 border-r border-slate-300 sticky left-0 z-30 bg-slate-100 shadow-[1px_0_0_0_#cbd5e1]">
                                 Ending Cash
                             </td>
@@ -243,43 +261,32 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                 );
                             })}
                         </tr>
-                        {/* Weekly Totals */}
-                        <tr className="border-b-2 border-slate-300 bg-white shadow-sm">
-                            <td className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-800 border-r border-slate-200 sticky left-0 z-30 bg-white shadow-[1px_0_0_0_#e2e8f0]">
-                                Total Out This Week
-                            </td>
-                            {weeks.map(w => {
-                                // Calculate total outflows for this week from planned items only
-                                const out = w.breakdown.outflows
-                                    .filter(i => i.sourceType === "recurring" || i.sourceType === "assumption" || i.section?.includes("Recurring") || i.section?.includes("What-If"))
-                                    .reduce((sum, i) => sum + i.amount, 0);
-                                return (
-                                    <td key={w.weekNumber} className="px-3 py-2 text-right text-sm font-bold font-financial text-rose-600 border-r border-slate-100 last:border-0">
-                                        {fmt(out)}
-                                    </td>
-                                );
-                            })}
-                        </tr>
                     </thead>
                     <tbody>
                         {recurring.length > 0 && (
                             <>
-                                <tr className="bg-slate-200">
-                                    <td colSpan={14} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-slate-200">
-                                        — Recurring
+                                <tr className="bg-slate-200 cursor-pointer hover:bg-slate-300 transition-colors" onClick={() => setIsRecurringExpanded(!isRecurringExpanded)}>
+                                    <td colSpan={14} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-inherit">
+                                        <div className="flex items-center gap-1.5">
+                                            {isRecurringExpanded ? <ChevronDown className="w-4 h-4"/> : <ChevronRight className="w-4 h-4"/>}
+                                            — Recurring
+                                        </div>
                                     </td>
                                 </tr>
-                                {recurring.map((c, i) => renderRow(c, i))}
+                                {isRecurringExpanded && recurring.map((c, i) => renderRow(c, i))}
                             </>
                         )}
                         {oneTime.length > 0 && (
                             <>
-                                <tr className="bg-slate-200">
-                                    <td colSpan={14} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-slate-200">
-                                        — One-Time
+                                <tr className="bg-slate-200 cursor-pointer hover:bg-slate-300 transition-colors" onClick={() => setIsOneTimeExpanded(!isOneTimeExpanded)}>
+                                    <td colSpan={14} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-inherit">
+                                        <div className="flex items-center gap-1.5">
+                                            {isOneTimeExpanded ? <ChevronDown className="w-4 h-4"/> : <ChevronRight className="w-4 h-4"/>}
+                                            — One-Time
+                                        </div>
                                     </td>
                                 </tr>
-                                {oneTime.map((c, i) => renderRow(c, i))}
+                                {isOneTimeExpanded && oneTime.map((c, i) => renderRow(c, i))}
                             </>
                         )}
                     </tbody>
