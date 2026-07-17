@@ -61,6 +61,25 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
     const [isSummaryExpanded, setIsSummaryExpanded] = useState(true);
     const [isRecurringExpanded, setIsRecurringExpanded] = useState(true);
     const [isOneTimeExpanded, setIsOneTimeExpanded] = useState(true);
+    const [colWidth, setColWidth] = useState(250);
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const startX = e.pageX;
+        const startWidth = colWidth;
+        
+        const handleMouseMove = (moveEvent: MouseEvent) => {
+            setColWidth(Math.max(150, Math.min(600, startWidth + (moveEvent.pageX - startX))));
+        };
+        
+        const handleMouseUp = () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+        
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+    };
 
     const recurring = commitments.filter(c => c.cadence !== "one-time" && c.cadence !== "irregular" && !c.isAdjustment);
     const oneTime = commitments.filter(c => c.cadence === "one-time" || c.cadence === "irregular" || c.isAdjustment);
@@ -78,11 +97,12 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
     };
 
     const renderRow = (c: Commitment, index: number) => {
-        const rowBg = index % 2 === 0 ? "bg-white" : "bg-slate-50/30";
+        const rowBg = index % 2 === 0 ? "bg-white" : "bg-slate-50";
         return (
             <tr key={c.id} className={`group hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 ${rowBg}`}>
                 <td 
-                    className={`px-3 py-1.5 whitespace-nowrap text-sm font-medium text-slate-800 border-r border-slate-200 cursor-pointer hover:text-indigo-600 transition-colors leading-snug sticky left-0 z-10 ${rowBg} shadow-[1px_0_0_0_#e2e8f0] group-hover:bg-slate-50`}
+                    style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }}
+                    className={`px-3 py-1.5 whitespace-nowrap text-sm font-medium text-slate-800 border-r border-slate-200 cursor-pointer hover:text-indigo-600 transition-colors leading-snug sticky left-0 z-10 ${rowBg} shadow-[1px_0_0_0_#e2e8f0] group-hover:bg-slate-50 overflow-hidden text-ellipsis`}
                     onClick={() => onEdit(c)}
                 >
                     <div>{c.displayName}</div>
@@ -163,8 +183,15 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                 <table className="w-full text-left border-collapse">
                     <thead className="sticky top-0 z-20 shadow-md">
                         <tr className="bg-slate-50 border-b border-slate-200">
-                            <th className="px-3 py-2 w-48 min-w-[200px] font-bold text-xs uppercase tracking-widest text-slate-500 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
-                                Commitment
+                            <th 
+                                style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }}
+                                className="px-3 py-2 font-bold text-xs uppercase tracking-widest text-slate-500 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] relative"
+                            >
+                                <div className="truncate">Commitment</div>
+                                <div 
+                                    onMouseDown={handleMouseDown}
+                                    className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-indigo-300 transition-colors z-50"
+                                />
                             </th>
                             {weeks.map(w => {
                                 const wExhausted = w.endCashExpected < 0;
@@ -198,7 +225,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                         {isSummaryExpanded && (
                             <>
                                 <tr className="bg-slate-50 border-b border-slate-200">
-                                    <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
+                                    <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] truncate">
                                         Beginning Cash
                                     </td>
                                     {weeks.map(w => (
@@ -208,7 +235,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                     ))}
                                 </tr>
                                 <tr className="bg-slate-50 border-b border-slate-200">
-                                    <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
+                                    <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] truncate">
                                         Inflows
                                     </td>
                                     {weeks.map(w => (
@@ -218,7 +245,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                     ))}
                                 </tr>
                                 <tr className="bg-slate-50 border-b border-slate-300">
-                                    <td className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
+                                    <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] truncate">
                                         Outflows
                                     </td>
                                     {weeks.map(w => (
@@ -228,7 +255,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                     ))}
                                 </tr>
                                 <tr className="border-b-2 border-slate-300 bg-white shadow-sm">
-                                    <td className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-800 border-r border-slate-200 sticky left-0 z-30 bg-white shadow-[1px_0_0_0_#e2e8f0]">
+                                    <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-800 border-r border-slate-200 sticky left-0 z-30 bg-white shadow-[1px_0_0_0_#e2e8f0] truncate">
                                         Total Out This Week
                                     </td>
                                     {weeks.map(w => {
@@ -245,7 +272,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                             </>
                         )}
                         <tr className="bg-slate-100 border-b border-slate-300 shadow-sm">
-                            <td className="px-3 py-2 text-xs font-bold text-slate-800 border-r border-slate-300 sticky left-0 z-30 bg-slate-100 shadow-[1px_0_0_0_#cbd5e1]">
+                            <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-2 text-xs font-bold text-slate-800 border-r border-slate-300 sticky left-0 z-30 bg-slate-100 shadow-[1px_0_0_0_#cbd5e1] truncate">
                                 Ending Cash
                             </td>
                             {weeks.map(w => {
