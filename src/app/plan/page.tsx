@@ -603,12 +603,12 @@ function PlanContent() {
                                                 window.location.href = `/receivables?highlightWeek=${week}`;
                                             } else if (type === "ap") {
                                                 window.location.href = `/payables?highlightWeek=${week}`;
-                                            } else if (type === "recurring" || type === "recurring-in" || type === "recurring-payroll") {
+                                            } else if (type === "recurring" || type === "recurring-in" || type === "recurring-payroll" || type === "adjustments") {
                                                 const selectedWeekData = data.forecast.weeks[week - 1];
                                                 if (selectedWeekData) {
                                                     const recurringItems = [
-                                                        ...selectedWeekData.breakdown.inflows.filter(i => i.sourceType === "recurring" || i.section?.includes("Inflows")),
-                                                        ...selectedWeekData.breakdown.outflows.filter(o => o.sourceType === "recurring" || o.sourceType === "assumption" || o.section?.includes("Recurring"))
+                                                        ...selectedWeekData.breakdown.inflows.filter(i => i.sourceType === "recurring" || i.section?.includes("Inflows") || i.section?.startsWith("Cat:")),
+                                                        ...selectedWeekData.breakdown.outflows.filter(o => o.sourceType === "recurring" || o.sourceType === "assumption" || o.section?.includes("Recurring") || o.section?.startsWith("Cat:"))
                                                     ];
                                                     setPlannedPanelWeek({
                                                         weekNumber: week,
@@ -617,9 +617,6 @@ function PlanContent() {
                                                         items: recurringItems,
                                                     });
                                                 }
-                                            } else if (type === "adjustments") {
-                                                const dir = data.cashFlowCategories?.find(c => c.id === extraId)?.direction === "inflow" ? "in" : "out";
-                                                window.location.href = `/adjustments?direction=${dir}&highlightWeek=${week}&highlightCategory=${extraId}`;
                                             }
                                         }}
                                     />
