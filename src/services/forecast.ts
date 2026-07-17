@@ -102,7 +102,7 @@ export interface ForecastInput {
     /** One-time outflows from rescheduled recurring items: { patternId, displayName, amount, weekStart, sourceWeekStart } */
     oneTimeOutflows?: Array<{ patternId: string; displayName: string; amount: number; weekStart: Date; sourceWeekStart?: string | null }>;
     /** Manual cash flow entries from the Cash Adjustments screen */
-    cashFlowEntries?: Array<{ categoryId: string; categoryName: string; direction: "inflow" | "outflow"; label: string; amount: number; targetDate: Date }>;
+    cashFlowEntries?: Array<{ categoryId: string; categoryName: string; direction: "inflow" | "outflow"; label: string; amount: number; targetDate: Date; sourceId?: string }>;
 }
  
 interface RecurrenceInstance {
@@ -675,6 +675,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 amount: entry.amount,
                 type: "committed",
                 sourceType: "manual",
+                sourceId: entry.sourceId,
                 confidence: "high",
                 section: `Cat: ${entry.categoryName}`,
             });
@@ -818,6 +819,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 amount: entry.amount,
                 type: "committed",
                 sourceType: "manual",
+                sourceId: entry.sourceId,
                 confidence: "high",
                 section: `Cat: ${entry.categoryName}`,
             });

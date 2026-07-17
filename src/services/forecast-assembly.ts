@@ -199,11 +199,33 @@ export async function assembleForecastData(companyId: string) {
         });
 
     const bankBalance = cashSnapshot.bankBalance;
-    const adjustmentsTotal = cashAdjustments.reduce((s, a) => s + a.amount, 0);
+    const pastAdjustments = cashAdjustments.filter(a => a.effectiveDate <= cashSnapshot.asOfDate);
+    const futureAdjustments = cashAdjustments.filter(a => a.effectiveDate > cashSnapshot.asOfDate);
+    
+    const adjustmentsTotal = pastAdjustments.reduce((s, a) => s + a.amount, 0);
     const adjustedOpeningCash = bankBalance + adjustmentsTotal;
 
     const totalOpenAR = invoicesRaw.reduce((s, i) => s + i.amountOpen, 0);
     const isARHeavy = totalOpenAR > (baseline.variableInflowWeekly || 0);
+
+    const mappedFutureAdjustments = futureAdjustments.map(a => ({
+        categoryId: "custom",
+        categoryName: a.type,
+        direction: a.amount >= 0 ? ("inflow" as const) : ("outflow" as const),
+        label: a.note || a.type,
+        amount: Math.abs(a.amount),
+        targetDate: a.effectiveDate,
+        sourceId: a.id,
+    }));
+
+    const mappedEntries = cashFlowEntries.map((e: any) => ({
+        categoryId: e.categoryId,
+        categoryName: e.category.name,
+        direction: e.category.direction as "inflow" | "outflow",
+        label: e.label,
+        amount: e.amount,
+        targetDate: e.targetDate,
+    }));
 
     const input: ForecastInput = {
         adjustedOpeningCash,
@@ -235,14 +257,7 @@ export async function assembleForecastData(companyId: string) {
         cogsLagWeeks: cogsCorrelation.cogsLagWeeks,
         isARHeavy,
         oneTimeOutflows,
-        cashFlowEntries: cashFlowEntries.map((e: any) => ({
-            categoryId: e.categoryId,
-            categoryName: e.category.name,
-            direction: e.category.direction as "inflow" | "outflow",
-            label: e.label,
-            amount: e.amount,
-            targetDate: e.targetDate,
-        }))
+        cashFlowEntries: [...mappedEntries, ...mappedFutureAdjustments]
     };
 
 
