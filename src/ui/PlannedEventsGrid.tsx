@@ -84,6 +84,25 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
     const recurring = commitments.filter(c => c.cadence !== "one-time" && c.cadence !== "irregular" && !c.isAdjustment);
     const oneTime = commitments.filter(c => c.cadence === "one-time" || c.cadence === "irregular" || c.isAdjustment);
 
+    // Sort recurring: Payroll always first, then by total amount descending
+    const getTotalAmount = (c: Commitment) => {
+        return weeks.reduce((sum, w) => {
+            const items = c.direction === "inflow" ? w.breakdown.inflows : w.breakdown.outflows;
+            const matches = items.filter(i => i.sourceId === c.id || (!i.sourceId && i.label === c.displayName));
+            return sum + matches.reduce((s, i) => s + i.amount, 0);
+        }, 0);
+    };
+
+    const sortedRecurring = [...recurring].sort((a, b) => {
+        const aIsPayroll = a.displayName.toLowerCase().includes("payroll");
+        const bIsPayroll = b.displayName.toLowerCase().includes("payroll");
+        if (aIsPayroll && !bIsPayroll) return -1;
+        if (!aIsPayroll && bIsPayroll) return 1;
+        return getTotalAmount(b) - getTotalAmount(a);
+    });
+
+    const sortedOneTime = [...oneTime].sort((a, b) => getTotalAmount(b) - getTotalAmount(a));
+
     // Compute cell value for a commitment in a specific week
     const getAmountForWeek = (c: Commitment, week: ForecastWeek) => {
         // We look at the breakdown items for this week to see if this commitment hit.
@@ -219,12 +238,13 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                         </tr>
                         {/* Summary Rows (Cash Impact) */}
                         <tr className="bg-slate-100 border-y border-slate-300 shadow-sm cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}>
-                            <th colSpan={14} className="p-0 text-left sticky left-0 z-30 bg-slate-100 font-normal">
-                                <div className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-700 flex items-center gap-1">
+                            <th style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-1.5 text-left sticky left-0 z-30 bg-slate-100 font-normal shadow-[1px_0_0_0_#cbd5e1]">
+                                <div className="text-xs font-bold uppercase tracking-widest text-slate-700 flex items-center gap-1">
                                     {isSummaryExpanded ? <ChevronDown className="w-3.5 h-3.5"/> : <ChevronRight className="w-3.5 h-3.5"/>}
                                     Cash Impact Summary
                                 </div>
                             </th>
+                            {weeks.map(w => <th key={`sum-hdr-${w.weekNumber}`} className="bg-slate-100" />)}
                         </tr>
                         {isSummaryExpanded && (
                             <>
@@ -297,27 +317,29 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                         {recurring.length > 0 && (
                             <>
                                 <tr className="bg-slate-200 cursor-pointer hover:bg-slate-300 transition-colors" onClick={() => setIsRecurringExpanded(!isRecurringExpanded)}>
-                                    <td colSpan={14} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-slate-200">
+                                    <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-slate-200 shadow-[1px_0_0_0_#cbd5e1]">
                                         <div className="flex items-center gap-1.5">
                                             {isRecurringExpanded ? <ChevronDown className="w-4 h-4"/> : <ChevronRight className="w-4 h-4"/>}
                                             — Recurring
                                         </div>
                                     </td>
+                                    {weeks.map(w => <td key={`rec-hdr-${w.weekNumber}`} className="border-y-2 border-slate-300 bg-slate-200" />)}
                                 </tr>
-                                {isRecurringExpanded && recurring.map((c, i) => renderRow(c, i))}
+                                {isRecurringExpanded && sortedRecurring.map((c, i) => renderRow(c, i))}
                             </>
                         )}
                         {oneTime.length > 0 && (
                             <>
                                 <tr className="bg-slate-200 cursor-pointer hover:bg-slate-300 transition-colors" onClick={() => setIsOneTimeExpanded(!isOneTimeExpanded)}>
-                                    <td colSpan={14} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-slate-200">
+                                    <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-slate-200 shadow-[1px_0_0_0_#cbd5e1]">
                                         <div className="flex items-center gap-1.5">
                                             {isOneTimeExpanded ? <ChevronDown className="w-4 h-4"/> : <ChevronRight className="w-4 h-4"/>}
                                             — One-Time
                                         </div>
                                     </td>
+                                    {weeks.map(w => <td key={`ot-hdr-${w.weekNumber}`} className="border-y-2 border-slate-300 bg-slate-200" />)}
                                 </tr>
-                                {isOneTimeExpanded && oneTime.map((c, i) => renderRow(c, i))}
+                                {isOneTimeExpanded && sortedOneTime.map((c, i) => renderRow(c, i))}
                             </>
                         )}
                     </tbody>
