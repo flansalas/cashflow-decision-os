@@ -55,7 +55,11 @@ function VarianceModal({ data, onClose }: VarianceModalProps) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function WeeklyRoutineCard() {
+interface WeeklyRoutineCardProps {
+    onPlannedEventsClick?: () => void;
+}
+
+export function WeeklyRoutineCard({ onPlannedEventsClick }: WeeklyRoutineCardProps = {}) {
     const [latestDriverData, setLatestDriverData] = useState<VarianceDriverResult | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [loaded, setLoaded] = useState(false);
@@ -106,7 +110,16 @@ export function WeeklyRoutineCard() {
 
                     <ArrowRight className="w-3 h-3 text-slate-300 flex-shrink-0 hidden sm:block" />
 
-                    <a href="/planned" className="group flex items-baseline gap-1.5 hover:opacity-80 transition-opacity">
+                    <a 
+                        href={onPlannedEventsClick ? "#" : "/planned"} 
+                        onClick={(e) => {
+                            if (onPlannedEventsClick) {
+                                e.preventDefault();
+                                onPlannedEventsClick();
+                            }
+                        }}
+                        className="group flex items-baseline gap-1.5 hover:opacity-80 transition-opacity"
+                    >
                         <span className="text-xs font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">3. Verify Planned Events</span>
                         <span className="text-[10px] text-slate-400 hidden md:inline">Recurring cash</span>
                     </a>

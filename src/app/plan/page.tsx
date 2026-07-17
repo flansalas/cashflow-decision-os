@@ -11,6 +11,8 @@ import { ForecastPulseView } from "@/ui/ForecastPulseView";
 import { ForecastActionsView } from "@/ui/ForecastActionsView";
 import { ForecastSummaryGrid } from "@/ui/ForecastSummaryGrid";
 import { WeekDrawer } from "@/ui/WeekDrawer";
+import { PlannedWeekPanel } from "@/ui/PlannedWeekPanel";
+import { PlannedEventDrawer } from "@/ui/PlannedEventDrawer";
 import { OnboardingWizard } from "@/ui/OnboardingWizard";
 import { ScenarioBuilder, type ScenarioItem } from "@/ui/ScenarioBuilder";
 import { ForecastBarView } from "@/ui/ForecastBarView";
@@ -203,6 +205,9 @@ function PlanContent() {
     const [error, setError] = useState<string | null>(null);
     const [whyWeekOpen, setWhyWeekOpen] = useState(false);
     const [selectedWeekNumber, setSelectedWeekNumber] = useState<number | null>(null);
+    const [plannedPanelWeek, setPlannedPanelWeek] = useState<{ weekNumber: number; weekStart: string; weekEnd: string; items: any[] } | null>(null);
+    const [showEditDrawer, setShowEditDrawer] = useState(false);
+    const [editingItem, setEditingItem] = useState<any>(null);
     const [setupOpen, setSetupOpen] = useState(false);
     const [scenarioItems, setScenarioItems] = useState<ScenarioItem[]>([]);
     const [forecastView, setForecastView] = useState<"actions" | "chart" | "runway" | "pulse" | "bar" | "table">("chart");
@@ -599,7 +604,19 @@ function PlanContent() {
                                             } else if (type === "ap") {
                                                 window.location.href = `/payables?highlightWeek=${week}`;
                                             } else if (type === "recurring" || type === "recurring-in" || type === "recurring-payroll") {
-                                                window.location.href = `/planned?highlightWeek=${week}`;
+                                                const selectedWeekData = data.forecast.weeks[week - 1];
+                                                if (selectedWeekData) {
+                                                    const recurringItems = [
+                                                        ...selectedWeekData.breakdown.inflows.filter(i => i.sourceType === "recurring" || i.section?.includes("Inflows")),
+                                                        ...selectedWeekData.breakdown.outflows.filter(o => o.sourceType === "recurring" || o.sourceType === "assumption" || o.section?.includes("Recurring"))
+                                                    ];
+                                                    setPlannedPanelWeek({
+                                                        weekNumber: week,
+                                                        weekStart: selectedWeekData.weekStart,
+                                                        weekEnd: selectedWeekData.weekEnd,
+                                                        items: recurringItems,
+                                                    });
+                                                }
                                             } else if (type === "adjustments") {
                                                 const dir = data.cashFlowCategories?.find(c => c.id === extraId)?.direction === "inflow" ? "in" : "out";
                                                 window.location.href = `/adjustments?direction=${dir}&highlightWeek=${week}&highlightCategory=${extraId}`;
@@ -727,6 +744,44 @@ function PlanContent() {
                     onCancel={() => setShowUpdateBalance(false)}
                 />
             )}
+
+            {plannedPanelWeek && data && (
+                <PlannedWeekPanel
+                    isOpen={!!plannedPanelWeek}
+                    weekNumber={plannedPanelWeek.weekNumber}
+                    weekStart={plannedPanelWeek.weekStart}
+                    weekEnd={plannedPanelWeek.weekEnd}
+                    items={plannedPanelWeek.items}
+                    allWeeks={data.forecast.weeks}
+                    companyId={effectiveCompanyId ?? ""}
+                    onClose={() => setPlannedPanelWeek(null)}
+                    onSaved={() => {
+                        setPlannedPanelWeek(null);
+                        fetchDashboard(effectiveCompanyId);
+                    }}
+                    onEditPattern={(item) => {
+                        setEditingItem(item);
+                        setShowEditDrawer(true);
+                    }}
+                    onManageAll={() => window.location.href = "/planned"}
+                />
+            )}
+            
+            <PlannedEventDrawer
+                isOpen={showEditDrawer}
+                companyId={effectiveCompanyId ?? ""}
+                editingItem={editingItem}
+                onClose={() => {
+                    setShowEditDrawer(false);
+                    setEditingItem(null);
+                }}
+                onSaved={() => {
+                    setShowEditDrawer(false);
+                    setEditingItem(null);
+                    fetchDashboard(effectiveCompanyId);
+                    if (plannedPanelWeek) setPlannedPanelWeek(null); // Optional: close panel to reflect changes
+                }}
+            />
         </div>
     );
 }

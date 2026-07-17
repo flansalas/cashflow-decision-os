@@ -31,6 +31,7 @@ interface Props {
     highlightId?: string | null;
     onRefresh: () => void;
     onClearHighlight?: () => void;
+    onPlannedClick?: (weekNumber: number) => void;
     executionPlan?: { id: string; version: number } | null;
     // Canonical forecast balances from the same engine as the Dashboard.
     // When provided, these override the client-side balance calculation so
@@ -995,7 +996,13 @@ export function CashflowGrid({
                                                 <div 
                                                     className="rounded-lg border px-2 py-1.5 text-[10px] space-y-0.5 cursor-pointer hover:brightness-95 transition-all" 
                                                     style={{ background: 'var(--bg-raised)', borderColor: 'var(--border-subtle)' }}
-                                                    onClick={() => router.push(`/planned?highlightWeek=${wk.weekNumber}`)}
+                                                    onClick={() => {
+                                                        if (props.onPlannedClick) {
+                                                            props.onPlannedClick(wk.weekNumber);
+                                                        } else {
+                                                            router.push(`/planned?highlightWeek=${wk.weekNumber}`);
+                                                        }
+                                                    }}
                                                 >
                                                     {recIn > 0 && (
                                                         <div className="flex justify-between">
