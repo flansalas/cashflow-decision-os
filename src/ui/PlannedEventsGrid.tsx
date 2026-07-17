@@ -184,14 +184,16 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                     <thead className="sticky top-0 z-20 shadow-md">
                         <tr className="bg-slate-50 border-b border-slate-200">
                             <th 
-                                style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }}
-                                className="px-3 py-2 font-bold text-xs uppercase tracking-widest text-slate-500 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] relative"
+                                className="px-0 py-0 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] border-r border-slate-200"
                             >
-                                <div className="truncate">Commitment</div>
-                                <div 
-                                    onMouseDown={handleMouseDown}
-                                    className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-indigo-300 transition-colors z-50"
-                                />
+                                <div style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="flex items-center justify-between h-full w-full">
+                                    <div className="px-3 py-2 font-bold text-xs uppercase tracking-widest text-slate-500 truncate flex-1 select-none text-left">Commitment</div>
+                                    <div 
+                                        onMouseDown={handleMouseDown}
+                                        className="w-3 h-full cursor-col-resize hover:bg-indigo-300 transition-colors flex-shrink-0"
+                                        style={{ touchAction: "none" }}
+                                    />
+                                </div>
                             </th>
                             {weeks.map(w => {
                                 const wExhausted = w.endCashExpected < 0;
@@ -217,17 +219,19 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                         </tr>
                         {/* Summary Rows (Cash Impact) */}
                         <tr className="bg-slate-100 border-y border-slate-300 shadow-sm cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}>
-                            <td colSpan={14} className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-700 sticky left-0 z-30 bg-slate-100 flex items-center gap-1">
-                                {isSummaryExpanded ? <ChevronDown className="w-3.5 h-3.5"/> : <ChevronRight className="w-3.5 h-3.5"/>}
-                                Cash Impact Summary
-                            </td>
+                            <th colSpan={14} className="p-0 text-left sticky left-0 z-30 bg-slate-100 font-normal">
+                                <div className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-700 flex items-center gap-1">
+                                    {isSummaryExpanded ? <ChevronDown className="w-3.5 h-3.5"/> : <ChevronRight className="w-3.5 h-3.5"/>}
+                                    Cash Impact Summary
+                                </div>
+                            </th>
                         </tr>
                         {isSummaryExpanded && (
                             <>
                                 <tr className="bg-slate-50 border-b border-slate-200">
-                                    <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] truncate">
+                                    <th style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] truncate text-left font-normal">
                                         Beginning Cash
-                                    </td>
+                                    </th>
                                     {weeks.map(w => (
                                         <td key={`beg-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial font-semibold text-slate-700 border-r border-slate-200 last:border-0 bg-slate-50">
                                             ${w.startCash.toLocaleString()}
@@ -235,9 +239,9 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                     ))}
                                 </tr>
                                 <tr className="bg-slate-50 border-b border-slate-200">
-                                    <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] truncate">
+                                    <th style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] truncate text-left font-normal">
                                         Inflows
-                                    </td>
+                                    </th>
                                     {weeks.map(w => (
                                         <td key={`in-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial text-emerald-600 border-r border-slate-200 last:border-0 bg-slate-50">
                                             +{fmt(w.inflowsExpected)}
@@ -245,9 +249,9 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                     ))}
                                 </tr>
                                 <tr className="bg-slate-50 border-b border-slate-300">
-                                    <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] truncate">
+                                    <th style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-1.5 text-xs font-medium text-slate-600 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] truncate text-left font-normal">
                                         Outflows
-                                    </td>
+                                    </th>
                                     {weeks.map(w => (
                                         <td key={`out-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial text-red-600 border-r border-slate-200 last:border-0 bg-slate-50">
                                             -{fmt(w.outflowsExpected)}
@@ -255,9 +259,9 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                     ))}
                                 </tr>
                                 <tr className="border-b-2 border-slate-300 bg-white shadow-sm">
-                                    <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-800 border-r border-slate-200 sticky left-0 z-30 bg-white shadow-[1px_0_0_0_#e2e8f0] truncate">
+                                    <th style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-800 border-r border-slate-200 sticky left-0 z-30 bg-white shadow-[1px_0_0_0_#e2e8f0] truncate text-left">
                                         Total Out This Week
-                                    </td>
+                                    </th>
                                     {weeks.map(w => {
                                         const out = w.breakdown.outflows
                                             .filter(i => i.sourceType === "recurring" || i.sourceType === "assumption" || i.section?.includes("Recurring") || i.section?.includes("What-If"))
@@ -272,9 +276,9 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                             </>
                         )}
                         <tr className="bg-slate-100 border-b border-slate-300 shadow-sm">
-                            <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-2 text-xs font-bold text-slate-800 border-r border-slate-300 sticky left-0 z-30 bg-slate-100 shadow-[1px_0_0_0_#cbd5e1] truncate">
+                            <th style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-2 text-xs font-bold text-slate-800 border-r border-slate-300 sticky left-0 z-30 bg-slate-100 shadow-[1px_0_0_0_#cbd5e1] truncate text-left">
                                 Ending Cash
-                            </td>
+                            </th>
                             {weeks.map(w => {
                                 const wExhausted = w.endCashExpected < 0;
                                 const wBreached = w.endCashExpected < bufferMin;
