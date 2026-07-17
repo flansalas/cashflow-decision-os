@@ -135,7 +135,7 @@ export async function PATCH(
             } else if (body.direction !== undefined) {
                 updateData.amount = body.direction === "outflow" ? -Math.abs(existingAdjustment.amount) : Math.abs(existingAdjustment.amount);
             }
-            if (body.nextExpectedDate !== undefined) updateData.date = body.nextExpectedDate ? body.nextExpectedDate : new Date().toISOString().slice(0, 10);
+            if (body.nextExpectedDate !== undefined) updateData.effectiveDate = body.nextExpectedDate ? new Date(body.nextExpectedDate) : new Date(new Date().toISOString().slice(0, 10));
 
             const updated = await prisma.cashAdjustment.update({ where: { id }, data: updateData });
             return NextResponse.json({ ok: true, updated });

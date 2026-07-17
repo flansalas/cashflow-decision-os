@@ -254,7 +254,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                     </th>
                                     {weeks.map(w => (
                                         <td key={`beg-${w.weekNumber}`} className="px-3 py-1.5 text-right text-xs font-financial font-semibold text-slate-700 border-r border-slate-200 last:border-0 bg-slate-50">
-                                            ${w.startCash.toLocaleString()}
+                                            ${w.startCash.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                                         </td>
                                     ))}
                                 </tr>
@@ -303,11 +303,12 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                 const wExhausted = w.endCashExpected < 0;
                                 const wBreached = w.endCashExpected < bufferMin;
                                 let color = "text-slate-800";
-                                if (wExhausted) color = "text-red-700";
-                                else if (wBreached) color = "text-amber-700";
+                                if (wExhausted) color = "text-red-600";
+                                else if (wBreached) color = "text-amber-600";
+                                
                                 return (
-                                    <td key={`end-${w.weekNumber}`} className={`px-3 py-2 text-right text-sm font-financial font-bold border-r border-slate-300 last:border-0 bg-slate-100 ${color}`}>
-                                        ${w.endCashExpected.toLocaleString()}
+                                    <td key={`end-${w.weekNumber}`} className={`px-3 py-2 text-right text-sm font-bold font-financial border-r border-slate-300 last:border-0 bg-slate-100 shadow-[1px_0_0_0_#cbd5e1] ${color}`}>
+                                        ${w.endCashExpected.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                                     </td>
                                 );
                             })}
