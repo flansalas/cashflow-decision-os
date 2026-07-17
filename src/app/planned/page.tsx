@@ -220,7 +220,7 @@ function RecurringContent() {
                             <ArrowLeft className="w-3 h-3" /> Dashboard
                         </a>
                         <span style={{ color: "var(--border-default)" }}>/</span>
-                        <span style={{ color: "var(--color-primary)" }} className="font-bold text-sm flex items-center gap-1.5"><ClipboardList className="w-4 h-4" /> Planned Events</span>
+                        <span style={{ color: "var(--color-primary)" }} className="font-bold text-sm flex items-center gap-1.5"><ClipboardList className="w-4 h-4" /> Cash Commitments</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
@@ -230,7 +230,7 @@ function RecurringContent() {
                             className="px-3 py-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider rounded-lg shadow-sm transition-all"
                             style={{ background: "var(--color-primary)", color: "white" }}
                         >
-                            <Plus className="w-3.5 h-3.5" /> Add Planned Event
+                            <Plus className="w-3.5 h-3.5" /> Add Cash Commitment
                         </button>
                         <button onClick={fetchData} className="p-1.5 rounded-lg border text-sm" title="Refresh" style={{ background: "var(--bg-raised)", borderColor: "var(--border-default)", color: "var(--text-muted)" }}>
                             <RefreshCw className="w-3.5 h-3.5" />
@@ -240,13 +240,11 @@ function RecurringContent() {
             </header>
 
             <main className="max-w-5xl mx-auto px-5 py-6 space-y-5">
-                {/* Cash Impact Table */}
-                <CashImpactTable weeks={data.forecast.weeks} bufferMin={data.assumptions.bufferMin} />
-
-                {/* Main Grid replacing Tab Switcher */}
+                {/* Main Grid replacing Tab Switcher and Impact Table */}
                 <PlannedEventsGrid 
                     commitments={plannedEvents}
                     weeks={data.forecast.weeks}
+                    bufferMin={data.assumptions.bufferMin}
                     onEdit={(item) => {
                         setEditingItem(item);
                         setShowAddForm(true);
@@ -310,7 +308,7 @@ function RecurringContent() {
                         }
                         setShowAddForm(true);
                     }}
-                    onManageAll={() => setPlannedPanelWeek(null)}
+                    hideManageAll={true}
                 />
             )}
         </div>

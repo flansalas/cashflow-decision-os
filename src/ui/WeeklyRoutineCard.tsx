@@ -120,7 +120,7 @@ export function WeeklyRoutineCard({ onPlannedEventsClick }: WeeklyRoutineCardPro
                         }}
                         className="group flex items-baseline gap-1.5 hover:opacity-80 transition-opacity"
                     >
-                        <span className="text-xs font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">3. Verify Planned Events</span>
+                        <span className="text-xs font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">3. Verify Cash Commitments</span>
                         <span className="text-[10px] text-slate-400 hidden md:inline">Recurring cash</span>
                     </a>
 

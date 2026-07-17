@@ -125,7 +125,7 @@ export function AppSidebar() {
         },
         {
             icon: <Repeat2 className="w-[18px] h-[18px]" />,
-            label: "Planned Events",
+            label: "Cash Commitments",
             href: "/planned",
             section: "tools",
         },

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Plus } from "lucide-react";
+import { Plus, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 interface Commitment {
     id: string;
@@ -33,6 +33,7 @@ interface ForecastWeek {
     weekNumber: number;
     weekStart: string;
     weekEnd: string;
+    startCash: number;
     endCashExpected: number;
     inflowsExpected: number;
     outflowsExpected: number;
@@ -45,6 +46,7 @@ interface ForecastWeek {
 interface Props {
     commitments: Commitment[];
     weeks: ForecastWeek[];
+    bufferMin: number;
     onEdit: (item: Commitment) => void;
     onWeekClick: (weekNum: number) => void;
     onAdd: () => void;
@@ -55,7 +57,7 @@ function fmt(n: number): string {
     return Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
-export function PlannedEventsGrid({ commitments, weeks, onEdit, onWeekClick, onAdd }: Props) {
+export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWeekClick, onAdd }: Props) {
     const recurring = commitments.filter(c => c.cadence !== "one-time" && c.cadence !== "irregular" && !c.isAdjustment);
     const oneTime = commitments.filter(c => c.cadence === "one-time" || c.cadence === "irregular" || c.isAdjustment);
 
@@ -64,7 +66,7 @@ export function PlannedEventsGrid({ commitments, weeks, onEdit, onWeekClick, onA
         // We look at the breakdown items for this week to see if this commitment hit.
         // We match by sourceId === c.id
         const items = c.direction === "inflow" ? week.breakdown.inflows : week.breakdown.outflows;
-        const matches = items.filter(i => i.sourceId === c.id || (c.isAdjustment && i.sourceId === c.id));
+        const matches = items.filter(i => i.sourceId === c.id || (c.isAdjustment && i.sourceId === c.id) || (!i.sourceId && i.label === c.displayName));
         if (matches.length > 0) {
             return matches.reduce((sum, i) => sum + i.amount, 0);
         }
@@ -93,10 +95,10 @@ export function PlannedEventsGrid({ commitments, weeks, onEdit, onWeekClick, onA
                             title={`Week ${w.weekNumber} (${new Date(w.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })})`}
                         >
                             {amt > 0 ? (
-                                <span className={c.direction === "inflow" ? "text-emerald-600" : "text-slate-700"}>
+                                <span className={c.direction === "inflow" ? "text-emerald-600" : "text-slate-700 font-semibold"}>
                                     {fmt(amt)}
                                 </span>
-                            ) : null}
+                            ) : <span className="text-slate-300">—</span>}
                         </td>
                     );
                 })}
@@ -104,41 +106,144 @@ export function PlannedEventsGrid({ commitments, weeks, onEdit, onWeekClick, onA
         );
     };
 
+    let lowestCash = weeks.length > 0 ? weeks[0].endCashExpected : 0;
+    let lowestWeek = weeks.length > 0 ? weeks[0] : null;
+
+    weeks.forEach(w => {
+        if (w.endCashExpected < lowestCash) {
+            lowestCash = w.endCashExpected;
+            lowestWeek = w;
+        }
+    });
+
+    const isBufferBreached = lowestCash < bufferMin;
+    const isExhausted = lowestCash < 0;
+
+    let statusColor = "text-emerald-700 bg-emerald-50 border-emerald-200";
+    let statusIcon = <CheckCircle2 className="w-5 h-5 text-emerald-600" />;
+    let statusText = "Safe Buffer";
+
+    if (isExhausted) {
+        statusColor = "text-red-700 bg-red-50 border-red-200";
+        statusIcon = <AlertTriangle className="w-5 h-5 text-red-600" />;
+        statusText = "Cash Exhaustion Risk";
+    } else if (isBufferBreached) {
+        statusColor = "text-amber-700 bg-amber-50 border-amber-200";
+        statusIcon = <AlertTriangle className="w-5 h-5 text-amber-600" />;
+        statusText = "Buffer Breach Risk";
+    }
+
     return (
-        <div className="bg-white rounded-xl border shadow-sm overflow-hidden" style={{ borderColor: "var(--border-subtle)" }}>
-            <div className="flex items-center justify-between p-4 border-b bg-slate-50/50" style={{ borderColor: "var(--border-subtle)" }}>
-                <h2 className="text-sm font-bold text-slate-800">Planned Events</h2>
-                <button 
-                    onClick={onAdd}
-                    className="px-3 py-1.5 flex items-center gap-1.5 text-xs font-bold rounded-lg shadow-sm transition-all"
-                    style={{ background: "var(--color-primary)", color: "white" }}
-                >
-                    <Plus className="w-3.5 h-3.5" /> Add Cash Commitment
-                </button>
-            </div>
-            
-            <div className="overflow-x-auto custom-scrollbar pb-2">
+        <div className="space-y-4">
+            {lowestWeek && (
+                <div className={`px-6 py-4 border rounded-xl flex items-center justify-between shadow-sm ${statusColor}`}>
+                    <div className="flex items-center gap-3">
+                        {statusIcon}
+                        <div>
+                            <h3 className="font-bold text-sm tracking-tight">{statusText}</h3>
+                            <p className="text-xs font-medium opacity-80">
+                                Lowest projected: <span className="font-financial font-bold">{lowestCash < 0 ? "-" : ""}${Math.abs(lowestCash).toLocaleString()}</span> in Week {lowestWeek.weekNumber} ({new Date(lowestWeek.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })})
+                            </p>
+                        </div>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Target Buffer</p>
+                        <p className="text-sm font-financial font-bold opacity-90">${bufferMin.toLocaleString()}</p>
+                    </div>
+                </div>
+            )}
+
+            <div className="bg-white rounded-xl border shadow-sm overflow-hidden" style={{ borderColor: "var(--border-subtle)" }}>
+                <div className="flex items-center justify-between p-4 border-b bg-slate-50/50" style={{ borderColor: "var(--border-subtle)" }}>
+                    <h2 className="text-sm font-bold text-slate-800">Cash Commitments</h2>
+                    <button 
+                        onClick={onAdd}
+                        className="px-3 py-1.5 flex items-center gap-1.5 text-xs font-bold rounded-lg shadow-sm transition-all"
+                        style={{ background: "var(--color-primary)", color: "white" }}
+                    >
+                        <Plus className="w-3.5 h-3.5" /> Add Cash Commitment
+                    </button>
+                </div>
+                
+                <div className="overflow-x-auto custom-scrollbar pb-2">
                 <table className="w-full text-left border-collapse">
                     <thead>
                         <tr className="bg-slate-50 border-b border-slate-200">
                             <th className="p-3 w-48 min-w-[200px] font-bold text-xs uppercase tracking-widest text-slate-500 border-r border-slate-200">
                                 Commitment
                             </th>
+                            {weeks.map(w => {
+                                const wExhausted = w.endCashExpected < 0;
+                                const wBreached = w.endCashExpected < bufferMin;
+                                let headerColor = "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100";
+                                if (wExhausted) headerColor = "text-red-700 bg-red-50 border-red-200 hover:bg-red-100";
+                                else if (wBreached) headerColor = "text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100";
+                                else headerColor = "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"; // default safe
+
+                                return (
+                                    <th 
+                                        key={w.weekNumber} 
+                                        onClick={() => onWeekClick(w.weekNumber)}
+                                        className={`p-3 min-w-[70px] text-center cursor-pointer transition-colors border-r last:border-0 ${headerColor}`}
+                                    >
+                                        <div className="text-xs font-bold">W{w.weekNumber}</div>
+                                        <div className="text-[10px] opacity-70 font-medium mt-0.5">
+                                            {new Date(w.weekStart).toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: "UTC" })}
+                                        </div>
+                                    </th>
+                                );
+                            })}
+                        </tr>
+                        {/* Summary Rows (Cash Impact) */}
+                        <tr className="bg-white border-b border-slate-100">
+                            <td className="p-3 text-xs font-medium text-slate-500 border-r border-slate-200">
+                                Beginning Cash
+                            </td>
                             {weeks.map(w => (
-                                <th 
-                                    key={w.weekNumber} 
-                                    onClick={() => onWeekClick(w.weekNumber)}
-                                    className="p-3 min-w-[70px] text-center cursor-pointer hover:bg-slate-100 transition-colors border-r border-slate-200 last:border-0"
-                                >
-                                    <div className="text-xs font-bold text-slate-700">W{w.weekNumber}</div>
-                                    <div className="text-[10px] text-slate-400 font-medium mt-0.5">
-                                        {new Date(w.weekStart).toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: "UTC" })}
-                                    </div>
-                                </th>
+                                <td key={`beg-${w.weekNumber}`} className="p-3 text-right text-sm font-financial font-semibold text-slate-800 border-r border-slate-100 last:border-0">
+                                    ${w.startCash.toLocaleString()}
+                                </td>
                             ))}
                         </tr>
+                        <tr className="bg-white border-b border-slate-100">
+                            <td className="p-3 text-xs font-medium text-slate-500 border-r border-slate-200">
+                                Inflows
+                            </td>
+                            {weeks.map(w => (
+                                <td key={`in-${w.weekNumber}`} className="p-3 text-right text-sm font-financial text-emerald-600 border-r border-slate-100 last:border-0">
+                                    +{fmt(w.inflowsExpected)}
+                                </td>
+                            ))}
+                        </tr>
+                        <tr className="bg-white border-b border-slate-100">
+                            <td className="p-3 text-xs font-medium text-slate-500 border-r border-slate-200">
+                                Outflows
+                            </td>
+                            {weeks.map(w => (
+                                <td key={`out-${w.weekNumber}`} className="p-3 text-right text-sm font-financial text-red-600 border-r border-slate-100 last:border-0">
+                                    -{fmt(w.outflowsExpected)}
+                                </td>
+                            ))}
+                        </tr>
+                        <tr className="bg-slate-50 border-b-2 border-slate-200 shadow-sm">
+                            <td className="p-3 text-xs font-bold text-slate-800 border-r border-slate-200">
+                                Ending Cash
+                            </td>
+                            {weeks.map(w => {
+                                const wExhausted = w.endCashExpected < 0;
+                                const wBreached = w.endCashExpected < bufferMin;
+                                let color = "text-slate-800";
+                                if (wExhausted) color = "text-red-700";
+                                else if (wBreached) color = "text-amber-700";
+                                return (
+                                    <td key={`end-${w.weekNumber}`} className={`p-3 text-right text-sm font-financial font-bold border-r border-slate-100 last:border-0 ${color}`}>
+                                        ${w.endCashExpected.toLocaleString()}
+                                    </td>
+                                );
+                            })}
+                        </tr>
                         {/* Weekly Totals */}
-                        <tr className="border-b-2 border-slate-200 bg-white">
+                        <tr className="border-b border-slate-200 bg-white shadow-sm">
                             <td className="p-3 text-xs font-bold uppercase tracking-widest text-slate-800 border-r border-slate-200">
                                 Total Out This Week
                             </td>
@@ -179,6 +284,7 @@ export function PlannedEventsGrid({ commitments, weeks, onEdit, onWeekClick, onA
                     </tbody>
                 </table>
             </div>
+        </div>
         </div>
     );
 }

@@ -33,7 +33,8 @@ interface Props {
     onClose: () => void;
     onSaved: () => void;
     onEditPattern: (item: BreakdownItem) => void;
-    onManageAll: () => void;
+    onManageAll?: () => void;
+    hideManageAll?: boolean;
 }
 
 function fmt(n: number): string {
@@ -41,7 +42,7 @@ function fmt(n: number): string {
 }
 
 export function PlannedWeekPanel({
-    isOpen, weekNumber, weekStart, weekEnd, items, allWeeks, companyId, onClose, onSaved, onEditPattern, onManageAll
+    isOpen, weekNumber, weekStart, weekEnd, items, allWeeks, companyId, onClose, onSaved, onEditPattern, onManageAll, hideManageAll
 }: Props) {
     const [actionState, setActionState] = useState<{ type: 'defer' | 'skip', itemIdx: number } | null>(null);
     const [targetWeekNum, setTargetWeekNum] = useState<number | "">("");
@@ -106,7 +107,7 @@ export function PlannedWeekPanel({
                                 <ArrowLeft className="w-3 h-3 cursor-pointer hover:text-indigo-800" onClick={onClose} /> Week {weekNumber}
                             </span>
                             <span className="text-slate-400 text-xs">—</span>
-                            <span className="text-xs text-slate-500 font-medium">Planned Events</span>
+                            <span className="text-xs text-slate-500 font-medium">Cash Commitments</span>
                         </div>
                         <h2 className="text-lg font-bold text-slate-900 mt-1">
                             {new Date(weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} – {new Date(weekEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}
@@ -129,7 +130,7 @@ export function PlannedWeekPanel({
                     )}
                     
                     {items.length === 0 ? (
-                        <p className="text-sm text-slate-500 italic">No planned events this week.</p>
+                        <p className="text-sm text-slate-500 italic">No cash commitments this week.</p>
                     ) : items.map((item, idx) => {
                         const isOutflow = !item.section?.includes("Inflows");
                         const isDeferring = actionState?.type === 'defer' && actionState.itemIdx === idx;
@@ -220,14 +221,16 @@ export function PlannedWeekPanel({
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-center">
-                    <button 
-                        onClick={onManageAll}
-                        className="text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1"
-                    >
-                        Manage All Planned Events <ArrowRight className="w-4 h-4" />
-                    </button>
-                </div>
+                {!hideManageAll && onManageAll && (
+                    <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-center">
+                        <button 
+                            onClick={onManageAll}
+                            className="text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1"
+                        >
+                            Manage All Cash Commitments <ArrowRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
