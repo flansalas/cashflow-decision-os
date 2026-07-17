@@ -206,7 +206,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                 className="px-0 py-0 sticky left-0 z-30 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] border-r border-slate-200"
                             >
                                 <div style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="flex items-center justify-between h-full w-full">
-                                    <div className="px-3 py-2 font-bold text-xs uppercase tracking-widest text-slate-500 truncate flex-1 select-none text-left">Commitment</div>
+                                    <div className="px-3 py-2 font-bold text-xs uppercase tracking-widest text-slate-500 whitespace-nowrap overflow-hidden flex-1 select-none text-left">Commitment</div>
                                     <div 
                                         onMouseDown={handleMouseDown}
                                         className="w-3 h-full cursor-col-resize hover:bg-indigo-300 transition-colors flex-shrink-0"
@@ -238,7 +238,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                         </tr>
                         {/* Summary Rows (Cash Impact) */}
                         <tr className="bg-slate-100 border-y border-slate-300 shadow-sm cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}>
-                            <th style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-1.5 text-left sticky left-0 z-30 bg-slate-100 font-normal shadow-[1px_0_0_0_#cbd5e1]">
+                            <th style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-1.5 text-left sticky left-0 z-30 bg-slate-100 font-normal shadow-[1px_0_0_0_#cbd5e1] whitespace-nowrap overflow-hidden">
                                 <div className="text-xs font-bold uppercase tracking-widest text-slate-700 flex items-center gap-1">
                                     {isSummaryExpanded ? <ChevronDown className="w-3.5 h-3.5"/> : <ChevronRight className="w-3.5 h-3.5"/>}
                                     Cash Impact Summary
@@ -279,7 +279,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                     ))}
                                 </tr>
                                 <tr className="border-b-2 border-slate-300 bg-white shadow-sm">
-                                    <th style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-800 border-r border-slate-200 sticky left-0 z-30 bg-white shadow-[1px_0_0_0_#e2e8f0] truncate text-left">
+                                    <th style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-800 border-r border-slate-200 sticky left-0 z-30 bg-white shadow-[1px_0_0_0_#e2e8f0] whitespace-nowrap overflow-hidden text-left">
                                         Total Out This Week
                                     </th>
                                     {weeks.map(w => {
@@ -317,7 +317,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                         {recurring.length > 0 && (
                             <>
                                 <tr className="bg-slate-200 cursor-pointer hover:bg-slate-300 transition-colors" onClick={() => setIsRecurringExpanded(!isRecurringExpanded)}>
-                                    <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-slate-200 shadow-[1px_0_0_0_#cbd5e1]">
+                                    <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-slate-200 shadow-[1px_0_0_0_#cbd5e1] whitespace-nowrap overflow-hidden">
                                         <div className="flex items-center gap-1.5">
                                             {isRecurringExpanded ? <ChevronDown className="w-4 h-4"/> : <ChevronRight className="w-4 h-4"/>}
                                             — Recurring
@@ -331,7 +331,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                         {oneTime.length > 0 && (
                             <>
                                 <tr className="bg-slate-200 cursor-pointer hover:bg-slate-300 transition-colors" onClick={() => setIsOneTimeExpanded(!isOneTimeExpanded)}>
-                                    <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-slate-200 shadow-[1px_0_0_0_#cbd5e1]">
+                                    <td style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-700 border-y-2 border-slate-300 sticky left-0 z-10 bg-slate-200 shadow-[1px_0_0_0_#cbd5e1] whitespace-nowrap overflow-hidden">
                                         <div className="flex items-center gap-1.5">
                                             {isOneTimeExpanded ? <ChevronDown className="w-4 h-4"/> : <ChevronRight className="w-4 h-4"/>}
                                             — One-Time
