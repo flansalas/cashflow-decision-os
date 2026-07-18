@@ -14,6 +14,7 @@ interface Commitment {
     isIncluded: boolean;
     isCritical: boolean;
     direction: string;
+    description?: string | null;
     status?: string;
     origin?: string;
     isAdjustment?: boolean;

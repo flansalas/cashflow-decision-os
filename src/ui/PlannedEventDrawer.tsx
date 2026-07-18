@@ -20,6 +20,7 @@ export function PlannedEventDrawer({ isOpen, onClose, onSaved, companyId, editin
     const [name, setName] = useState("");
     const [amount, setAmount] = useState("");
     const [category, setCategory] = useState("Uncategorized");
+    const [description, setDescription] = useState("");
     const [date, setDate] = useState("");
     const [cadence, setCadence] = useState("monthly");
     const [saving, setSaving] = useState(false);
@@ -33,6 +34,7 @@ export function PlannedEventDrawer({ isOpen, onClose, onSaved, companyId, editin
                 setName(editingItem.displayName || "");
                 setAmount(editingItem.typicalAmount ? String(editingItem.typicalAmount) : "");
                 setCategory(editingItem.category || "Uncategorized");
+                setDescription(editingItem.description || "");
                 setDate(editingItem.nextExpectedDate ? new Date(editingItem.nextExpectedDate).toISOString().slice(0, 10) : "");
                 setCadence(editingItem.cadence && editingItem.cadence !== "irregular" ? editingItem.cadence : "monthly");
             } else {
@@ -41,6 +43,7 @@ export function PlannedEventDrawer({ isOpen, onClose, onSaved, companyId, editin
                 setName("");
                 setAmount("");
                 setCategory("Uncategorized");
+                setDescription("");
                 setDate(new Date().toISOString().slice(0, 10));
                 setCadence("monthly");
             }
@@ -68,6 +71,7 @@ export function PlannedEventDrawer({ isOpen, onClose, onSaved, companyId, editin
                 direction,
                 amount: parseFloat(amount),
                 date,
+                description: description.trim() || null,
             };
 
             if (editingItem) {
@@ -249,6 +253,18 @@ export function PlannedEventDrawer({ isOpen, onClose, onSaved, companyId, editin
                                     </select>
                                 </div>
                             )}
+                        </div>
+
+                        {/* Notes (Optional) */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Notes (Optional)</label>
+                            <textarea 
+                                value={description} 
+                                onChange={e => setDescription(e.target.value)}
+                                placeholder="Add any additional details or context here..."
+                                rows={3}
+                                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                            />
                         </div>
                     </div>
 

@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
         if (!companyId) return NextResponse.json({ error: "Could not resolve company" }, { status: 401 });
 
         const body = await req.json();
-        const { type, direction, name, amount, category, date, cadence } = body;
+        const { type, direction, name, amount, category, date, cadence, description } = body;
 
         if (!name || !amount || !date || !direction) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
                     cadence,
                     nextExpectedDate: new Date(date),
                     category,
+                    description,
                     confidence: "high", // manual entry
                     isIncluded: true,
                     isCritical: false,
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest) {
                     type: category || "other",
                     amount: direction === "outflow" ? -Math.abs(amount) : Math.abs(amount),
                     note: name,
+                    description,
                     effectiveDate: new Date(date),
                     status: "active",
                     origin: "user"

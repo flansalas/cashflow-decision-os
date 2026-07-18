@@ -211,6 +211,7 @@ function RecurringContent() {
                 confidence: "high",
                 isIncluded: true,
                 isCritical: false,
+                description: a.description,
                 status: a.status || "active",
                 origin: a.origin || "user",
                 isAdjustment: true

@@ -64,6 +64,7 @@ export interface ForecastRecurring {
     isCritical: boolean;
     status: string;
     origin: string;
+    description?: string | null;
     /** ISO date strings (week-start Mondays) for which this occurrence should be skipped */
     skipDates?: string[];
 }

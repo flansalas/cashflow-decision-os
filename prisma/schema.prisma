@@ -87,6 +87,7 @@ model CashAdjustment {
   amount        Float
   effectiveDate DateTime
   note          String?
+  description   String?
   origin        String   @default("system") // system | user
   status        String   @default("active") // active | ignored
   createdAt     DateTime @default(now())
@@ -243,6 +244,7 @@ model RecurringPattern {
   category         String    @default("other")
   isIncluded       Boolean   @default(true)
   isCritical       Boolean   @default(false)
+  description      String?
   origin           String    @default("system") // system | user
   status           String    @default("active") // active | ignored
   createdAt        DateTime  @default(now())

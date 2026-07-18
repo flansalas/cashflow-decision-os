@@ -401,6 +401,7 @@ export async function GET(req: NextRequest) {
             isCritical: rp.isCritical,
             status: rp.status,
             origin: rp.origin,
+            description: rp.description,
             skipDates: skipDatesByPattern.get(rp.id) ?? [],
         }));
 
@@ -778,7 +779,7 @@ export async function GET(req: NextRequest) {
                 adjustedOpeningCash,
                 asOfDate: cashSnapshot.asOfDate,
                 adjustments: cashAdjustments.map(a => ({
-                    id: a.id, type: a.type, amount: a.amount, note: a.note, date: a.effectiveDate, status: a.status, origin: a.origin
+                    id: a.id, type: a.type, amount: a.amount, note: a.note, description: a.description, date: a.effectiveDate, status: a.status, origin: a.origin
                 })),
             },
             assumptions: {

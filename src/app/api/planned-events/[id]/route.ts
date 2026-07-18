@@ -17,6 +17,7 @@ interface PatchBody {
     origin?: string;
     direction?: string;
     type?: string;
+    description?: string | null;
 }
 
 export async function PATCH(
@@ -76,6 +77,7 @@ export async function PATCH(
                 origin: string;
                 direction: string;
                 category: string;
+                description?: string | null;
             }> = {};
 
             if (body.isIncluded !== undefined) updateData.isIncluded = body.isIncluded;
@@ -85,6 +87,7 @@ export async function PATCH(
             if (body.displayName !== undefined) updateData.displayName = body.displayName.trim();
             if (body.direction !== undefined) updateData.direction = body.direction;
             if (body.type !== undefined) updateData.category = body.type;
+            if (body.description !== undefined) updateData.description = body.description;
             if (body.typicalAmount !== undefined) {
                 if (body.typicalAmount <= 0) return NextResponse.json({ error: "Amount must be positive" }, { status: 400 });
                 updateData.typicalAmount = body.typicalAmount;
@@ -128,6 +131,7 @@ export async function PATCH(
             if (body.type !== undefined) updateData.type = body.type;
             if (body.status !== undefined) updateData.status = body.status;
             if (body.origin !== undefined) updateData.origin = body.origin;
+            if (body.description !== undefined) updateData.description = body.description;
             if (body.typicalAmount !== undefined && body.direction !== undefined) {
                 updateData.amount = body.direction === "outflow" ? -Math.abs(body.typicalAmount) : Math.abs(body.typicalAmount);
             } else if (body.typicalAmount !== undefined) {
