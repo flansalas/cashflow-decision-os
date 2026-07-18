@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { TrendingUp, PlaneTakeoff, BarChart2, Calendar, AlertTriangle, ArrowUpRight, ArrowDownRight, Target, ArrowRight, ChevronLeft, ChevronRight, RotateCcw, X } from "lucide-react";
 import type { ScenarioItem } from "./ScenarioBuilder";
+import { OccurrenceOverridePopover } from "./OccurrenceOverridePopover";
 
 interface BreakdownItem {
     label: string;
@@ -406,7 +407,7 @@ function RecurringReschedulePopover({
 
 // ── Section Block ─────────────────────────────────────────────────────────────
 function SectionBlock({
-    title, items, sign, companyId, sourceWeekStart, onReschedule, startOpen = false, weekNumber, macroMemory,
+    title, items, sign, companyId, sourceWeekStart, onReschedule, startOpen = false, weekNumber, macroMemory, setOverrideState,
 }: {
     title: string;
     items: BreakdownItem[];
@@ -417,6 +418,7 @@ function SectionBlock({
     startOpen?: boolean;
     weekNumber: number;
     macroMemory?: { varianceMultiplier: number; averageVariancePct: number; varianceMultiplierIn: number; averageVariancePctIn: number; weeksTracked: number };
+    setOverrideState: React.Dispatch<React.SetStateAction<{ item: BreakdownItem; rect: DOMRect } | null>>;
 }) {
     const [reschedulingId, setReschedulingId] = useState<string | null>(null);
     const [resettingId, setResettingId] = useState<string | null>(null);
@@ -568,7 +570,16 @@ function SectionBlock({
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
-                                    <span className={`text-sm font-bold font-financial ${sign === "+" ? "text-emerald-600" : "text-red-600"}`}>
+                                    <span 
+                                        onClick={(e) => {
+                                            if (item.sourceType === "recurring" && item.sourceId) {
+                                                e.stopPropagation();
+                                                setOverrideState({ item, rect: e.currentTarget.getBoundingClientRect() });
+                                            }
+                                        }}
+                                        title={item.sourceType === "recurring" ? "Edit this week's amount" : undefined}
+                                        className={`text-sm font-bold font-financial ${sign === "+" ? "text-emerald-600" : "text-red-600"} ${item.sourceType === "recurring" ? "cursor-pointer hover:opacity-70 transition-opacity hover:underline" : ""}`}
+                                    >
                                         {sign}{fmt(item.amount)}
                                     </span>
                                     {(canReset(item) || (item.type === "rescheduled" && !!item.metadata?.sourceWeekStart)) && (
@@ -642,6 +653,7 @@ const zoneLabels: Record<string, { label: string; colorStyle: React.CSSPropertie
 // ── Main Drawer ───────────────────────────────────────────────────────────────
 export function WeekDrawer({ week, weekNumber, weekStart, companyId, scenarioItems = [], viewMode, buffer, macroMemory, onReschedule, onNavigateWeek, onClose }: Props & { buffer?: number }) {
     const [hoveredSection, setHoveredSection] = useState<string | null>(null);
+    const [overrideState, setOverrideState] = useState<{ item: BreakdownItem; rect: DOMRect } | null>(null);
     const inflowGroups = groupBySection(week.breakdown.inflows);
     const outflowGroups = groupBySection(week.breakdown.outflows);
 
@@ -667,8 +679,9 @@ export function WeekDrawer({ week, weekNumber, weekStart, companyId, scenarioIte
     const zoneInfo = zoneLabels[week.zone] ?? zoneLabels.uncertain;
 
     return (
-        <div className="fixed inset-y-0 right-0 z-50 flex pointer-events-none p-0 drawer-enter">
-            <div className="border-l h-full w-[36rem] max-w-[90vw] overflow-y-auto shadow-2xl pointer-events-auto" style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)" }}>
+        <>
+            <div className="fixed inset-y-0 right-0 z-50 flex pointer-events-none p-0 drawer-enter">
+                <div className="border-l h-full w-[36rem] max-w-[90vw] overflow-y-auto shadow-2xl pointer-events-auto" style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)" }}>
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-8 py-6 border-b sticky top-0 z-10 backdrop-blur-md bg-white/95" style={{ borderColor: "var(--border-subtle)" }}>
@@ -690,7 +703,7 @@ export function WeekDrawer({ week, weekNumber, weekStart, companyId, scenarioIte
                             </div>
                         )}
                         <button onClick={onClose} className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all shadow-sm active:scale-95 text-slate-400 hover:text-slate-900">
-                            <X className="w-5 h-5" />
+                            <X className="w-5 h-5 text-slate-400 group-hover:text-slate-700 transition-colors" />
                         </button>
                     </div>
                 </div>
@@ -758,6 +771,7 @@ export function WeekDrawer({ week, weekNumber, weekStart, companyId, scenarioIte
                                 startOpen={section === "AR Receipts" && week.endCashExpected < (buffer ?? 0)}
                                 weekNumber={weekNumber}
                                 macroMemory={macroMemory}
+                                setOverrideState={setOverrideState}
                             />
                         ))
                     )}
@@ -793,11 +807,30 @@ export function WeekDrawer({ week, weekNumber, weekStart, companyId, scenarioIte
                                 startOpen={false}
                                 weekNumber={weekNumber}
                                 macroMemory={macroMemory}
+                                setOverrideState={setOverrideState}
                             />
                         ))
                     )}
                 </div>
             </div>
         </div>
+        {overrideState && overrideState.item.sourceId && (
+            <OccurrenceOverridePopover
+                companyId={companyId}
+                commitment={{
+                    id: overrideState.item.sourceId,
+                    displayName: overrideState.item.label
+                }}
+                weekStart={weekStart}
+                originalAmount={overrideState.item.amount}
+                rect={overrideState.rect}
+                onClose={() => setOverrideState(null)}
+                onSaved={() => {
+                    setOverrideState(null);
+                    onReschedule(); // Triggers a reload of data
+                }}
+            />
+        )}
+        </>
     );
 }
