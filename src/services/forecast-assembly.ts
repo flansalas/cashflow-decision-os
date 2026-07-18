@@ -199,8 +199,8 @@ export async function assembleForecastData(companyId: string) {
         });
 
     const bankBalance = cashSnapshot.bankBalance;
-    const pastAdjustments = cashAdjustments.filter(a => a.effectiveDate <= cashSnapshot.asOfDate);
-    const futureAdjustments = cashAdjustments.filter(a => a.effectiveDate > cashSnapshot.asOfDate);
+    const pastAdjustments = cashAdjustments.filter(a => a.origin === "system");
+    const futureAdjustments = cashAdjustments.filter(a => a.origin === "user");
     
     const adjustmentsTotal = pastAdjustments.reduce((s, a) => s + a.amount, 0);
     const adjustedOpeningCash = bankBalance + adjustmentsTotal;
