@@ -134,7 +134,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                     return (
                         <td 
                             key={w.weekNumber} 
-                            onClick={() => onWeekClick(w.weekNumber)}
+                            onClick={() => { if (amt > 0) onEdit(c); else onWeekClick(w.weekNumber); }}
                             className="px-3 py-1.5 text-right text-sm font-financial cursor-pointer hover:bg-indigo-50/50 transition-colors border-r border-slate-100 last:border-0"
                             title={`Week ${w.weekNumber} (${new Date(w.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })})`}
                         >
