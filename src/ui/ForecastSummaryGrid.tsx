@@ -276,23 +276,23 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                             </tr>
                                         );
                                     })()}
-                                    {inCategories.map(cat => {
+                                    {(() => {
                                         const amounts = weeks.map((w: any) => w.breakdown.inflows
-                                            .filter((i: any) => i.section === `Cat: ${cat.name}`)
+                                            .filter((i: any) => i.sourceType === "manual")
                                             .reduce((s: number, i: any) => s + i.amount, 0));
                                         if (!amounts.some((a: number) => Math.abs(a) > 0.01)) return null;
                                         return (
-                                            <tr key={cat.id} className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
+                                            <tr className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
                                                 <td
                                                     className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs flex items-center gap-2 w-[180px]"
                                                     style={{ background: "inherit", borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
                                                 >
-                                                    <div className="w-3.5" /> <span className="truncate">{cat.name}</span>
+                                                    <div className="w-3.5" /> <span className="truncate">One-Time Inflows</span>
                                                 </td>
-                                                {amounts.map((amount: number, idx: number) => renderCell(amount, "adjustments", weeks[idx].weekNumber, cat.id))}
+                                                {amounts.map((amount: number, idx: number) => renderCell(amount, "adjustments", weeks[idx].weekNumber))}
                                             </tr>
                                         );
-                                    })}
+                                    })()}
                                     {(() => {
                                         const amounts = weeks.map((w: any) => w.breakdown.inflows
                                             .filter((i: any) => i.sourceType === "recurring")
@@ -439,29 +439,29 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                                     className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs flex items-center gap-2 w-[180px]"
                                                     style={{ background: "inherit", borderColor: "var(--border-subtle)" }}
                                                 >
-                                                    <div className="w-3.5" /> Cash Commitments
+                                                    <div className="w-3.5" /> Recurring Commitments
                                                 </td>
                                                 {amounts.map((amount: number, idx: number) => renderCell(amount, "recurring", weeks[idx].weekNumber))}
                                             </tr>
                                         );
                                     })()}
-                                    {outCategories.map(cat => {
+                                    {(() => {
                                         const amounts = weeks.map((w: any) => w.breakdown.outflows
-                                            .filter((i: any) => i.section === `Cat: ${cat.name}`)
+                                            .filter((i: any) => i.sourceType === "manual")
                                             .reduce((s: number, i: any) => s + i.amount, 0));
                                         if (!amounts.some((a: number) => Math.abs(a) > 0.01)) return null;
                                         return (
-                                            <tr key={cat.id} className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
+                                            <tr className="hover:bg-black/5" style={{ background: "var(--bg-surface)" }}>
                                                 <td
                                                     className="px-4 py-2 border-b border-r sticky left-0 z-10 text-xs flex items-center gap-2 w-[180px]"
                                                     style={{ background: "inherit", borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
                                                 >
-                                                    <div className="w-3.5" /> <span className="truncate">{cat.name}</span>
+                                                    <div className="w-3.5" /> <span className="truncate">One-Time Outflows</span>
                                                 </td>
-                                                {amounts.map((amount: number, idx: number) => renderCell(amount, "adjustments", weeks[idx].weekNumber, cat.id))}
+                                                {amounts.map((amount: number, idx: number) => renderCell(amount, "adjustments", weeks[idx].weekNumber))}
                                             </tr>
                                         );
-                                    })}
+                                    })()}
                                     {/* Baseline Projection row — only shown when engine has projected outflows */}
                                     {weeks.some((w: any) => w.breakdown.outflows.some((i: any) => i.sourceType === "baseline")) && (
                                         <tr className="hover:bg-amber-50/60" style={{ background: "var(--bg-surface)" }}>
