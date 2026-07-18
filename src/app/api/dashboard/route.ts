@@ -114,8 +114,6 @@ export async function GET(req: NextRequest) {
                         effectiveDate: e.targetDate,
                         status: "active",
                         origin: "user",
-                        createdAt: e.createdAt,
-                        updatedAt: e.updatedAt,
                     }
                 });
             }
