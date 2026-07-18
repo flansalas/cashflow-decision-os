@@ -722,7 +722,10 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         // the "Gap" between your scheduled inflows and your historical bank average. 
         // This creates a smoother 13-week runway by assuming that if you have weak AR 
         // scheduled for a future week, more is coming to meet your average.
-        const scheduledInflowSum = inflowBreakdown.reduce((s, i) => s + i.amount, 0);
+        // FIXED BUG: Do not include Recurring or Manual in this sum! Variable baseline is additive to one-off adjustments and recurring revenue.
+        const scheduledInflowSum = inflowBreakdown
+            .filter(i => i.sourceType === "invoice")
+            .reduce((s, i) => s + i.amount, 0);
         const baselineInflowWeekly = (input.baselineInflowWeekly || 0) * inflowMultiplier;
         const inflowGap = Math.max(0, baselineInflowWeekly - scheduledInflowSum);
 
