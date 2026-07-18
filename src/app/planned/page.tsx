@@ -15,27 +15,11 @@ import {
 import { HelpBubble } from "@/ui/HelpBubble";
 import { CashImpactTable } from "@/ui/CashImpactTable";
 import { PlannedEventDrawer } from "@/ui/PlannedEventDrawer";
-import { PlannedEventsGrid } from "@/ui/PlannedEventsGrid";
+import { PlannedEventsGrid, Commitment } from "@/ui/PlannedEventsGrid";
 import { PlannedWeekPanel } from "@/ui/PlannedWeekPanel";
 import { useAuth, useOrganization } from "@clerk/nextjs";
 
 // ── Types ──────────────────────────────────────────────────────────────
-
-interface Commitment {
-    id: string;
-    displayName: string;
-    category: string;
-    cadence: string;
-    nextExpectedDate: string | null;
-    typicalAmount: number;
-    confidence: string;
-    isIncluded: boolean;
-    isCritical: boolean;
-    direction: string;
-    status?: string;
-    origin?: string;
-    isAdjustment?: boolean;
-}
 
 interface WeekBreakdownItem {
     label: string;
@@ -254,6 +238,7 @@ function RecurringContent() {
             <main className="max-w-5xl mx-auto px-5 py-6 space-y-5">
                 {/* Main Grid replacing Tab Switcher and Impact Table */}
                 <PlannedEventsGrid 
+                    companyId={data.company.id}
                     commitments={plannedEvents}
                     weeks={data.forecast.weeks}
                     bufferMin={data.assumptions.bufferMin}

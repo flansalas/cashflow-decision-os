@@ -2,8 +2,9 @@
 
 import React, { useState } from "react";
 import { Plus, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
+import { OccurrenceOverridePopover } from "./OccurrenceOverridePopover";
 
-interface Commitment {
+export interface Commitment {
     id: string;
     displayName: string;
     category: string;
@@ -51,6 +52,7 @@ interface Props {
     onEdit: (item: Commitment) => void;
     onWeekClick: (weekNum: number) => void;
     onAdd: () => void;
+    companyId: string;
 }
 
 function fmt(n: number): string {
@@ -58,11 +60,17 @@ function fmt(n: number): string {
     return Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
-export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWeekClick, onAdd }: Props) {
+export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWeekClick, onAdd, companyId }: Props) {
     const [isSummaryExpanded, setIsSummaryExpanded] = useState(true);
     const [isRecurringExpanded, setIsRecurringExpanded] = useState(true);
     const [isOneTimeExpanded, setIsOneTimeExpanded] = useState(true);
     const [colWidth, setColWidth] = useState(250);
+    const [overrideState, setOverrideState] = useState<{
+        commitment: Commitment;
+        weekStart: string;
+        originalAmount: number;
+        rect: DOMRect;
+    } | null>(null);
 
     const handleMouseDown = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -85,7 +93,6 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
     const recurring = commitments.filter(c => c.isIncluded && c.cadence !== "one-time" && c.cadence !== "irregular" && !c.isAdjustment);
     const oneTime = commitments.filter(c => c.isIncluded && (c.cadence === "one-time" || c.cadence === "irregular" || c.isAdjustment));
 
-    // Sort recurring: Payroll always first, then by total amount descending
     const getTotalAmount = (c: Commitment) => {
         return weeks.reduce((sum, w) => {
             const items = c.direction === "inflow" ? w.breakdown.inflows : w.breakdown.outflows;
@@ -104,16 +111,20 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
 
     const sortedOneTime = [...oneTime].sort((a, b) => getTotalAmount(b) - getTotalAmount(a));
 
-    // Compute cell value for a commitment in a specific week
     const getAmountForWeek = (c: Commitment, week: ForecastWeek) => {
-        // We look at the breakdown items for this week to see if this commitment hit.
-        // We match by sourceId === c.id
         const items = c.direction === "inflow" ? week.breakdown.inflows : week.breakdown.outflows;
-        const matches = items.filter(i => i.sourceId === c.id || (c.isAdjustment && i.sourceId === c.id) || (!i.sourceId && i.label === c.displayName));
+        const matches = items.filter(i => 
+            i.sourceId === c.id || 
+            (i.sourceId && i.sourceId.includes(c.id)) || 
+            (c.isAdjustment && i.sourceId === c.id) || 
+            (!i.sourceId && i.label === c.displayName)
+        );
         if (matches.length > 0) {
-            return matches.reduce((sum, i) => sum + i.amount, 0);
+            const amount = matches.reduce((sum, i) => sum + i.amount, 0);
+            const isOverride = matches.some(i => i.type === "rescheduled" || (i.sourceId && i.sourceId.includes("resched-")));
+            return { amount, isOverride };
         }
-        return 0;
+        return { amount: 0, isOverride: false };
     };
 
     const renderRow = (c: Commitment, index: number) => {
@@ -131,17 +142,32 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                     </div>
                 </td>
                 {weeks.map(w => {
-                    const amt = getAmountForWeek(c, w);
+                    const { amount: amt, isOverride } = getAmountForWeek(c, w);
                     return (
                         <td 
                             key={w.weekNumber} 
-                            onClick={() => { if (amt !== 0) onEdit(c); else onWeekClick(w.weekNumber); }}
-                            className="px-3 py-1.5 text-right text-sm font-financial cursor-pointer hover:bg-indigo-50/50 transition-colors border-r border-slate-100 last:border-0"
+                            onClick={(e) => { 
+                                if (amt !== 0) {
+                                    if (c.cadence !== "one-time" && c.cadence !== "irregular" && !c.isAdjustment) {
+                                        setOverrideState({
+                                            commitment: c,
+                                            weekStart: w.weekStart,
+                                            originalAmount: amt,
+                                            rect: e.currentTarget.getBoundingClientRect()
+                                        });
+                                    } else {
+                                        onEdit(c); 
+                                    }
+                                } else { 
+                                    onWeekClick(w.weekNumber); 
+                                } 
+                            }}
+                            className={`px-3 py-1.5 text-right text-sm font-financial cursor-pointer hover:bg-indigo-50/50 transition-colors border-r border-slate-100 last:border-0 ${isOverride ? "bg-indigo-50/30" : ""}`}
                             title={`Week ${w.weekNumber} (${new Date(w.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })})`}
                         >
                             {amt > 0 ? (
-                                <span className={c.direction === "inflow" ? "text-emerald-600" : "text-slate-700 font-semibold"}>
-                                    {fmt(amt)}
+                                <span className={`${c.direction === "inflow" ? "text-emerald-600" : "text-slate-700 font-semibold"} ${isOverride ? "text-indigo-700" : ""}`}>
+                                    {fmt(amt)}{isOverride ? "*" : ""}
                                 </span>
                             ) : <span className="text-slate-200 font-light">—</span>}
                         </td>
@@ -221,7 +247,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                 let headerColor = "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100";
                                 if (wExhausted) headerColor = "text-red-700 bg-red-50 border-red-200 hover:bg-red-100";
                                 else if (wBreached) headerColor = "text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100";
-                                else headerColor = "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"; // default safe
+                                else headerColor = "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100";
 
                                 return (
                                     <th 
@@ -237,7 +263,6 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                                 );
                             })}
                         </tr>
-                        {/* Summary Rows (Cash Impact) */}
                         <tr className="bg-slate-100 border-y border-slate-300 shadow-sm cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}>
                             <th style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }} className="px-3 py-1.5 text-left sticky left-0 z-30 bg-slate-100 font-normal shadow-[1px_0_0_0_#cbd5e1] whitespace-nowrap overflow-hidden">
                                 <div className="text-xs font-bold uppercase tracking-widest text-slate-700 flex items-center gap-1">
@@ -347,6 +372,21 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
                     </tbody>
                 </table>
             </div>
+
+            {overrideState && (
+                <OccurrenceOverridePopover
+                    companyId={companyId}
+                    commitment={overrideState.commitment}
+                    weekStart={overrideState.weekStart}
+                    originalAmount={overrideState.originalAmount}
+                    rect={overrideState.rect}
+                    onClose={() => setOverrideState(null)}
+                    onSaved={() => {
+                        setOverrideState(null);
+                        window.location.reload(); 
+                    }}
+                />
+            )}
         </div>
         </div>
     );

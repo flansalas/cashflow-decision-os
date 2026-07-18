@@ -147,6 +147,10 @@ export async function POST(req: NextRequest) {
         actionDesc = `Amount Adjusted`;
         fieldChanged = "amountOpen";
         newValue = amount;
+    } else if (type === "modify_recurring_occurrence" && amount !== undefined) {
+        actionDesc = `Modified Occurrence Amount`;
+        fieldChanged = "amount";
+        newValue = amount;
     } else if (type === "delay_due_date") {
         actionDesc = `Delayed payment due date`;
         fieldChanged = "dueDate";

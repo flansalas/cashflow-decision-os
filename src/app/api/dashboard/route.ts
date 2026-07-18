@@ -381,7 +381,7 @@ export async function GET(req: NextRequest) {
         // Build a map of patternId -> skipDates from active skip_recurring_occurrence overrides
         const skipDatesByPattern = new Map<string, string[]>();
         for (const ov of overrides) {
-            if (ov.type === "skip_recurring_occurrence" && ov.targetId && ov.effectiveDate) {
+            if ((ov.type === "skip_recurring_occurrence" || ov.type === "modify_recurring_occurrence") && ov.targetId && ov.effectiveDate) {
                 if (!skipDatesByPattern.has(ov.targetId)) skipDatesByPattern.set(ov.targetId, []);
                 skipDatesByPattern.get(ov.targetId)!.push(ov.effectiveDate.toISOString().slice(0, 10));
             }
@@ -405,17 +405,32 @@ export async function GET(req: NextRequest) {
             skipDates: skipDatesByPattern.get(rp.id) ?? [],
         }));
 
-        // Build one-time outflows from rescheduled recurring items
+        // Build one-time outflows from rescheduled/modified recurring items
         const oneTimeOutflows = overrides
-            .filter(ov => ov.type === "add_one_time_outflow" && ov.targetId && ov.effectiveDate && ov.amount != null && ov.metaJson?.startsWith("recurring:"))
+            .filter(ov => (ov.type === "add_one_time_outflow" || ov.type === "modify_recurring_occurrence") && ov.targetId && ov.effectiveDate && ov.amount != null)
             .map(ov => {
-                const parts = ov.metaJson!.split("|from:");
+                let displayName = ov.type === "modify_recurring_occurrence" ? "Modified Amount" : "Rescheduled Amount";
+                let sourceWeekStart = null;
+                
+                if (ov.metaJson?.startsWith("recurring:")) {
+                    const parts = ov.metaJson.split("|from:");
+                    displayName = parts[0].replace("recurring:", "");
+                    sourceWeekStart = parts[1] || null;
+                } else if (ov.metaJson) {
+                    try {
+                        const parsed = JSON.parse(ov.metaJson);
+                        if (parsed.displayName) displayName = parsed.displayName;
+                    } catch (e) {
+                        // ignore
+                    }
+                }
+
                 return {
                     patternId: ov.targetId!,
-                    displayName: parts[0].replace("recurring:", ""),
+                    displayName,
                     amount: ov.amount!,
                     weekStart: ov.effectiveDate!,
-                    sourceWeekStart: parts[1] || null,
+                    sourceWeekStart,
                 };
             });
 
