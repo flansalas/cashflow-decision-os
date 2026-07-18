@@ -187,23 +187,27 @@ function RecurringContent() {
             </div>
         );
     }
+    const currentWeekStartTime = data?.forecast?.weeks?.[0]?.weekStart ? new Date(data.forecast.weeks[0].weekStart).getTime() : 0;
+
     const plannedEvents = [
         ...data.commitments,
-        ...(data.cash?.adjustments || []).map(a => ({
-            id: a.id,
-            displayName: a.note || "Adjustment",
-            category: a.type,
-            cadence: "one-time",
-            nextExpectedDate: a.date,
-            typicalAmount: Math.abs(a.amount),
-            direction: a.amount < 0 ? "outflow" : "inflow",
-            confidence: "high",
-            isIncluded: true,
-            isCritical: false,
-            status: a.status || "active",
-            origin: a.origin || "user",
-            isAdjustment: true
-        } as Commitment))
+        ...(data.cash?.adjustments || [])
+            .filter(a => new Date(a.date).getTime() >= currentWeekStartTime)
+            .map(a => ({
+                id: a.id,
+                displayName: a.note || "Adjustment",
+                category: a.type,
+                cadence: "one-time",
+                nextExpectedDate: a.date,
+                typicalAmount: Math.abs(a.amount),
+                direction: a.amount < 0 ? "outflow" : "inflow",
+                confidence: "high",
+                isIncluded: true,
+                isCritical: false,
+                status: a.status || "active",
+                origin: a.origin || "user",
+                isAdjustment: true
+            } as Commitment))
     ].sort((a, b) => {
         if (!a.nextExpectedDate) return 1;
         if (!b.nextExpectedDate) return -1;

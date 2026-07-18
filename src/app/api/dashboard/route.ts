@@ -101,6 +101,33 @@ export async function GET(req: NextRequest) {
 
         const currentWeekStart = getMonday(cashSnapshot ? new Date(cashSnapshot.asOfDate) : new Date());
 
+        // Legacy Migration: Auto-migrate CashFlowEntry to CashAdjustment
+        if (cashFlowEntries.length > 0) {
+            console.log(`Migrating ${cashFlowEntries.length} legacy CashFlowEntry items to CashAdjustment...`);
+            for (const e of cashFlowEntries) {
+                await prisma.cashAdjustment.create({
+                    data: {
+                        companyId: e.companyId,
+                        type: e.category.name,
+                        amount: e.category.direction === "outflow" ? -Math.abs(e.amount) : Math.abs(e.amount),
+                        note: e.label || e.note || e.category.name,
+                        effectiveDate: e.targetDate,
+                        status: "active",
+                        origin: "user",
+                        createdAt: e.createdAt,
+                        updatedAt: e.updatedAt,
+                    }
+                });
+            }
+            await prisma.cashFlowEntry.deleteMany({ where: { companyId: cid } });
+            
+            // Re-fetch cashAdjustments since we just modified them
+            const updatedAdjustments = await prisma.cashAdjustment.findMany({ where: { companyId: cid } });
+            cashAdjustments.length = 0;
+            cashAdjustments.push(...updatedAdjustments);
+            cashFlowEntries.length = 0; // Clear them out so they aren't double-counted
+        }
+
         const activePlan = await prisma.executionPlan.findFirst({
             where: { companyId: cid, weekStart: currentWeekStart, status: "approved" },
             orderBy: { version: 'desc' }
