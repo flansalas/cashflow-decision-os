@@ -395,7 +395,10 @@ export async function GET(req: NextRequest) {
 
         // ── Cash calculations ──────────────────────────────────────────
         const bankBalance = cashSnapshot.bankBalance;
-        const adjustmentsTotal = cashAdjustments.reduce((sum, a) => sum + a.amount, 0);
+        const pastAdjustments = cashAdjustments.filter(a => a.origin === "system");
+        const futureAdjustments = cashAdjustments.filter(a => a.origin === "user");
+
+        const adjustmentsTotal = pastAdjustments.reduce((sum, a) => sum + a.amount, 0);
         const adjustedOpeningCash = bankBalance + adjustmentsTotal;
 
         // ── Compute forecast ───────────────────────────────────────────
@@ -432,14 +435,25 @@ export async function GET(req: NextRequest) {
             cogsLagWeeks: cogsCorrelation.cogsLagWeeks,
             isARHeavy,
             oneTimeOutflows,
-            cashFlowEntries: cashFlowEntries.map((e: any) => ({
-                categoryId: e.categoryId,
-                categoryName: e.category.name,
-                direction: e.category.direction as "inflow" | "outflow",
-                label: e.label,
-                amount: e.amount,
-                targetDate: e.targetDate,
-            })),
+            cashFlowEntries: [
+                ...cashFlowEntries.map((e: any) => ({
+                    categoryId: e.categoryId,
+                    categoryName: e.category.name,
+                    direction: e.category.direction as "inflow" | "outflow",
+                    label: e.label,
+                    amount: e.amount,
+                    targetDate: e.targetDate,
+                })),
+                ...futureAdjustments.map(a => ({
+                    categoryId: "custom",
+                    categoryName: a.type,
+                    direction: a.amount >= 0 ? ("inflow" as const) : ("outflow" as const),
+                    label: a.note || a.type,
+                    amount: Math.abs(a.amount),
+                    targetDate: a.effectiveDate,
+                    sourceId: a.id,
+                }))
+            ]
         };
 
         const forecast = computeForecast(forecastInput);
