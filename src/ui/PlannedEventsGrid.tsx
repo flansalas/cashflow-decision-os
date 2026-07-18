@@ -81,8 +81,8 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
         document.addEventListener('mouseup', handleMouseUp);
     };
 
-    const recurring = commitments.filter(c => c.cadence !== "one-time" && c.cadence !== "irregular" && !c.isAdjustment);
-    const oneTime = commitments.filter(c => c.cadence === "one-time" || c.cadence === "irregular" || c.isAdjustment);
+    const recurring = commitments.filter(c => c.isIncluded && c.cadence !== "one-time" && c.cadence !== "irregular" && !c.isAdjustment);
+    const oneTime = commitments.filter(c => c.isIncluded && (c.cadence === "one-time" || c.cadence === "irregular" || c.isAdjustment));
 
     // Sort recurring: Payroll always first, then by total amount descending
     const getTotalAmount = (c: Commitment) => {

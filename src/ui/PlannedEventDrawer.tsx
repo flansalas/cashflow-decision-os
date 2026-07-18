@@ -76,6 +76,7 @@ export function PlannedEventDrawer({ isOpen, onClose, onSaved, companyId, editin
                 payload.nextExpectedDate = date;
                 payload.cadence = type === "recurring" ? cadence : "irregular";
                 payload.type = category;
+                payload.isIncluded = true;
             } else {
                 payload.name = name.trim();
                 payload.type = type;
