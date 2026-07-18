@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import { X, Save, Trash2, Loader2, AlertCircle } from "lucide-react";
-import { Commitment } from "./PlannedEventsGrid";
 
 interface OccurrenceOverridePopoverProps {
     companyId: string;
-    commitment: Commitment;
+    commitment: { id: string; displayName: string };
     weekStart: string;
     originalAmount: number;
     rect: DOMRect;

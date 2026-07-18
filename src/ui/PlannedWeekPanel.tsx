@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { X, ArrowRight, ArrowLeft, Calendar, FileEdit, Ban, AlertTriangle } from "lucide-react";
+import { OccurrenceOverridePopover } from "./OccurrenceOverridePopover";
 
 interface BreakdownItem {
     label: string;
@@ -49,6 +50,10 @@ export function PlannedWeekPanel({
     const [targetWeekNum, setTargetWeekNum] = useState<number | "">("");
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [overrideState, setOverrideState] = useState<{
+        item: BreakdownItem;
+        rect: DOMRect;
+    } | null>(null);
 
     if (!isOpen) return null;
 
@@ -145,7 +150,15 @@ export function PlannedWeekPanel({
                                             {item.sourceType === "recurring" ? "Recurring" : "One-Time"}
                                         </div>
                                     </div>
-                                    <div className={`font-bold font-financial text-right ${isOutflow ? "text-rose-600" : "text-emerald-600"}`}>
+                                    <div 
+                                        onClick={(e) => {
+                                            if (item.sourceType === "recurring" && item.sourceId) {
+                                                setOverrideState({ item, rect: e.currentTarget.getBoundingClientRect() });
+                                            }
+                                        }}
+                                        className={`font-bold font-financial text-right ${item.sourceType === "recurring" ? "cursor-pointer hover:opacity-70 transition-opacity" : ""} ${isOutflow ? "text-rose-600" : "text-emerald-600"}`}
+                                        title={item.sourceType === "recurring" ? "Edit this week's amount" : undefined}
+                                    >
                                         {isOutflow ? "-" : "+"}{fmt(item.amount)}
                                     </div>
                                 </div>
@@ -233,6 +246,24 @@ export function PlannedWeekPanel({
                     </div>
                 )}
             </div>
+
+            {overrideState && overrideState.item.sourceId && (
+                <OccurrenceOverridePopover
+                    companyId={companyId}
+                    commitment={{
+                        id: overrideState.item.sourceId,
+                        displayName: overrideState.item.label
+                    }}
+                    weekStart={weekStart}
+                    originalAmount={overrideState.item.amount}
+                    rect={overrideState.rect}
+                    onClose={() => setOverrideState(null)}
+                    onSaved={() => {
+                        setOverrideState(null);
+                        onSaved();
+                    }}
+                />
+            )}
         </div>
     );
 }
