@@ -190,7 +190,14 @@ function RecurringContent() {
     const currentWeekStartTime = data?.forecast?.weeks?.[0]?.weekStart ? new Date(data.forecast.weeks[0].weekStart).getTime() : 0;
 
     const plannedEvents = [
-        ...data.commitments,
+        ...data.commitments.filter(c => {
+            // Hide one-time commitments (cadence irregular/one-time) that are in the past
+            if (c.cadence === "irregular" || c.cadence === "one-time") {
+                if (!c.nextExpectedDate) return true; // Keep if no date
+                return new Date(c.nextExpectedDate).getTime() >= currentWeekStartTime;
+            }
+            return true; // Keep all recurring
+        }),
         ...(data.cash?.adjustments || [])
             .filter(a => new Date(a.date).getTime() >= currentWeekStartTime)
             .map(a => ({
