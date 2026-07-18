@@ -607,8 +607,12 @@ function PlanContent() {
                                                 const selectedWeekData = data.forecast.weeks[week - 1];
                                                 if (selectedWeekData) {
                                                     const recurringItems = [
-                                                        ...selectedWeekData.breakdown.inflows.filter(i => i.sourceType === "recurring" || i.section?.includes("Inflows") || i.section?.startsWith("Cat:")),
-                                                        ...selectedWeekData.breakdown.outflows.filter(o => o.sourceType === "recurring" || o.sourceType === "assumption" || o.section?.includes("Recurring") || o.section?.startsWith("Cat:"))
+                                                        ...selectedWeekData.breakdown.inflows
+                                                            .filter(i => i.sourceType === "recurring" || i.sourceType === "manual" || i.section?.includes("Inflows") || i.section?.startsWith("Cat:"))
+                                                            .map(i => ({ ...i, direction: "inflow" as const })),
+                                                        ...selectedWeekData.breakdown.outflows
+                                                            .filter(o => o.sourceType === "recurring" || o.sourceType === "manual" || o.sourceType === "assumption" || o.section?.includes("Recurring") || o.section?.startsWith("Cat:"))
+                                                            .map(o => ({ ...o, direction: "outflow" as const }))
                                                     ];
                                                     setPlannedPanelWeek({
                                                         weekNumber: week,
@@ -759,6 +763,7 @@ function PlanContent() {
                     onEditPattern={(item) => {
                         setEditingItem(item);
                         setShowEditDrawer(true);
+                        setPlannedPanelWeek(null);
                     }}
                     onManageAll={() => window.location.href = "/planned"}
                 />

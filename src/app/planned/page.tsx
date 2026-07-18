@@ -253,8 +253,12 @@ function RecurringContent() {
                         const selectedWeekData = data.forecast.weeks[weekNum - 1];
                         if (selectedWeekData) {
                             const recurringItems = [
-                                ...selectedWeekData.breakdown.inflows.filter(i => i.sourceType === "recurring" || i.section?.includes("Inflows")),
-                                ...selectedWeekData.breakdown.outflows.filter(o => o.sourceType === "recurring" || o.sourceType === "assumption" || o.section?.includes("Recurring"))
+                                ...selectedWeekData.breakdown.inflows
+                                    .filter(i => i.sourceType === "recurring" || i.sourceType === "manual" || i.section?.includes("Inflows"))
+                                    .map(i => ({ ...i, direction: "inflow" as const })),
+                                ...selectedWeekData.breakdown.outflows
+                                    .filter(o => o.sourceType === "recurring" || o.sourceType === "manual" || o.sourceType === "assumption" || o.section?.includes("Recurring"))
+                                    .map(o => ({ ...o, direction: "outflow" as const }))
                             ];
                             setPlannedPanelWeek({
                                 weekNumber: weekNum,
@@ -307,6 +311,7 @@ function RecurringContent() {
                             setEditingItem(item);
                         }
                         setShowAddForm(true);
+                        setPlannedPanelWeek(null);
                     }}
                     hideManageAll={true}
                 />

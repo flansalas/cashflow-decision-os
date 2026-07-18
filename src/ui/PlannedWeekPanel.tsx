@@ -11,6 +11,7 @@ interface BreakdownItem {
     sourceId?: string;
     confidence: string;
     section?: string;
+    direction?: "inflow" | "outflow";
 }
 
 interface ForecastWeek {
@@ -51,8 +52,8 @@ export function PlannedWeekPanel({
 
     if (!isOpen) return null;
 
-    const totalOut = items.filter(i => !i.section?.includes("Inflows")).reduce((s, i) => s + i.amount, 0);
-    const totalIn = items.filter(i => i.section?.includes("Inflows")).reduce((s, i) => s + i.amount, 0);
+    const totalOut = items.filter(i => i.direction === "outflow" || (!i.direction && !i.section?.includes("Inflows"))).reduce((s, i) => s + i.amount, 0);
+    const totalIn = items.filter(i => i.direction === "inflow" || (!i.direction && i.section?.includes("Inflows"))).reduce((s, i) => s + i.amount, 0);
     const net = totalIn - totalOut;
 
     const handleDefer = async (item: BreakdownItem) => {
@@ -132,7 +133,7 @@ export function PlannedWeekPanel({
                     {items.length === 0 ? (
                         <p className="text-sm text-slate-500 italic">No cash commitments this week.</p>
                     ) : items.map((item, idx) => {
-                        const isOutflow = !item.section?.includes("Inflows");
+                        const isOutflow = item.direction === "outflow" || (!item.direction && !item.section?.includes("Inflows"));
                         const isDeferring = actionState?.type === 'defer' && actionState.itemIdx === idx;
                         
                         return (
