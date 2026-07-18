@@ -75,7 +75,7 @@ interface DashboardData {
     };
     cash?: {
         adjustments?: Array<{
-            id: string; type: string; amount: number; note: string; date: string; status?: string; origin?: string;
+            id: string; type: string; amount: number; note: string; date: string; status?: string; origin?: string; description?: string | null;
         }>;
     };
 }
