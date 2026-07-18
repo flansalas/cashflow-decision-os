@@ -135,7 +135,7 @@ function RecurringContent() {
     const fetchData = useCallback(() => {
         // Authenticated with active org: no companyId — backend uses Clerk orgId
         // Legacy/unauthenticated: pass legacyCompanyId
-        const q = (isSignedIn && organization) ? "" : (legacyCompanyId ? `?companyId=${legacyCompanyId}` : "");
+        const q = (isSignedIn && organization?.id) ? "" : (legacyCompanyId ? `?companyId=${legacyCompanyId}` : "");
         const url = `/api/dashboard${q}`;
         setLoading(true);
         fetch(url)
@@ -146,7 +146,7 @@ function RecurringContent() {
             })
             .catch(() => setError("Failed to load"))
             .finally(() => setLoading(false));
-    }, [isSignedIn, organization, legacyCompanyId]);
+    }, [isSignedIn, organization?.id, legacyCompanyId]);
 
     useEffect(() => {
         if (!isAuthLoaded || !isOrgLoaded) return;

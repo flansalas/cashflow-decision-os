@@ -134,7 +134,7 @@ function CashflowContent() {
     const fetchGrid = useCallback(() => {
         // Authenticated with active org: no companyId — backend uses Clerk orgId
         // Legacy/unauthenticated: pass legacyCompanyId
-        const q = (isSignedIn && organization) ? "" : (legacyCompanyId ? `?companyId=${legacyCompanyId}` : "");
+        const q = (isSignedIn && organization?.id) ? "" : (legacyCompanyId ? `?companyId=${legacyCompanyId}` : "");
         const url = `/api/cashflow-grid${q}`;
         // Only show the full-screen spinner on the very first load
         if (!hasLoadedRef.current) setLoading(true);
@@ -146,7 +146,7 @@ function CashflowContent() {
             })
             .catch(() => setError("Failed to load"))
             .finally(() => { if (!hasLoadedRef.current) setLoading(false); else setLoading(false); });
-    }, [isSignedIn, organization, legacyCompanyId]);
+    }, [isSignedIn, organization?.id, legacyCompanyId]);
 
     useEffect(() => {
         if (!isAuthLoaded || !isOrgLoaded) return;
