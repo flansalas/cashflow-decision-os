@@ -311,7 +311,7 @@ export function HeaderTruthBar({
                                     onClick={() => setShowChangeSummary(!showChangeSummary)}
                                     className="text-[10px] font-bold text-amber-600 hover:text-amber-700 hover:bg-amber-50 px-2 py-1 rounded transition-colors"
                                 >
-                                    {postApprovalChanges.length} changes · ${Math.abs(postApprovalChanges.reduce((sum, c) => sum + (c.details.impact || 0), 0)).toLocaleString()}
+                                    {postApprovalChanges.length} change{postApprovalChanges.length === 1 ? '' : 's'} · ${Math.abs(postApprovalChanges.reduce((sum, c) => sum + (c.details.impact || 0), 0)).toLocaleString()}
                                 </button>
                                 <button 
                                     onClick={handleApprovePlan}
@@ -332,7 +332,7 @@ export function HeaderTruthBar({
                         )}
 
                         <button onClick={onUpdateBalanceClick} className="btn-pill !py-1 px-5 text-[11px] uppercase font-bold tracking-widest !bg-slate-900 !text-white !border-slate-900 hover:!bg-slate-800 h-8 shadow-sm flex items-center">
-                            <RotateCw className="w-3 h-3 mr-1.5" /> Reconcile
+                            <RotateCw className="w-3 h-3 mr-1.5" /> Weekly Check-In
                         </button>
                     </div>
 
@@ -392,292 +392,232 @@ export function HeaderTruthBar({
                     </div>
                 </div>
 
-                {/* Cash */}
-                <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/cash transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-4 xl:px-5 py-3'}`}>
-                    <div className={`flex items-baseline w-full min-w-0 transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
-                        <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-10' : 'w-16'}`}>Beg. Cash</span>
-                        <div className="flex flex-col items-start relative w-full min-w-0">
-                            <span 
-                                onClick={() => setEditBalanceOpen(!editBalanceOpen)} 
-                                className={`font-black font-financial cursor-pointer hover:text-indigo-600 border-b border-dashed border-slate-300 text-slate-900 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-lg xl:text-xl 2xl:text-2xl'}`}
-                                title="Click to edit balance and outstanding items"
-                            >
+                {/* Cash (Redesigned) */}
+                <div className={`w-full lg:flex-[1.5] min-w-0 flex items-center justify-between relative group/cash transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-4 xl:px-6 py-4'}`}>
+                    <div className="flex flex-col items-start w-full min-w-0 gap-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0">Starting Cash (As of {new Date(asOfDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric', timeZone: 'UTC'})})</span>
+                        <div className="flex items-center gap-3 w-full min-w-0 flex-wrap">
+                            <span className={`font-black font-financial text-slate-900 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-2xl xl:text-3xl'}`}>
                                 {fmt(adjustedCash)}
                             </span>
-                            
-                            {/* Adjusted/Muted details below */}
-                            <div className={`font-medium text-slate-500 absolute flex items-center gap-2 transition-all duration-500 whitespace-nowrap ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3'}`}>
-                                {expectedEndingCash !== undefined && (
-                                    <span className="opacity-80 group-hover/cash:opacity-100 transition-opacity">Exp End: {fmt(expectedEndingCash)}</span>
-                                )}
-                                {expectedEndingCash !== undefined && adjustmentsTotal !== 0 && <span className="opacity-80">•</span>}
-                                {adjustmentsTotal !== 0 && (
-                                    <button onClick={() => setShowAdj(!showAdj)} className="hover:text-slate-600 flex items-center gap-1 opacity-80 group-hover/cash:opacity-100 transition-opacity">
-                                        <ListFilter className="w-2.5 h-2.5" />
-                                        Includes {fmt(adjustmentsTotal)} adj.
-                                    </button>
-                                )}
-                            </div>
-                            
-                            {/* Fast Reconcile Popover */}
-                            {editBalanceOpen && (
+                            <button 
+                                onClick={() => setEditBalanceOpen(!editBalanceOpen)} 
+                                className="flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-widest bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-md transition-colors"
+                            >
+                                ✎ Adjust Baseline
+                            </button>
+                        </div>
+                        
+                        {/* Adjusted/Muted details below */}
+                        <div className={`font-medium text-slate-500 flex items-center flex-wrap gap-2 transition-all duration-500 mt-1 ${isCompact ? 'text-[9px]' : 'text-[11px]'}`}>
+                            <span className="opacity-80">Stated Bank: {fmt(bankBalance)}</span>
+                            {adjustmentsTotal !== 0 && (
                                 <>
-                                    <div className="fixed inset-0 z-[50]" onClick={() => setEditBalanceOpen(false)} />
-                                    <div className="absolute z-[60] top-full mt-4 w-80 border rounded-2xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
-                                        <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-                                            <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Fast Reconcile</p>
-                                            <button onClick={() => setEditBalanceOpen(false)} className="text-slate-400 hover:text-slate-700 transition">&times;</button>
-                                        </div>
-                                        
-                                        <div className="space-y-4">
-                                            <div>
-                                                <label className="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">State Balance</label>
-                                                <div className="relative">
-                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-financial">$</span>
-                                                    <input 
-                                                        type="text" 
-                                                        inputMode="decimal"
-                                                        value={tempBalance} 
-                                                        onChange={e => setTempBalance(e.target.value)} 
-                                                        className="w-full border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none rounded-xl pl-7 pr-3 py-2 text-sm font-financial font-bold transition-all text-slate-800"
-                                                    />
-                                                </div>
+                                    <span className="opacity-80">•</span>
+                                    <button onClick={() => setShowAdj(!showAdj)} className="hover:text-slate-700 font-bold flex items-center gap-1 opacity-80 group-hover/cash:opacity-100 transition-opacity">
+                                        <ListFilter className="w-2.5 h-2.5" />
+                                        Uncleared Items: {fmt(adjustmentsTotal)}
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                        
+                        {/* Fast Reconcile Popover */}
+                        {editBalanceOpen && (
+                            <>
+                                <div className="fixed inset-0 z-[50]" onClick={() => setEditBalanceOpen(false)} />
+                                <div className="absolute z-[60] top-full mt-4 w-80 border rounded-2xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
+                                    <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+                                        <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Adjust Starting Cash</p>
+                                        <button onClick={() => setEditBalanceOpen(false)} className="text-slate-400 hover:text-slate-700 transition">&times;</button>
+                                    </div>
+                                    
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Stated Bank Balance</label>
+                                            <div className="relative">
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-financial">$</span>
+                                                <input 
+                                                    type="text" 
+                                                    inputMode="decimal"
+                                                    value={tempBalance} 
+                                                    onChange={e => setTempBalance(e.target.value)} 
+                                                    className="w-full border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none rounded-xl pl-7 pr-3 py-2 text-sm font-financial font-bold transition-all text-slate-800"
+                                                />
                                             </div>
+                                        </div>
 
-                                            {tempAdjustments.length > 0 && (
-                                                <div>
-                                                    <label className="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Outstanding Items (Click to Edit)</label>
-                                                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                                                        {tempAdjustments.map(a => (
-                                                            <div key={a.id} className="flex flex-col gap-1.5 p-2 rounded-lg border border-slate-100 bg-slate-50 group hover:border-indigo-200 transition-colors">
-                                                                <div className="flex justify-between items-center gap-2">
-                                                                    <div className="flex-1 min-w-0">
+                                        {tempAdjustments.length > 0 && (
+                                            <div>
+                                                <label className="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Uncleared Items (Click to Edit)</label>
+                                                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                                                    {tempAdjustments.map(a => (
+                                                        <div key={a.id} className="flex flex-col gap-1.5 p-2 rounded-lg border border-slate-100 bg-slate-50 group hover:border-indigo-200 transition-colors">
+                                                            <div className="flex justify-between items-center gap-2">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <input 
+                                                                        type="text"
+                                                                        value={a.note || ""}
+                                                                        placeholder={a.type.replace(/_/g, " ")}
+                                                                        onChange={(e) => handleUpdateTempAdj(a.id, { note: e.target.value })}
+                                                                        className="w-full bg-transparent border-none p-0 text-xs font-medium text-slate-700 focus:ring-0 placeholder:text-slate-400 outline-none"
+                                                                    />
+                                                                    <p className="text-[8px] text-slate-400 uppercase font-black">{a.type.replace(/_/g, " ")}</p>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                                    <div className="relative">
+                                                                        <span className={`absolute left-1 top-1/2 -translate-y-1/2 text-[10px] font-financial font-bold ${a.amount >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                                                                            {a.amount >= 0 ? "+" : "–"}
+                                                                        </span>
                                                                         <input 
                                                                             type="text"
-                                                                            value={a.note || ""}
-                                                                            placeholder={a.type.replace(/_/g, " ")}
-                                                                            onChange={(e) => handleUpdateTempAdj(a.id, { note: e.target.value })}
-                                                                            className="w-full bg-transparent border-none p-0 text-xs font-medium text-slate-700 focus:ring-0 placeholder:text-slate-400 outline-none"
+                                                                            value={Math.abs(a.amount).toString()}
+                                                                            onChange={(e) => {
+                                                                                const val = parseFloat(e.target.value.replace(/[^-0-9.]/g, ""));
+                                                                                if (!isNaN(val)) {
+                                                                                    handleUpdateTempAdj(a.id, { amount: a.amount >= 0 ? val : -val });
+                                                                                }
+                                                                            }}
+                                                                            className={`w-14 bg-transparent border-none p-0 pl-3.5 text-xs font-financial font-bold focus:ring-0 text-right outline-none ${a.amount >= 0 ? "text-emerald-600" : "text-rose-600"}`}
                                                                         />
-                                                                        <p className="text-[8px] text-slate-400 uppercase font-black">{a.type.replace(/_/g, " ")}</p>
                                                                     </div>
-                                                                    <div className="flex items-center gap-1.5 shrink-0">
-                                                                        <div className="relative">
-                                                                            <span className={`absolute left-1 top-1/2 -translate-y-1/2 text-[10px] font-financial font-bold ${a.amount >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
-                                                                                {a.amount >= 0 ? "+" : "–"}
-                                                                            </span>
-                                                                            <input 
-                                                                                type="text"
-                                                                                value={Math.abs(a.amount).toString()}
-                                                                                onChange={(e) => {
-                                                                                    const val = parseFloat(e.target.value.replace(/[^-0-9.]/g, ""));
-                                                                                    if (!isNaN(val)) {
-                                                                                        handleUpdateTempAdj(a.id, { amount: a.amount >= 0 ? val : -val });
-                                                                                    }
-                                                                                }}
-                                                                                className={`w-14 bg-transparent border-none p-0 pl-3.5 text-xs font-financial font-bold focus:ring-0 text-right outline-none ${a.amount >= 0 ? "text-emerald-600" : "text-rose-600"}`}
-                                                                            />
-                                                                        </div>
-                                                                        <button 
-                                                                            onClick={() => handleRemoveTempAdj(a.id)}
-                                                                            className="text-slate-300 hover:text-rose-500 transition-colors p-1 rounded hover:bg-white"
-                                                                        >
-                                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                                        </button>
-                                                                    </div>
+                                                                    <button 
+                                                                        onClick={() => handleRemoveTempAdj(a.id)}
+                                                                        className="text-slate-300 hover:text-rose-500 transition-colors p-1 rounded hover:bg-white"
+                                                                    >
+                                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                                    </button>
                                                                 </div>
                                                             </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center text-sm">
-                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Adjusted</span>
-                                                <span className={`font-financial font-black ${tempAdjustedCash < 0 ? 'text-rose-600' : 'text-slate-900'}`}>{fmt(tempAdjustedCash)}</span>
-                                            </div>
-
-                                            <button 
-                                                onClick={handleSaveBalance} 
-                                                disabled={isSavingBalance}
-                                                className="w-full py-2.5 rounded-xl text-xs font-black tracking-widest uppercase text-white transition-all bg-indigo-600 hover:bg-indigo-700 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
-                                            >
-                                                {isSavingBalance ? "Saving..." : <><CheckCircle2 className="w-4 h-4" /> Save & Re-Roll</>}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-
-                            {/* Adjustment breakdown Popover */}
-                            {showAdj && (
-                                <>
-                                    <div className="fixed inset-0 z-[50]" onClick={() => setShowAdj(false)} />
-                                    <div className="absolute z-[60] top-full mt-4 w-72 border rounded-xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
-                                        <div className="flex justify-between items-center mb-3">
-                                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Ledger Discrepancies</p>
-                                            <button onClick={() => setShowAdj(false)} className="text-slate-300 hover:text-slate-600">&times;</button>
-                                        </div>
-                                        {adjustments.length === 0 ? (
-                                            <p className="text-xs italic text-slate-400">No pending adjustments</p>
-                                        ) : (
-                                            <div className="space-y-2">
-                                                {adjustments.map(a => (
-                                                    <div key={a.id} className="flex justify-between text-xs">
-                                                        <span className="truncate pr-4 text-slate-500">{a.type.replace(/_/g, " ")}{a.note ? ` — ${a.note}` : ""}</span>
-                                                        <span className={`font-financial font-bold ${a.amount >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                                                            {a.amount >= 0 ? "+" : ""}{fmt(a.amount)}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                                <div className="pt-2 border-t mt-2 flex justify-between text-xs font-bold text-slate-900 uppercase tracking-wide">
-                                                    <span>Calculated Start</span>
-                                                    <span className="font-financial">{fmt(adjustedCash)}</span>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
                                         )}
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                </div>
 
-                {/* Inflow */}
-                <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/in transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-4 xl:px-5 py-3'}`}>
-                    <div className={`flex items-baseline w-full min-w-0 transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
-                        <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-12' : 'w-16'}`}>In (30d)</span>
-                        <div className="flex flex-col items-start relative w-full min-w-0">
-                            <span className={`font-black font-financial text-emerald-700 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-lg xl:text-xl 2xl:text-2xl'}`}>{fmt(inflow30)}</span>
-                            {dataQualityGate && (
-                                <button onClick={() => setShowReasons(!showReasons)} className={`font-medium text-slate-400 hover:text-slate-700 absolute flex items-center gap-1 opacity-80 group-hover/in:opacity-100 transition-all duration-500 whitespace-nowrap ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3'}`}>
-                                    {dataQualityGate.gate === "green" ? (
-                                        <ShieldCheck className="w-2.5 h-2.5 text-emerald-500" />
-                                    ) : (
-                                        <ShieldAlert className={`w-2.5 h-2.5 ${dataQualityGate.gate === "red" ? 'text-rose-500' : 'text-amber-500'}`} />
-                                    )}
-                                    {dataQualityGate.gate === "green" ? "Data: Verified" : dataQualityGate.gate === "yellow" ? "Data: Warning" : "Data: Action Needed"}
-                                </button>
-                            )}
-
-                            {/* Confidence Reasons Popover */}
-                            {showReasons && dataQualityGate && (
-                                <>
-                                    <div className="fixed inset-0 z-50" onClick={() => setShowReasons(false)} />
-                                    <div className="absolute z-[60] top-full mt-4 w-80 border rounded-xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
-                                        <div className="flex justify-between items-center mb-3">
-                                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Data Quality Gate</p>
-                                            <button onClick={() => setShowReasons(false)} className="text-slate-300 hover:text-slate-600">&times;</button>
+                                        <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center text-sm">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Adjusted</span>
+                                            <span className={`font-financial font-black ${tempAdjustedCash < 0 ? 'text-rose-600' : 'text-slate-900'}`}>{fmt(tempAdjustedCash)}</span>
                                         </div>
-                                        {dataQualityGate.reasons.length === 0 ? (
-                                            <div className="text-xs text-slate-500 flex gap-2"><span className="text-emerald-400 font-black">•</span> All core data requirements met.</div>
-                                        ) : (
-                                            dataQualityGate.reasons.map((r, i) => (
-                                                <div key={i} className="text-xs mb-1.5 flex gap-2 text-slate-600">
-                                                    <span className={`${dataQualityGate.redReasons?.includes(r) ? 'text-rose-400' : dataQualityGate.yellowReasons?.includes(r) ? 'text-amber-400' : 'text-emerald-400'} font-black`}>•</span> {r}
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                </div>
 
-                {/* Outflow */}
-                <div className={`w-full lg:flex-1 min-w-0 flex items-center justify-between relative group/out transition-all duration-500 ${isCompact ? 'px-3 py-2' : 'px-4 xl:px-5 py-3'}`}>
-                    <div className={`flex items-baseline w-full min-w-0 transition-all duration-500 ${isCompact ? 'gap-2' : 'gap-3'}`}>
-                        <span className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 transition-all duration-500 ${isCompact ? 'w-14' : 'w-16'}`}>Out (30d)</span>
-                        <div className="flex flex-col items-start relative w-full min-w-0">
-                            <span className={`font-black font-financial text-rose-600 transition-all duration-500 truncate max-w-full block ${isCompact ? 'text-[15px]' : 'text-lg xl:text-xl 2xl:text-2xl'}`}>{fmt(outflow30)}</span>
-                            {payroll ? (
-                                <span className={`font-medium text-slate-500 absolute whitespace-nowrap flex items-center gap-1 opacity-80 group-hover/out:opacity-100 transition-all duration-500 ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3.5'}`}>
-                                    <TrendingDown className="w-2.5 h-2.5" />
-                                    Payroll {new Date(payroll.nextDate!).toLocaleDateString("en-US", { timeZone: "UTC", month: 'short', day: 'numeric'})}
-                                </span>
-                            ) : payrollPromptNeeded ? (
-                                <span className={`font-medium text-amber-600 absolute whitespace-nowrap flex items-center gap-1 opacity-80 group-hover/out:opacity-100 transition-all duration-500 ${isCompact ? 'text-[8px] -bottom-2' : 'text-[9px] -bottom-3.5'}`}>
-                                    <AlertTriangle className="w-2.5 h-2.5" /> Payroll Info Missing
-                                </span>
-                            ) : null}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Health & Runway */}
-                <div className={`w-full lg:flex-[2.5] min-w-0 flex items-center justify-between relative group/health transition-all duration-500 gap-2 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-4 py-3 xl:px-5'}`}>
-                    {/* Contextual Action - Visible Only When Expanded */}
-                    {!isCompact && (
-                        <div className="relative z-10 flex shrink-0 items-center justify-start h-full">
-                            {onDrillIn && healthStatus !== "safe" && (
-                                <button
-                                    onClick={onDrillIn}
-                                    className="flex items-center gap-1.5 font-black uppercase text-white bg-rose-600 hover:bg-rose-700 rounded-md transition-colors group/drill shadow-sm tracking-[0.15em] text-[10px] px-4 py-2"
-                                >
-                                    Review Gap
-                                    <ArrowRight className="w-3 h-3 group-hover/drill:translate-x-0.5 transition-transform" />
-                                </button>
-                            )}
-                        </div>
-                    )}
-
-                    <div className={`flex flex-col items-end justify-center flex-1 min-w-0 relative z-10 ${isCompact ? '' : 'pt-2 lg:pt-0'}`}>
-                        {isCompact ? (
-                            <div className="flex items-baseline w-full gap-2">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0 w-12">Health</span>
-                                <div className="flex-1 flex justify-end gap-3 items-center min-w-0">
-                                    <RunwayMetric businessCashState={businessCashState} expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} isCompact={isCompact} />
-                                    {onDrillIn && healthStatus !== "safe" && (
-                                        <button onClick={onDrillIn} className="flex items-center gap-1 border border-rose-200 text-rose-500 hover:bg-rose-50 px-2 py-0.5 rounded text-[8px] uppercase font-black whitespace-nowrap bg-white/50 shadow-sm shrink-0 transition-colors">
-                                           Fix <ArrowRight className="w-2.5 h-2.5" />
+                                        <button 
+                                            onClick={handleSaveBalance} 
+                                            disabled={isSavingBalance}
+                                            className="w-full py-2.5 rounded-xl text-xs font-black tracking-widest uppercase text-white transition-all bg-indigo-600 hover:bg-indigo-700 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                                        >
+                                            {isSavingBalance ? "Saving..." : <><CheckCircle2 className="w-4 h-4" /> Save & Re-Roll</>}
                                         </button>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* Adjustment breakdown Popover */}
+                        {showAdj && (
+                            <>
+                                <div className="fixed inset-0 z-[50]" onClick={() => setShowAdj(false)} />
+                                <div className="absolute z-[60] top-full mt-4 w-72 border rounded-xl p-5 shadow-2xl bg-white left-0 animate-in fade-in slide-in-from-top-2 border-slate-200">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Uncleared Items</p>
+                                        <button onClick={() => setShowAdj(false)} className="text-slate-300 hover:text-slate-600">&times;</button>
+                                    </div>
+                                    {adjustments.length === 0 ? (
+                                        <p className="text-xs italic text-slate-400">No pending items</p>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {adjustments.map(a => (
+                                                <div key={a.id} className="flex justify-between text-xs">
+                                                    <span className="truncate pr-4 text-slate-500">{a.type.replace(/_/g, " ")}{a.note ? ` — ${a.note}` : ""}</span>
+                                                    <span className={`font-financial font-bold ${a.amount >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                                        {a.amount >= 0 ? "+" : ""}{fmt(a.amount)}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                            <div className="pt-2 border-t mt-2 flex justify-between text-xs font-bold text-slate-900 uppercase tracking-wide">
+                                                <span>Calculated Start</span>
+                                                <span className="font-financial">{fmt(adjustedCash)}</span>
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
-                            </div>
-                        ) : (
-                            <RunwayMetric businessCashState={businessCashState} expectedWeek={expectedRunOutWeek} worstWeek={worstCaseRunOutWeek} isCompact={isCompact} />
-                        )}
-                        
-                        {!isCompact && (lowestExpected !== undefined || lowestWorst !== undefined) && (
-                            <div className="flex items-center justify-end gap-2 font-bold uppercase tracking-widest opacity-60 group-hover/health:opacity-100 transition-all duration-500 text-[9px] mt-1.5">
-                                {managementImpact !== undefined && Math.abs(managementImpact) > 500 && (
-                                    <span className={`flex items-center gap-1 ${managementImpact > 0 ? 'text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded' : 'text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded'}`}>
-                                        Actions: {managementImpact > 0 ? '+' : '–'}{fmt(Math.abs(managementImpact))}
-                                        <HelpBubble position="bottom-left" width="w-64" text="Net cash impact of your rescheduling actions, compared to the 'Do-Nothing Trajectory' at the lowest cash point." />
-                                    </span>
-                                )}
-                                {managementImpact !== undefined && Math.abs(managementImpact) > 500 && <span className="text-slate-300">|</span>}
-                                {lowestExpected !== undefined && (
-                                    <span className="flex items-center gap-1 text-slate-500">
-                                        Floor: <span className={`font-financial font-bold ${lowestExpected < 0 ? 'text-rose-600' : 'text-slate-700'}`}>{fmt(lowestExpected)}</span>
-                                        <HelpBubble position="bottom-left" width="w-64" text="Lowest forecasted cash point across the entire 13-week expected projection." />
-                                    </span>
-                                )}
-                                {lowestExpected !== undefined && lowestWorst !== undefined && <span className="text-slate-300">|</span>}
-                                {lowestWorst !== undefined && (
-                                    <span className="flex items-center gap-1 text-slate-500">
-                                        Worst: <span className={`font-financial font-bold ${lowestWorst < 0 ? 'text-rose-600' : 'text-slate-700'}`}>{fmt(lowestWorst)}</span>
-                                        <HelpBubble position="bottom-left" width="w-64" text="Lowest forecasted cash point if all identified worst-case risks materialize." />
-                                    </span>
-                                )}
-                            </div>
+                            </>
                         )}
                     </div>
-                    {/* Background glow color tint */}
-                    {(() => {
-                        const statusConfig = {
-                            safe: { glow: "bg-emerald-400/5 lg:rounded-br-2xl" },
-                            threatened: { glow: "bg-amber-400/10 lg:rounded-br-2xl" },
-                            critical: { glow: "bg-rose-400/10 lg:rounded-br-2xl" },
-                            exhausted: { glow: "bg-rose-500/15 lg:rounded-br-2xl" }
-                        }[healthStatus];
-                        return <div className={`absolute inset-0 ${statusConfig.glow} pointer-events-none transition-all duration-500 ${isCompact ? 'rounded-2xl lg:rounded-r-full' : ''}`} />;
-                    })()}
                 </div>
 
-                {/* Removed floating compact search button to prevent breaking right-side rounded styling */}
+                {/* Adaptive Health Widget */}
+                <div className={`w-full lg:flex-[1.5] min-w-0 flex items-center relative transition-all duration-500 gap-4 ${isCompact ? 'px-3 py-2 lg:h-12 lg:rounded-r-full' : 'px-4 py-4 xl:px-6 lg:rounded-br-2xl'} ${
+                    lowestExpected !== undefined && lowestExpected < 0 ? 'bg-rose-50 border-l-4 border-rose-400' :
+                    lowestExpected !== undefined && lowestExpected < buffer ? 'bg-amber-50 border-l-4 border-amber-400' :
+                    lowestExpected !== undefined && lowestExpected > buffer * 2 ? 'bg-blue-50 border-l-4 border-blue-400' :
+                    'bg-emerald-50 border-l-4 border-emerald-400'
+                }`}>
+                    {(() => {
+                        const lowest = lowestExpected !== undefined ? lowestExpected : 0;
+                        const isCritical = lowest < 0;
+                        const isWarning = lowest >= 0 && lowest < buffer;
+                        const isExcess = lowest > buffer * 2;
+                        
+                        let adaptiveStatus = "STABLE";
+                        let adaptiveColor = "text-emerald-700";
+                        let adaptiveIcon = <CheckCircle2 className="w-5 h-5 lg:w-6 lg:h-6 text-emerald-500" />;
+                        let adaptiveSubtext = `Lowest expected cash is ${fmt(lowest)}, safely above your ${fmt(buffer)} buffer.`;
+                        let adaptiveAction = "View Trend";
+                        let adaptiveActionColor = "text-emerald-700 bg-emerald-100 hover:bg-emerald-200";
 
+                        if (isCritical) {
+                            adaptiveStatus = "CRITICAL RUNWAY";
+                            adaptiveColor = "text-rose-700";
+                            adaptiveIcon = <AlertTriangle className="w-5 h-5 lg:w-6 lg:h-6 text-rose-500" />;
+                            adaptiveSubtext = `Cash drops below $0 on Week ${expectedRunOutWeek || '?'}. Immediate action required.`;
+                            adaptiveAction = "Fix Shortfall";
+                            adaptiveActionColor = "text-white bg-rose-600 hover:bg-rose-700";
+                        } else if (isWarning) {
+                            adaptiveStatus = "WARNING";
+                            adaptiveColor = "text-amber-700";
+                            adaptiveIcon = <AlertTriangle className="w-5 h-5 lg:w-6 lg:h-6 text-amber-500" />;
+                            adaptiveSubtext = `Lowest cash (${fmt(lowest)}) drops below your ${fmt(buffer)} safety buffer.`;
+                            adaptiveAction = "Review Gap";
+                            adaptiveActionColor = "text-amber-800 bg-amber-200 hover:bg-amber-300";
+                        } else if (isExcess) {
+                            adaptiveStatus = "EXCESS RESERVES";
+                            adaptiveColor = "text-blue-700";
+                            adaptiveIcon = <TrendingUp className="w-5 h-5 lg:w-6 lg:h-6 text-blue-500" />;
+                            adaptiveSubtext = `${fmt(lowest - buffer)} above your required safety buffer over the next 13 weeks.`;
+                            adaptiveAction = "Explore";
+                            adaptiveActionColor = "text-blue-800 bg-blue-200 hover:bg-blue-300";
+                        }
+
+                        return (
+                            <>
+                                <div className="shrink-0 pt-0.5">
+                                    {adaptiveIcon}
+                                </div>
+                                <div className="flex flex-col items-start min-w-0 flex-1 justify-center gap-1">
+                                    <div className="flex items-center gap-3 w-full flex-wrap lg:flex-nowrap justify-between">
+                                        <span className={`font-black uppercase tracking-widest text-[11px] lg:text-xs ${adaptiveColor}`}>
+                                            {adaptiveStatus}
+                                        </span>
+                                        {onDrillIn && (
+                                            <button
+                                                onClick={onDrillIn}
+                                                className={`flex items-center gap-1.5 font-bold uppercase rounded-md transition-colors shadow-sm tracking-wider text-[10px] px-3 py-1.5 shrink-0 ${adaptiveActionColor}`}
+                                            >
+                                                {adaptiveAction}
+                                                <ArrowRight className="w-3 h-3" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    {!isCompact && (
+                                        <span className="text-[10px] lg:text-[11px] font-medium text-slate-600 leading-snug max-w-[90%]">
+                                            {adaptiveSubtext}
+                                        </span>
+                                    )}
+                                </div>
+                            </>
+                        );
+                    })()}
+                </div>
             </div>
         </div>
     );

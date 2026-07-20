@@ -41,17 +41,20 @@ interface Props {
 }
 
 function fmt(n: number): string {
-    return "$" + Math.round(n).toLocaleString("en-US", { minimumFractionDigits: 0 });
+    const sign = n < 0 ? "-" : "";
+    return sign + "$" + Math.abs(Math.round(n)).toLocaleString("en-US", { minimumFractionDigits: 0 });
 }
 
 function fmtChartAxis(n: number): string {
-    if (Math.abs(n) >= 1000000) {
-        return "$" + (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+    const sign = n < 0 ? "-" : "";
+    const abs = Math.abs(n);
+    if (abs >= 1000000) {
+        return sign + "$" + (abs / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
     }
-    if (Math.abs(n) >= 1000) {
-        return "$" + (n / 1000).toFixed(0) + "k";
+    if (abs >= 1000) {
+        return sign + "$" + (abs / 1000).toFixed(0) + "k";
     }
-    return "$" + n.toFixed(0);
+    return sign + "$" + abs.toFixed(0);
 }
 
 function formatDate(dateStr: string): string {
@@ -107,14 +110,14 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
             outflow: w.outflowsExpected,
             expected: Math.round(w.startCash), // Main series now plots beginning cash
             expectedEnd: Math.round(w.endCashExpected),
-            best: Math.round(startCashBest),
-            worst: Math.round(startCashWorst),
+            best: Math.round(w.endCashBest),
+            worst: Math.round(w.endCashWorst),
             scenario: hasScenario ? Math.round(w.startCash + currentScenarioCashForStart) : undefined,
             planExpected,
             organicExpected,
             zone: w.zone,
-            bandHigh: w.zone !== "committed" ? Math.round(startCashBest) : undefined,
-            bandLow: w.zone !== "committed" ? Math.round(startCashWorst) : undefined,
+            bandHigh: w.zone !== "committed" ? Math.round(w.endCashBest) : undefined,
+            bandLow: w.zone !== "committed" ? Math.round(w.endCashWorst) : undefined,
         };
     });
 
@@ -188,24 +191,22 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
 
     return (
         <div className="flex-1 flex flex-col w-full relative min-h-[300px]">
-            {hasScenario && (
-                <div className="absolute top-0 right-2 z-10">
-                    <span className="text-[10px] px-3 py-1 text-amber-600 border rounded-xl font-bold uppercase tracking-widest flex items-center gap-2 shadow-sm bg-[#fffbeb]" style={{ borderColor: "rgba(245,158,11,0.2)" }}>
-                        <Zap className="w-3.5 h-3.5" /> Simulation Active
-                    </span>
-                </div>
-            )}
-            <div className="w-full h-full flex flex-col relative group">
-            {planWeeks && planWeeks.length > 0 && (
-                <div className="absolute top-0 right-0 z-10 flex items-center gap-2 bg-white/90 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 cursor-pointer flex items-center gap-2">
+            <div className="flex justify-end items-center gap-3 mb-2 px-2 z-10">
+                {planWeeks && planWeeks.length > 0 && (
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 cursor-pointer flex items-center gap-2 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm transition-colors">
                         <input type="checkbox" checked={comparePlan} onChange={e => setComparePlan(e.target.checked)} className="accent-indigo-500" />
                         Compare to Approved Plan
                     </label>
-                </div>
-            )}
+                )}
+                {hasScenario && (
+                    <span className="text-[10px] px-3 py-1.5 text-amber-600 border rounded-full font-bold uppercase tracking-widest flex items-center gap-2 shadow-sm bg-[#fffbeb]" style={{ borderColor: "rgba(245,158,11,0.2)" }}>
+                        <Zap className="w-3.5 h-3.5" /> Simulation Active
+                    </span>
+                )}
+            </div>
+            <div className="w-full h-full flex flex-col relative group">
             <ResponsiveContainer width="100%" height={400}>
-                    <ComposedChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                    <ComposedChart data={chartData} margin={{ top: 5, right: 40, left: 10, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                         <XAxis
                             dataKey="name"
