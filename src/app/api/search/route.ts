@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     const results = [];
 
     // 1. Search AR (ReceivableInvoices)
-    const arQuery: any = { companyId, status: "open" };
+    const arQuery: any = { companyId };
     if (amountQuery) {
         // search +/- 1%
         const min = amountQuery * 0.99;
@@ -42,11 +42,12 @@ export async function GET(req: NextRequest) {
             color: "emerald",
             url: `/receivables?highlightId=${ar.id}`,
             dateInfo: ar.dueDate ? new Date(ar.dueDate).toLocaleDateString() : ar.invoiceDate ? new Date(ar.invoiceDate).toLocaleDateString() : "No date",
+            status: ar.status
         });
     }
 
     // 2. Search AP (PayableBills)
-    const apQuery: any = { companyId, status: "open" };
+    const apQuery: any = { companyId };
     if (amountQuery) {
         const min = amountQuery * 0.99;
         const max = amountQuery * 1.01;
@@ -67,6 +68,7 @@ export async function GET(req: NextRequest) {
             color: "rose",
             url: `/payables?highlightId=${ap.id}`,
             dateInfo: ap.dueDate ? new Date(ap.dueDate).toLocaleDateString() : "No date",
+            status: ap.status
         });
     }
 
@@ -93,6 +95,38 @@ export async function GET(req: NextRequest) {
             color: "indigo",
             url: `/planned?highlightId=${rec.id}`,
             dateInfo: `Cadence: ${rec.cadence}`,
+            status: "active"
+        });
+    }
+
+    // 4. Search CashAdjustments (One-Time)
+    const adjQuery: any = { companyId };
+    if (amountQuery) {
+        const min = amountQuery * 0.99;
+        const max = amountQuery * 1.01;
+        adjQuery.OR = [
+            { amount: { gte: min, lte: max } },
+            { amount: { gte: -max, lte: -min } }
+        ];
+    } else {
+        adjQuery.OR = [
+            { note: { contains: q, mode: "insensitive" } },
+            { description: { contains: q, mode: "insensitive" } },
+        ];
+    }
+    const adjMatches = await prisma.cashAdjustment.findMany({ where: adjQuery, take: 5 });
+    for (const adj of adjMatches) {
+        // determine if past based on effectiveDate
+        const isPast = new Date(adj.effectiveDate) < new Date(new Date().setHours(0,0,0,0));
+        results.push({
+            id: adj.id,
+            type: "One-Time " + (adj.amount > 0 ? "In" : "Out"),
+            label: adj.note || "Adjustment",
+            amount: Math.abs(adj.amount),
+            color: adj.amount > 0 ? "emerald" : "rose",
+            url: `/planned?highlightId=${adj.id}`,
+            dateInfo: `Date: ${new Date(adj.effectiveDate).toLocaleDateString()}`,
+            status: isPast ? "completed" : "active"
         });
     }
 

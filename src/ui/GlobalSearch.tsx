@@ -12,6 +12,7 @@ interface SearchResult {
     color: string;
     url: string;
     dateInfo: string;
+    status?: string;
 }
 
 function fmt(n: number) {
@@ -98,10 +99,26 @@ export function GlobalSearch({ open, onClose }: { open: boolean, onClose: () => 
     // Grouping results
     const groups: Record<string, SearchResult[]> = {};
     results.forEach(r => {
-        const cat = r.type.includes("AR") ? "Receivables" : r.type.includes("AP") ? "Payables" : r.type.includes("Recurring") ? "Recurring" : "Other";
+        let cat = r.type.includes("AR") ? "Receivables" : r.type.includes("AP") ? "Payables" : r.type.includes("Recurring") ? "Recurring" : "Other";
+        
+        const isPast = r.status === "paid" || r.status === "closed" || r.status === "completed";
+        if (isPast) {
+            cat = "Past / Completed";
+        } else {
+            cat = "Upcoming / Action Needed";
+        }
+
         if (!groups[cat]) groups[cat] = [];
         groups[cat].push(r);
     });
+
+    // Ensure Upcoming is always first
+    const sortedGroupNames = Object.keys(groups).sort((a, b) => {
+        if (a === "Upcoming / Action Needed") return -1;
+        if (b === "Upcoming / Action Needed") return 1;
+        return 0;
+    });
+
 
     return (
         <div className="fixed inset-0 z-[200] flex items-start justify-center pt-[15vh] px-4" 
@@ -154,7 +171,9 @@ export function GlobalSearch({ open, onClose }: { open: boolean, onClose: () => 
 
                     {results.length > 0 && (
                         <div className="py-2">
-                            {Object.entries(groups).map(([catName, items]) => (
+                            {sortedGroupNames.map((catName) => {
+                                const items = groups[catName];
+                                return (
                                 <div key={catName}>
                                     <div className="px-5 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10 border-y border-transparent">
                                         {catName}
@@ -163,6 +182,7 @@ export function GlobalSearch({ open, onClose }: { open: boolean, onClose: () => 
                                         {items.map((r) => {
                                             const index = results.findIndex(res => res.id === r.id);
                                             const isActive = index === activeIndex;
+                                            const isPast = r.status === "paid" || r.status === "closed" || r.status === "completed";
                                             return (
                                                 <li key={r.id}>
                                                     <button
@@ -170,7 +190,7 @@ export function GlobalSearch({ open, onClose }: { open: boolean, onClose: () => 
                                                         onMouseEnter={() => setActiveIndex(index)}
                                                         className={`w-full text-left flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors group ${
                                                             isActive ? "bg-white shadow-sm ring-1 ring-slate-200" : "hover:bg-slate-100/50"
-                                                        }`}
+                                                        } ${isPast ? "opacity-60 grayscale-[50%]" : ""}`}
                                                     >
                                                         <div className="flex items-center gap-3 min-w-0 flex-1">
                                                             <div className={`w-8 h-8 rounded shrink-0 flex items-center justify-center border
@@ -187,6 +207,11 @@ export function GlobalSearch({ open, onClose }: { open: boolean, onClose: () => 
                                                                     <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">
                                                                         {r.type}
                                                                     </span>
+                                                                    {isPast && (
+                                                                        <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                                                                            {r.status}
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                                 <p className="text-xs text-slate-400 mt-0.5 truncate">{r.dateInfo}</p>
                                                             </div>
@@ -205,7 +230,8 @@ export function GlobalSearch({ open, onClose }: { open: boolean, onClose: () => 
                                         })}
                                     </ul>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
