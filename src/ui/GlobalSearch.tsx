@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Search, FileText, Repeat, Briefcase, CornerDownRight, X } from "lucide-react";
 
@@ -26,8 +27,13 @@ export function GlobalSearch({ open, onClose }: { open: boolean, onClose: () => 
     const [results, setResults] = useState<SearchResult[]>([]);
     const [loading, setLoading] = useState(false);
     const [activeIndex, setActiveIndex] = useState(0);
+    const [mounted, setMounted] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     // Auto-focus input when opened
     useEffect(() => {
@@ -119,8 +125,9 @@ export function GlobalSearch({ open, onClose }: { open: boolean, onClose: () => 
         return 0;
     });
 
+    if (!mounted) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[200] flex items-start justify-center pt-[15vh] px-4" 
              style={{ background: "rgba(15, 23, 42, 0.4)", backdropFilter: "blur(6px)" }}
              onClick={onClose}>
@@ -251,6 +258,7 @@ export function GlobalSearch({ open, onClose }: { open: boolean, onClose: () => 
                     100% { transform: translateX(300%); }
                 }
             `}} />
-        </div>
+        </div>,
+        document.body
     );
 }
