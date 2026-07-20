@@ -45,6 +45,9 @@ function fmt(n: number): string {
 }
 
 function fmtChartAxis(n: number): string {
+    if (Math.abs(n) >= 1000000) {
+        return "$" + (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+    }
     if (Math.abs(n) >= 1000) {
         return "$" + (n / 1000).toFixed(0) + "k";
     }
@@ -71,7 +74,8 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
     // Build chart data, with running scenario totals
     let runningScenarioCash = 0;
     const chartData = weeks.map((w, idx) => {
-        const dateLabel = formatDate(w.weekEnd); // Keeps existing axis label alignment
+        const dateLabel = formatDate(w.weekEnd);
+        const xAxisLabel = `W${w.weekNumber} · ${dateLabel}`;
         
         const startCashBest = idx === 0 ? w.startCash : weeks[idx - 1].endCashBest;
         const startCashWorst = idx === 0 ? w.startCash : weeks[idx - 1].endCashWorst;
@@ -94,7 +98,9 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
         }
 
         return {
-            name: dateLabel,
+            name: xAxisLabel,
+            dateLabel,
+            weekNumber: w.weekNumber,
             weekNum: `Week ${w.weekNumber}`,
             opening: Math.round(w.startCash),
             inflow: w.inflowsExpected,
@@ -112,8 +118,8 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
         };
     });
 
-    const constraintLabel = constraintWeek
-        ? formatDate(weeks[constraintWeek - 1]?.weekEnd)
+    const constraintLabel = constraintWeek && weeks[constraintWeek - 1]
+        ? `W${constraintWeek} · ${formatDate(weeks[constraintWeek - 1].weekEnd)}`
         : null;
 
     const CustomTooltip = ({ active, payload, label }: any) => {
@@ -124,7 +130,7 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
                     <div className="flex justify-between items-end mb-4 border-b border-white/10 pb-3">
                         <div>
                             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 leading-none mb-1">Timeline</p>
-                            <h4 className="text-sm font-bold text-white leading-none">{data.weekNum} · {label}</h4>
+                            <h4 className="text-sm font-bold text-white leading-none">Week {data.weekNumber} · {data.dateLabel}</h4>
                         </div>
                         <div className="text-right">
                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 leading-none mb-1">Status</p>
@@ -357,9 +363,9 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
 
                         {/* Constraint week — "OUT OF CASH" wall */}
                         {constraintLabel && (() => {
-                            const weekIdx = weeks.findIndex(w => formatDate(w.weekEnd) === constraintLabel);
+                            const weekIdx = weeks.findIndex(w => `W${w.weekNumber} · ${formatDate(w.weekEnd)}` === constraintLabel);
                             // Get the previous week label for the filled area start
-                            const prevLabel = weekIdx > 0 ? formatDate(weeks[weekIdx - 1].weekEnd) : constraintLabel;
+                            const prevLabel = weekIdx > 0 ? `W${weeks[weekIdx - 1].weekNumber} · ${formatDate(weeks[weekIdx - 1].weekEnd)}` : constraintLabel;
                             return (
                                 <>
                                     <ReferenceLine
