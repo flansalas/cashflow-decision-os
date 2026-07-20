@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
             label: `${ar.customerName} (${ar.invoiceNo})`,
             amount: ar.amountOpen,
             color: "emerald",
-            url: `/cashflow?highlightId=${ar.id}`,
+            url: `/receivables?highlightId=${ar.id}`,
             dateInfo: ar.dueDate ? new Date(ar.dueDate).toLocaleDateString() : ar.invoiceDate ? new Date(ar.invoiceDate).toLocaleDateString() : "No date",
         });
     }
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
             label: `${ap.vendorName} (${ap.billNo})`,
             amount: ap.amountOpen,
             color: "rose",
-            url: `/cashflow?highlightId=${ap.id}`,
+            url: `/payables?highlightId=${ap.id}`,
             dateInfo: ap.dueDate ? new Date(ap.dueDate).toLocaleDateString() : "No date",
         });
     }
@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
             label: rec.displayName,
             amount: rec.typicalAmount,
             color: "indigo",
-            url: `/recurring`,
+            url: `/planned?highlightId=${rec.id}`,
             dateInfo: `Cadence: ${rec.cadence}`,
         });
     }
