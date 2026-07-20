@@ -139,12 +139,24 @@ function RecurringContent() {
     }, [isAuthLoaded, isOrgLoaded, isSignedIn, organization?.id, fetchData]);
 
 
-    // Auto-switch to Manage if highlighting a specific commitment pattern
+    const highlightConsumedRef = useRef(false);
+    const clearHighlight = useCallback(() => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("highlightId");
+        router.replace(`/planned${params.size > 0 ? `?${params}` : ""}`, { scroll: false });
+    }, [router, searchParams]);
+
+    // Auto-switch to edit mode if highlighting a specific commitment pattern
     useEffect(() => {
-        if (highlightId && data?.commitments.some(c => c.id === highlightId)) {
-            setTab("manage");
+        if (!highlightId || highlightConsumedRef.current || !data) return;
+        const target = data.commitments.find(c => c.id === highlightId);
+        if (target) {
+            highlightConsumedRef.current = true;
+            setEditingItem(target);
+            setShowAddForm(true);
+            clearHighlight();
         }
-    }, [highlightId, data?.commitments]);
+    }, [highlightId, data, clearHighlight]);
 
     if (loading) {
         return (
