@@ -90,6 +90,7 @@ const CATEGORIES = ["other", "rent", "loan", "subscription", "utilities", "fuel"
 
 function RecurringContent() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const highlightWeek = searchParams.get("highlightWeek") ? Number(searchParams.get("highlightWeek")) : null;
     const highlightId = searchParams.get("highlightId");
 
