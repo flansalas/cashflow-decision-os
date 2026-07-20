@@ -147,17 +147,6 @@ function RecurringContent() {
         router.replace(`/planned${params.size > 0 ? `?${params}` : ""}`, { scroll: false });
     }, [router, searchParams]);
 
-    // Auto-switch to edit mode if highlighting a specific commitment pattern
-    useEffect(() => {
-        if (!highlightId || highlightConsumedRef.current || !data) return;
-        const target = data.commitments.find(c => c.id === highlightId);
-        if (target) {
-            highlightConsumedRef.current = true;
-            setEditingItem(target);
-            setShowAddForm(true);
-            clearHighlight();
-        }
-    }, [highlightId, data, clearHighlight]);
 
     if (loading) {
         return (
@@ -255,6 +244,8 @@ function RecurringContent() {
                     commitments={plannedEvents}
                     weeks={data.forecast.weeks}
                     bufferMin={data.assumptions.bufferMin}
+                    highlightId={highlightId}
+                    onClearHighlight={clearHighlight}
                     onEdit={(item) => {
                         setEditingItem(item);
                         setShowAddForm(true);

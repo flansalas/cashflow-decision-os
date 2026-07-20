@@ -53,6 +53,8 @@ interface Props {
     onWeekClick: (weekNum: number) => void;
     onAdd: () => void;
     companyId: string;
+    highlightId?: string | null;
+    onClearHighlight?: () => void;
 }
 
 function fmt(n: number): string {
@@ -60,7 +62,7 @@ function fmt(n: number): string {
     return Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
-export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWeekClick, onAdd, companyId }: Props) {
+export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWeekClick, onAdd, companyId, highlightId, onClearHighlight }: Props) {
     const [isSummaryExpanded, setIsSummaryExpanded] = useState(true);
     const [isRecurringExpanded, setIsRecurringExpanded] = useState(true);
     const [isOneTimeExpanded, setIsOneTimeExpanded] = useState(true);
@@ -71,6 +73,21 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
         originalAmount: number;
         rect: DOMRect;
     } | null>(null);
+
+    React.useEffect(() => {
+        if (!highlightId) return;
+        const el = document.getElementById(`commitment-${highlightId}`);
+        if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        
+        const handleInteraction = () => {
+            if (onClearHighlight) onClearHighlight();
+        };
+        document.addEventListener("mousedown", handleInteraction, { once: true });
+        return () => document.removeEventListener("mousedown", handleInteraction);
+    }, [highlightId, onClearHighlight]);
+
 
     const handleMouseDown = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -130,7 +147,7 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
     const renderRow = (c: Commitment, index: number) => {
         const rowBg = index % 2 === 0 ? "bg-white" : "bg-slate-50";
         return (
-            <tr key={c.id} className={`group hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 ${rowBg}`}>
+            <tr key={c.id} id={`commitment-${c.id}`} className={`group hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 ${rowBg} ${highlightId === c.id ? "persistent-focus-glow relative z-20" : ""}`}>
                 <td 
                     style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }}
                     className={`px-3 py-1.5 whitespace-nowrap text-sm font-medium text-slate-800 border-r border-slate-200 cursor-pointer hover:text-indigo-600 transition-colors leading-snug sticky left-0 z-10 ${rowBg} shadow-[1px_0_0_0_#e2e8f0] group-hover:bg-slate-50 overflow-hidden text-ellipsis`}
