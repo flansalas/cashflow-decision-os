@@ -21,7 +21,8 @@ import { UpdateBalanceDialog } from "@/ui/UpdateBalanceDialog";
 import { GettingStartedTracker } from "@/ui/GettingStartedTracker";
 import { SpotlightProvider } from "@/ui/SpotlightContext";
 import { NebulaOverlay } from "@/ui/NebulaOverlay";
-import { AlertTriangle, Settings2, BarChart3, Target, PlaneTakeoff, AlignEndHorizontal, Zap, ClipboardList, Lightbulb, ChevronDown, ArrowRight, LineChart, Box, ArrowLeft, Upload, Landmark, RefreshCw, X, CheckCircle, ThermometerSun, ShieldCheck, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Settings2, BarChart3, Target, PlaneTakeoff, AlignEndHorizontal, Zap, ClipboardList, Lightbulb, ChevronDown, ArrowRight, LineChart, Box, ArrowLeft, Upload, Landmark, RefreshCw, X, CheckCircle, ThermometerSun, ShieldCheck, ShieldAlert, FilePlus, MessageSquare, Save, Settings, Plus, AlertCircle, ArrowUpRight, ArrowDownRight, Printer } from "lucide-react";
+import { StandaloneExecutionPlanModal } from "@/ui/StandaloneExecutionPlanModal";
 import type { BusinessCashState, DataQualityGateResult } from "@/domain/types";
 
 interface DashboardData {
@@ -215,6 +216,7 @@ function PlanContent() {
     // Map from weekNumber → change in endCashExpected vs last saved snapshot (positive = improved)
     const [forecastDiff, setForecastDiff] = useState<Map<number, number>>(new Map());
     const [isScrolled, setIsScrolled] = useState(false);
+    const [showExecutionPlan, setShowExecutionPlan] = useState(false);
     const otherViewsRef = useRef<HTMLDetailsElement>(null);
     // Tracks the last time we fetched the dashboard — used to decide whether to
     // re-fetch when the user returns from the Ledger after moving items.
@@ -280,7 +282,7 @@ function PlanContent() {
                     setData(d);
 
                     try {
-                        // cfdo_company_name intentionally NOT written here \u2014
+                        // cfdo_company_name intentionally NOT written here —
                         // sidebar now reads org name from Clerk directly.
                         // Keep isDemo for unauthenticated/legacy mode.
                         localStorage.setItem('cfdo_is_demo', String(d.company.isDemo));
@@ -447,6 +449,7 @@ function PlanContent() {
                         postApprovalChanges={data.postApprovalChanges}
                         forecastStateJson={data.forecast}
                         onPlanApproved={() => fetchDashboard(effectiveCompanyId)}
+                        onPrintPlan={() => setShowExecutionPlan(true)}
                         freshness={data.freshness}
                     />
                 </div>
@@ -722,6 +725,14 @@ function PlanContent() {
                     />
                 ) : null;
             })()}
+
+            {/* Execution Plan Modal */}
+            {showExecutionPlan && (
+                <StandaloneExecutionPlanModal
+                    companyId={effectiveCompanyId!}
+                    onClose={() => setShowExecutionPlan(false)}
+                />
+            )}
 
             {/* Setup Wizard (openable from header or banner) */}
             {setupOpen && effectiveCompanyId && (
