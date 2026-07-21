@@ -1,8 +1,8 @@
 // ui/ItemDetailDrawer.tsx — Right-sidebar Decision Panel for a selected AR/AP card
 "use client";
 
-import { useState } from "react";
-import { Hourglass, Package, EyeOff, RotateCcw } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Hourglass, Package, EyeOff, RotateCcw, MoreVertical } from "lucide-react";
 import type { GridItem } from "./ARAPCard";
 import { TransactionHistoryTimeline } from "./TransactionHistoryTimeline";
 
@@ -97,6 +97,18 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
     const [undoing, setUndoing] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
     const [reason, setReason] = useState("");
+    const [menuOpen, setMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setMenuOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     const isAR = item.kind === "ar";
     const isOverridden = !!item.overrideDate;
@@ -152,8 +164,6 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
     const handleExclude = async () => {
         setExcluding(true);
         try {
-            // "exclude" is a separate type so it does not overwrite date overrides by default in the UI flow,
-            // but we want to make sure it's saved.
             await fetch("/api/overrides", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -207,7 +217,6 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
         finally { setUndoing(false); }
     };
 
-    // Original due date vs effective date for "social capital" delta
     const originalDue = item.dueDate;
     const effectiveDateStr = isAR ? item.expectedDate : item.effectiveDate;
     const deltaDays = originalDue && effectiveDateStr
@@ -261,15 +270,62 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
                         {isAR ? item.invoiceNo : item.billNo}
                     </p>
                 </div>
-                <button
-                    onClick={onClose}
-                    className="text-gray-600 hover:text-gray-400 text-sm shrink-0 mt-0.5"
-                >×</button>
+                
+                <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                    {/* Actions Menu */}
+                    <div className="relative" ref={menuRef}>
+                        <button
+                            onClick={() => setMenuOpen(!menuOpen)}
+                            className="p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-100 transition-colors"
+                        >
+                            <MoreVertical size={16} />
+                        </button>
+                        
+                        {menuOpen && (
+                            <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
+                                {item.isExcluded ? (
+                                    <button
+                                        onClick={() => { setMenuOpen(false); handleRestore(); }}
+                                        disabled={restoring}
+                                        className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                        <RotateCcw size={14} /> {restoring ? "Restoring…" : "Restore Item"}
+                                    </button>
+                                ) : (
+                                    <>
+                                        {item.effectiveWeek !== null && (
+                                            <button
+                                                onClick={() => { setMenuOpen(false); handleParkInBacklog(); }}
+                                                disabled={parking || excluding}
+                                                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                            >
+                                                <Package size={14} /> {parking ? "Parking…" : "Park in Backlog"}
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => { setMenuOpen(false); handleExclude(); }}
+                                            disabled={parking || excluding}
+                                            className="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                        >
+                                            <EyeOff size={14} /> {excluding ? "Excluding…" : "Exclude Permanently"}
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    
+                    <button
+                        onClick={onClose}
+                        className="p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-100 transition-colors"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
             </div>
 
             {/* Body — scrollable */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
-
                 {/* Tabs */}
                 <div className="flex border-b mb-2 mt-[-4px]" style={{ borderColor: "var(--border-subtle)" }}>
                     <button
@@ -342,9 +398,22 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
                             </div>
                         )}
                         {effectiveDateStr && (
-                            <div className="flex justify-between">
+                            <div className="flex justify-between items-center">
                                 <span style={{ color: "var(--text-faint)" }}>Scheduled for</span>
-                                <span className="font-medium" style={{ color: "var(--text-primary)" }}>{fmtDate(effectiveDateStr)}</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="font-medium" style={{ color: "var(--text-primary)" }}>{fmtDate(effectiveDateStr)}</span>
+                                    {isOverridden && (
+                                        <button
+                                            onClick={handleUndo}
+                                            disabled={undoing}
+                                            className="px-1.5 py-0.5 text-[9px] rounded border uppercase tracking-wider font-bold"
+                                            style={{ color: "var(--text-secondary)", borderColor: "var(--border-default)", background: "var(--bg-raised)" }}
+                                            title="Undo Reschedule"
+                                        >
+                                            {undoing ? "…" : "Undo"}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -396,154 +465,79 @@ export function ItemDetailDrawer({ item, weeks, companyId, onMoved, onClose }: P
                         </div>
                     </div>
                 )}
-                </>
-                )}
-            </div>
-
-            {/* ── Action Footer ─────────────────────────────────────────── */}
-            <div
-                className="px-4 py-4 border-t space-y-3 shrink-0"
-                style={{ borderColor: "var(--border-subtle)" }}
-            >
-                {/* Move to week */}
+                
+                {/* ── Notes / Reason ──────────────────────────────────────── */}
                 <div>
-                    <p className="text-[11px] uppercase tracking-widest font-bold mb-1.5" style={{ color: "var(--text-faint)" }}>
-                        Action
+                     <p className="text-[11px] uppercase tracking-widest font-bold mb-1.5" style={{ color: "var(--text-faint)" }}>
+                        Action Notes
                     </p>
                     <input
                         type="text"
                         value={reason}
                         onChange={e => setReason(e.target.value)}
-                        placeholder="Reason (optional)"
-                        className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500 shadow-sm mb-2"
-                        style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}
-                    />
-                    <select
-                        value={targetWeek}
-                        onChange={e => setTargetWeek(parseInt(e.target.value))}
+                        placeholder="Add a reason before moving/paying (optional)"
                         className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500 shadow-sm"
                         style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}
-                    >
-                        {weeks.map(w => (
-                            <option key={w.weekNumber} value={w.weekNumber}>
-                                W{w.weekNumber} ({fmtDateShort(w.weekStart)} – {fmtDateShort(w.weekEnd)})
-                                {w.weekNumber === item.effectiveWeek ? " (current)" : ""}
-                            </option>
-                        ))}
-                    </select>
-                    <div className="flex gap-1.5 mt-1.5">
+                    />
+                </div>
+                </>
+                )}
+            </div>
+
+            {/* ── Ultra-Compact Sticky Footer ───────────────────────────── */}
+            {!showHistory && !item.isExcluded && (
+                <div
+                    className="px-4 py-3 border-t shrink-0 flex flex-col gap-2.5 shadow-[0_-4px_12px_rgba(0,0,0,0.02)] z-10"
+                    style={{ borderColor: "var(--border-subtle)", background: "var(--bg-surface)" }}
+                >
+                    {/* Row 1: Move */}
+                    <div className="flex gap-2">
+                        <select
+                            value={targetWeek}
+                            onChange={e => setTargetWeek(parseInt(e.target.value))}
+                            className="w-5/12 border rounded px-2 py-1.5 text-[11px] font-medium focus:outline-none focus:border-indigo-500 shadow-sm"
+                            style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}
+                        >
+                            {weeks.map(w => (
+                                <option key={w.weekNumber} value={w.weekNumber}>
+                                    W{w.weekNumber} ({fmtDateShort(w.weekStart)})
+                                </option>
+                            ))}
+                        </select>
                         <button
                             onClick={handleMove}
                             disabled={saving || targetWeek === item.effectiveWeek}
-                            className="flex-1 py-1.5 text-[11px] font-semibold rounded disabled:opacity-40 transition-all shadow-md shadow-indigo-100"
+                            className="flex-1 py-1.5 text-[11px] font-semibold rounded disabled:opacity-40 transition-all shadow-sm"
                             style={{ background: "var(--color-primary)", color: "#fff" }}
                         >
-                            {saving ? (item.effectiveWeek === null ? "Recovering…" : "Moving…") : (item.effectiveWeek === null ? "Recover to grid" : "Move here")}
+                            {saving ? "Moving…" : (item.effectiveWeek === null ? "Recover" : "Move here")}
                         </button>
-                        {isOverridden && (
-                            <button
-                                onClick={handleUndo}
-                                disabled={undoing}
-                                className="px-2.5 py-1.5 text-[11px] rounded border disabled:opacity-40"
-                                style={{ color: "var(--text-secondary)", borderColor: "var(--border-default)", background: "var(--bg-raised)" }}
-                            >
-                                {undoing ? "…" : "Undo"}
-                            </button>
-                        )}
                     </div>
-                </div>
 
-                {/* Mark Paid */}
-                {!item.isExcluded && (
-                    <div className="pt-2 border-t mt-2" style={{ borderColor: "var(--border-subtle)" }}>
-                        <p className="text-[11px] uppercase tracking-widest font-bold mb-1.5 text-emerald-600">
-                            Mark Paid
-                        </p>
+                    {/* Row 2: Pay */}
+                    <div className="flex gap-2">
                         <input
                             type="date"
                             value={actualPaymentDate}
                             onChange={e => setActualPaymentDate(e.target.value)}
-                            className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-500 shadow-sm mb-1.5"
+                            className="w-5/12 border rounded px-2 py-1.5 text-[11px] font-medium focus:outline-none focus:border-emerald-500 shadow-sm"
                             style={{ background: "var(--bg-input)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}
                         />
                         <button
                             onClick={handleMarkPaid}
                             disabled={markingPaid || !actualPaymentDate}
-                            className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 shadow-sm"
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-bold rounded border transition-all disabled:opacity-40 shadow-sm"
                             style={{
                                 color: "var(--color-positive)",
                                 borderColor: "rgba(34,197,94,0.3)",
-                                background: "rgba(34,197,94,0.05)",
+                                background: "rgba(34,197,94,0.08)",
                             }}
                         >
                             {markingPaid ? "Marking…" : "✓ Confirm Payment"}
                         </button>
                     </div>
-                )}
-
-                {/* Park in Backlog / Exclude */}
-                {item.isExcluded ? (
-                    <div>
-                        <button
-                            onClick={handleRestore}
-                            disabled={restoring}
-                            className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 shadow-sm mb-1.5"
-                            style={{
-                                color: "var(--color-primary)",
-                                borderColor: "var(--border-default)",
-                                background: "var(--bg-raised)",
-                            }}
-                        >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            <span>{restoring ? "Restoring…" : "Restore Item"}</span>
-                        </button>
-                        <p className="text-center text-[11px]" style={{ color: "var(--text-faint)" }}>
-                            Brings this item back into the grid and forecast
-                        </p>
-                    </div>
-                ) : (
-                    <div className="flex gap-2">
-                        {item.effectiveWeek !== null && (
-                            <div className="flex-1">
-                                <button
-                                    onClick={handleParkInBacklog}
-                                    disabled={parking || excluding}
-                                    className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 shadow-sm"
-                                    style={{
-                                        color: "var(--color-primary)",
-                                        borderColor: "var(--border-default)",
-                                        background: "var(--bg-raised)",
-                                    }}
-                                >
-                                    {parking ? <Hourglass className="w-3.5 h-3.5" /> : <Package className="w-3.5 h-3.5" />}
-                                    <span>{parking ? "Parking…" : "Park in Backlog"}</span>
-                                </button>
-                                <p className="text-center text-[10px] mt-1.5" style={{ color: "var(--text-faint)" }}>
-                                    Removes from 13-week math
-                                </p>
-                            </div>
-                        )}
-                        <div className="flex-1">
-                            <button
-                                onClick={handleExclude}
-                                disabled={parking || excluding}
-                                className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 shadow-sm"
-                                style={{
-                                    color: "#e11d48",
-                                    borderColor: "rgba(225,29,72,0.2)",
-                                    background: "rgba(225,29,72,0.04)",
-                                }}
-                            >
-                                <EyeOff className="w-3.5 h-3.5" />
-                                <span>{excluding ? "Excluding…" : "Exclude Permanently"}</span>
-                            </button>
-                            <p className="text-center text-[10px] mt-1.5" style={{ color: "var(--text-faint)" }}>
-                                Hides entirely (recoverable)
-                            </p>
-                        </div>
-                    </div>
-                )}
-            </div>
+                </div>
+            )}
         </div>
     );
 }

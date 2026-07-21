@@ -1033,7 +1033,7 @@ export function CashflowGrid({
                         <div
                             className="flex-shrink-0 flex flex-col rounded-2xl h-[calc(100vh-200px)] overflow-hidden transition-all duration-200"
                             style={{
-                                width: "264px",
+                                width: "320px",
                                 background: "#ffffff",
                                 border: `2px solid ${selectedItem.kind === "ar" ? "rgba(34,197,94,0.40)" : "rgba(220,38,38,0.35)"}`,
                                 boxShadow: "0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)",
