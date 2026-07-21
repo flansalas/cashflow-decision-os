@@ -108,6 +108,25 @@ export async function POST(req: NextRequest) {
                             const { date, ...restNorm } = norm;
                             createdRec = await tx.bankTransaction.create({ data: { ...restNorm, txDate: date, companyId: tenantId }});
                             appliedRecordId = createdRec.id;
+
+                            // SMART AUTO-MATCHING
+                            // Look for an active CashAdjustment that corresponds to this bank transaction
+                            const isOutflow = restNorm.direction === "outflow";
+                            const matchAmount = isOutflow ? -Math.abs(restNorm.amount) : Math.abs(restNorm.amount);
+
+                            const matchingAdjustment = await tx.cashAdjustment.findFirst({
+                                where: {
+                                    companyId: tenantId,
+                                    status: "active",
+                                    amount: matchAmount
+                                }
+                            });
+
+                            if (matchingAdjustment) {
+                                await tx.cashAdjustment.delete({
+                                    where: { id: matchingAdjustment.id }
+                                });
+                            }
                         }
 
                         changeRecordsData.push({

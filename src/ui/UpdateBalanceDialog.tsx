@@ -57,7 +57,7 @@ export function UpdateBalanceDialog({
     onCancel,
 }: Props) {
     const todayISO = new Date().toISOString().slice(0, 10);
-    const [step, setStep] = useState<"upload" | "bank" | "balance" | "preview" | "actions" | "triage" | "summary">("upload");
+    const [step, setStep] = useState<"upload" | "bank" | "uncleared" | "balance" | "preview" | "actions" | "triage" | "summary">("upload");
     const [balance, setBalance] = useState(currentBalance.toString());
     const [asOfDate, setAsOfDate] = useState(todayISO);
     const [saving, setSaving] = useState(false);
@@ -347,11 +347,23 @@ export function UpdateBalanceDialog({
                     <BankUploadStep
                         companyId={companyId}
                         skipButtonText="Skip & Continue to Balance Review"
-                        onDone={() => {
+                        onDone={async () => {
                             setBankUploaded(true);
                             setBankSkipped(false);
                             setShowBankUploadWidget(false);
-                            setStep("balance");
+                            // Fetch updated adjustments in case auto-matching cleared some
+                            try {
+                                const res = await fetch(`/api/cash-adjustments?companyId=${companyId}`);
+                                if (res.ok) {
+                                    const data = await res.json();
+                                    if (data.adjustments) {
+                                        setAdjustments(data.adjustments.map((a: any) => ({ ...a, id: Math.random().toString(36).slice(2) })));
+                                    }
+                                }
+                            } catch (e) {
+                                console.error(e);
+                            }
+                            setStep("uncleared");
                         }}
                     />
                 )}
