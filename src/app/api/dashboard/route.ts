@@ -281,6 +281,8 @@ export async function GET(req: NextRequest) {
 
         baseline.conservativeOutflowWeekly = baseline.conservativeOutflowWeekly * varianceMultiplier;
         baseline.conservativeInflowWeekly = baseline.conservativeInflowWeekly * varianceMultiplierIn;
+        baseline.variableOutflowWeekly = baseline.variableOutflowWeekly * varianceMultiplier;
+        baseline.variableInflowWeekly = baseline.variableInflowWeekly * varianceMultiplierIn;
 
         // ── Build customer/vendor lookup ────────────────────────────────
         const customerMap = new Map(customerProfiles.map(c => [c.customerName, c]));
@@ -467,9 +469,9 @@ export async function GET(req: NextRequest) {
             },
             hasBankBaseline,
             baselineConfidenceTier: baseline.baselineConfidenceTier,
-            variableOutflowWeekly: baseline.conservativeOutflowWeekly,
+            variableOutflowWeekly: baseline.variableOutflowWeekly,
             variableOutflowBand: baseline.variableOutflowBand,
-            baselineInflowWeekly: baseline.conservativeInflowWeekly,
+            baselineInflowWeekly: baseline.variableInflowWeekly,
             baselineInflowBand: baseline.variableInflowBand,
             baselineInflowCadence: baseline.inflowCadence,
             baselineOutflowCadence: baseline.outflowCadence,

@@ -55,9 +55,9 @@ function SourceRow({
 function ProvenanceCard({ info }: { info: HoveredInfo }) {
     const isIn = info.type === "in";
 
-    const CARD_W = 220;
-    const OFFSET_X = 18;
-    const OFFSET_Y = -12;
+    const CARD_W = 240;
+    const OFFSET_X = 10;
+    const OFFSET_Y = 10;
     const vpW = typeof window !== "undefined" ? window.innerWidth : 1200;
     const left = info.x + OFFSET_X + CARD_W > vpW
         ? info.x - CARD_W - OFFSET_X
@@ -65,8 +65,8 @@ function ProvenanceCard({ info }: { info: HoveredInfo }) {
     const top = info.y + OFFSET_Y;
 
     const methodNote = info.baselineMethodNote || (isIn
-        ? "Gap between the 52-week recency-weighted avg. collection and the invoices + recurring items already logged for this week. Recent weeks count more than older ones. If known items cover the avg, this is $0."
-        : "Gap between the 52-week recency-weighted avg. outflow and the AP bills + recurring commitments already logged for this week. Recent weeks count more than older ones. If known items cover the avg, this is $0.");
+        ? "Gap between the 52-week recency-weighted avg. variable collection and the AR invoices already logged for this week. This adaptive baseline runs parallel to known recurring inflows. If invoices cover the avg, this is $0."
+        : "Gap between the 52-week recency-weighted avg. variable spend and the AP bills already logged for this week. This baseline runs parallel to your known fixed costs (payroll, rent, recurring). If AP bills cover the avg, this is $0.");
 
     return (
         <div
