@@ -163,7 +163,9 @@ export async function POST(req: NextRequest) {
             return newBatch;
         });
 
-        // Compute and cache the baseline asynchronously
+        // Bust the baseline cache FIRST so the 24-hour guard doesn't block the rebuild.
+        // Then rebuild fresh from all available bank history.
+        prisma.baselineSnapshot.deleteMany({ where: { companyId } }).catch(() => {});
         import("@/services/baseline-snapshot").then(({ buildAndCacheBaseline }) => {
             buildAndCacheBaseline(companyId).catch(err => {
                 console.error("Background Baseline Snapshot Worker failed:", err);

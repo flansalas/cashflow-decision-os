@@ -56,14 +56,12 @@ export async function GET(req: NextRequest) {
             prisma.customerProfile.findMany({ where: { companyId: cid } }),
             prisma.vendorProfile.findMany({ where: { companyId: cid } }),
             prisma.assumption.findFirst({ where: { companyId: cid } }),
-            prisma.recurringPattern.findMany({ where: { companyId: cid } }),
+            // Only active patterns — matches what baseline-snapshot.ts uses (status consistency fix)
+            prisma.recurringPattern.findMany({ where: { companyId: cid, status: "active" } }),
             prisma.override.findMany({ where: { companyId: cid, status: "active" }, orderBy: { createdAt: "desc" } }),
-            // Load bank txs for baseline computation (last 52 weeks = ~365 days)
+            // Load ALL bank txs (no 365-day cap) — matches baseline-snapshot.ts behaviour (date filter consistency fix)
             prisma.bankTransaction.findMany({
-                where: {
-                    companyId: cid,
-                    txDate: { gte: new Date(Date.now() - 365 * 86_400_000) },
-                },
+                where: { companyId: cid },
                 select: { amount: true, txDate: true, description: true, direction: true },
             }),
             // CompanyNotes for flags (cash mismatch, etc.)
