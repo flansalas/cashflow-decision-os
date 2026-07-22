@@ -52,6 +52,7 @@ model Company {
   importApplications          ImportApplication[]
   importApplyChanges          ImportApplyChange[]
   learningProposals           LearningProposal[]
+  baselineSnapshot            BaselineSnapshot?
 }
 
 model CompanyNote {
@@ -708,4 +709,29 @@ model LearningProposal {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId, status])
+}
+
+// ────────────────────────────────────────────────
+// BASELINE SNAPSHOT (CACHED)
+// ────────────────────────────────────────────────
+
+model BaselineSnapshot {
+  id                  String   @id @default(uuid())
+  companyId           String   @unique
+  asOfDate            DateTime
+  hasSufficientHistory Boolean
+  baselineConfidenceTier String
+  inflowCadence       String
+  outflowCadence      String
+  variableInflowWeekly Float
+  variableOutflowWeekly Float
+  variableInflowBand  Float
+  variableOutflowBand Float
+  conservativeInflowWeekly Float @default(0)
+  conservativeOutflowWeekly Float @default(0)
+  weeklyBucketsJson   String   @default("[]")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }

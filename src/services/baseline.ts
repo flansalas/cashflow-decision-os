@@ -10,6 +10,7 @@ export interface BankTxForBaseline {
 }
 
 import { normalizeDescription, categorize } from "./detectPatterns";
+import { computeACF, detectDominantCadence } from "./acf";
 
 export interface RecurringPatternForBaseline {
     merchantKey: string;
@@ -35,6 +36,9 @@ export interface BaselineResult {
     baselineConfidenceTier: BaselineConfidenceTier; // "high" 6+ wks | "med" 3-5 | "low" 1-2 | "none" 0
     computedFrom: "bank_tx" | "placeholder";
     note: string;
+    methodNote: string;
+    inflowCadence?: number;
+    outflowCadence?: number;
 }
 
 export interface BaselineAssumptions {
@@ -85,6 +89,8 @@ export function computeBaseline(
     // Compute week boundaries: last WEEKS_TO_ANALYZE complete weeks before asOfDate
     const weekBuckets: { inflow: number; outflow: number }[] = [];
     const weekStart0 = mondayBefore(asOfDate, WEEKS_TO_ANALYZE);
+    const dailyInflowSeries = new Array(WEEKS_TO_ANALYZE * 7).fill(0);
+    const dailyOutflowSeries = new Array(WEEKS_TO_ANALYZE * 7).fill(0);
 
     for (let i = 0; i < WEEKS_TO_ANALYZE; i++) {
         const wStart = addWeeks(weekStart0, i);
@@ -151,10 +157,13 @@ export function computeBaseline(
             );
             if (isExcluded) continue;
 
+            const dayIndex = daysBetween(weekStart0, tx.date);
             if (tx.amount > 0) {
                 inflowSum += tx.amount;
+                if (dayIndex >= 0 && dayIndex < dailyInflowSeries.length) dailyInflowSeries[dayIndex] += tx.amount;
             } else {
                 outflowSum += Math.abs(tx.amount);
+                if (dayIndex >= 0 && dayIndex < dailyOutflowSeries.length) dailyOutflowSeries[dayIndex] += Math.abs(tx.amount);
             }
         }
 
@@ -206,6 +215,7 @@ export function computeBaseline(
                 baselineConfidenceTier: tier,
                 computedFrom: "bank_tx",
                 note: `Span-based: ${Math.round(daySpan)}d window → $${Math.round(weeklyInflow).toLocaleString()}/wk inflow (${tier} confidence). Upload more history for higher accuracy.`,
+                methodNote: "Span-based average (insufficient weeks for CV-adaptive)",
             };
         }
 
@@ -237,31 +247,77 @@ export function computeBaseline(
         weights.push(weight);
     }
 
-    // Trim top/bottom 10% to remove spikes and dead weeks, then use median
-    const trimmedInflows = trimmedValues(inflowValues);
-    const trimmedOutflows = trimmedValues(outflowValues);
+    // Compute Weighted Mean and StdDev for CV
+    const inflowStats = computeWeightedMeanAndStdDev(inflowValues, weights);
+    const outflowStats = computeWeightedMeanAndStdDev(outflowValues, weights);
 
-    const variableInflowWeekly = median(trimmedInflows);
-    const variableOutflowWeekly = median(trimmedOutflows);
+    const inflowCV = inflowStats.mean > 0 ? inflowStats.stddev / inflowStats.mean : 0;
+    const outflowCV = outflowStats.mean > 0 ? outflowStats.stddev / outflowStats.mean : 0;
 
-    // Conservative = 25th percentile (anchor to honest, lower number for inflows)
-    const conservativeInflowWeekly = percentile(trimmedInflows, 25);
-    // For outflows, conservative = higher spend = 75th percentile
-    const conservativeOutflowWeekly = percentile(trimmedOutflows, 75);
+    let variableInflowWeekly = 0;
+    let variableOutflowWeekly = 0;
+    let conservativeInflowWeekly = 0;
+    let conservativeOutflowWeekly = 0;
+    let methodNoteStr = "";
 
-    // Keep stddev for band computation using the original weighted approach
-    const cappedInflows = clipOutliers(inflowValues);
-    const cappedOutflows = clipOutliers(outflowValues);
-    const inflowStdDev = computeWeightedMeanAndStdDev(cappedInflows, weights).stddev;
-    const outflowStdDev = computeWeightedMeanAndStdDev(cappedOutflows, weights).stddev;
+    // Inflows: Adaptive Baseline
+    if (inflowCV >= 0.8) {
+        // Lumpy/Project Business -> Use Recency-Weighted Mean
+        variableInflowWeekly = inflowStats.mean;
+        conservativeInflowWeekly = Math.max(0, inflowStats.mean - inflowStats.stddev * 0.5);
+        methodNoteStr += "Inflows: CV-Adaptive Weighted Mean (Lumpy). ";
+    } else {
+        // Smooth Business -> Use Recency-Weighted Median
+        // Compute unweighted median of trimmed values to avoid freak anomalies
+        const trimmedInflows = trimmedValues(inflowValues, 0.05); // 5% trim
+        variableInflowWeekly = median(trimmedInflows);
+        conservativeInflowWeekly = percentile(trimmedInflows, 25);
+        methodNoteStr += "Inflows: CV-Adaptive Weighted Median (Smooth). ";
+    }
+
+    // Outflows: Adaptive Baseline
+    if (outflowCV >= 0.8) {
+        // Lumpy
+        variableOutflowWeekly = outflowStats.mean;
+        conservativeOutflowWeekly = outflowStats.mean + outflowStats.stddev * 0.5;
+        methodNoteStr += "Outflows: CV-Adaptive Weighted Mean (Lumpy).";
+    } else {
+        // Smooth
+        const trimmedOutflows = trimmedValues(outflowValues, 0.05); // 5% trim
+        variableOutflowWeekly = median(trimmedOutflows);
+        conservativeOutflowWeekly = percentile(trimmedOutflows, 75);
+        methodNoteStr += "Outflows: CV-Adaptive Weighted Median (Smooth).";
+    }
 
     const variableInflowBand = variableInflowWeekly > 0
-        ? Math.min(0.6, inflowStdDev / variableInflowWeekly)
+        ? Math.min(0.6, inflowStats.stddev / variableInflowWeekly)
         : 0.3;
 
     const variableOutflowBand = variableOutflowWeekly > 0
-        ? Math.min(0.4, outflowStdDev / variableOutflowWeekly)
+        ? Math.min(0.4, outflowStats.stddev / variableOutflowWeekly)
         : 0.2;
+
+    // Detect Cadence for residual inflows (Fix 2)
+    let inflowCadence: number | undefined = undefined;
+    let outflowCadence: number | undefined = undefined;
+
+    if (activeWeeks.length >= 4) {
+        // max lag 40 days to catch monthly
+        const acfInflow = computeACF(dailyInflowSeries, 40);
+        // use lower threshold for residual noise
+        const dominantInflowLag = detectDominantCadence(acfInflow, 0.35);
+        if (dominantInflowLag && dominantInflowLag >= 7) {
+            inflowCadence = dominantInflowLag;
+            methodNoteStr += ` Detected ${inflowCadence}-day collection rhythm.`;
+        }
+
+        const acfOutflow = computeACF(dailyOutflowSeries, 40);
+        const dominantOutflowLag = detectDominantCadence(acfOutflow, 0.35);
+        if (dominantOutflowLag && dominantOutflowLag >= 7) {
+            outflowCadence = dominantOutflowLag;
+            methodNoteStr += ` Detected ${outflowCadence}-day outflow rhythm.`;
+        }
+    }
 
     return {
         variableOutflowWeekly: Math.round(variableOutflowWeekly * 100) / 100,
@@ -276,6 +332,9 @@ export function computeBaseline(
         baselineConfidenceTier: toBaselineTier(activeWeeks.length),
         computedFrom: "bank_tx",
         note: `Computed from ${activeWeeks.length} weeks of bank tx, excluding ${excludedPatterns.length} recurring patterns`,
+        methodNote: methodNoteStr.trim(),
+        inflowCadence,
+        outflowCadence,
     };
 }
 
@@ -295,6 +354,7 @@ function placeholderBaseline(reason: string): BaselineResult {
         baselineConfidenceTier: "none",
         computedFrom: "placeholder",
         note: `Baseline uses placeholder defaults — ${reason}`,
+        methodNote: "Placeholder",
     };
 }
 

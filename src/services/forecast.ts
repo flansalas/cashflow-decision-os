@@ -97,6 +97,8 @@ export interface ForecastInput {
     variableOutflowBand: number;       // +/- band (e.g., 0.2 = 20%)
     baselineInflowWeekly: number;      // avg inflow from baseline
     baselineInflowBand: number;        // +/- band
+    baselineInflowCadence?: number;    // ACF detected cadence in days for gap-filling
+    baselineOutflowCadence?: number;   // ACF detected cadence in days for gap-filling
     cashMarginRatio?: number;          // Historical cash margin ratio (e.g. 0.3 for 30%)
     cogsLagWeeks?: number;             // Delay in weeks between revenue and COGS
     isARHeavy?: boolean;               // If true, applies short-term baseline fade-in
@@ -320,7 +322,8 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         for (let w = 0; w < 13; w++) {
             const weekStart = addWeeks(currentMonday, w);
             const weekEnd = addDays(weekStart, 6);
-            if (isInWeek(new Date(entry.targetDate), weekStart, weekEnd)) {
+            const d = new Date(entry.targetDate);
+            if (isInWeek(d, weekStart, weekEnd) || (w === 0 && d < weekStart)) {
                 manualEntriesByWeek.get(w)!.push(entry);
                 break;
             }
@@ -339,11 +342,10 @@ export function computeForecast(input: ForecastInput): ForecastResult {
 
         const { date: expectedDate, confidence } = computeExpectedPaymentDate(inv, today, paymentCurve);
 
-        // Find which week this falls in
         for (let w = 0; w < 13; w++) {
             const weekStart = addWeeks(currentMonday, w);
             const weekEnd = addDays(weekStart, 6);
-            if (isInWeek(expectedDate, weekStart, weekEnd)) {
+            if (isInWeek(expectedDate, weekStart, weekEnd) || (w === 0 && expectedDate < weekStart)) {
                 invoicesByWeek.get(w)!.push({
                     invoice: inv,
                     amount,
@@ -379,7 +381,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         for (let w = 0; w < 13; w++) {
             const weekStart = addWeeks(currentMonday, w);
             const weekEnd = addDays(weekStart, 6);
-            if (isInWeek(billDueDate, weekStart, weekEnd)) {
+            if (isInWeek(billDueDate, weekStart, weekEnd) || (w === 0 && billDueDate < weekStart)) {
                 billsByWeek.get(w)!.push({ bill, amount });
                 break;
             }
@@ -408,7 +410,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             for (let w = 0; w < 13; w++) {
                 const weekStart = addWeeks(currentMonday, w);
                 const weekEnd = addDays(weekStart, 6);
-                if (isInWeek(d, weekStart, weekEnd)) {
+                if (isInWeek(d, weekStart, weekEnd) || (w === 0 && d < weekStart)) {
                     // Skip this occurrence if it has been rescheduled away
                     const weekStartISO = isNaN(weekStart.getTime()) ? "0000-00-00" : weekStart.toISOString().slice(0, 10);
                     if (!skipSet.has(weekStartISO)) {
@@ -434,7 +436,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         for (let w = 0; w < 13; w++) {
             const weekStart = addWeeks(currentMonday, w);
             const weekEnd = addDays(weekStart, 6);
-            if (isInWeek(oto.weekStart, weekStart, weekEnd)) {
+            if (isInWeek(oto.weekStart, weekStart, weekEnd) || (w === 0 && oto.weekStart < weekStart)) {
                 const originalPattern = input.recurring.find((r: ForecastRecurring) => r.id === oto.patternId);
                 const syntheticPattern: ForecastRecurring = {
                     ...originalPattern,
@@ -566,7 +568,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             for (let w = 0; w < 13; w++) {
                 const weekStart = addWeeks(currentMonday, w);
                 const weekEnd = addDays(weekStart, 6);
-                if (isInWeek(d, weekStart, weekEnd)) {
+                if (isInWeek(d, weekStart, weekEnd) || (w === 0 && d < weekStart)) {
                     recurringInflowsByWeek.get(w)!.push({ pattern: rec, amount: rec.typicalAmount });
                     break;
                 }
@@ -594,6 +596,8 @@ export function computeForecast(input: ForecastInput): ForecastResult {
     let worstRunOut: number | null = null;
 
     const pendingCogs: number[] = new Array(13).fill(0);
+    let cumulativeInflowDeficit = 0;
+    let cumulativeOutflowDeficit = 0;
 
     for (let w = 0; w < 13; w++) {
         const weekStart = addWeeks(currentMonday, w);
@@ -703,16 +707,32 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         const outflowMultiplier = spendFade * (2 - safetyMargin);
 
         // Baseline inflow bucket — "Gap-Filling" logic:
-        // Instead of showing bank history ONLY when there are zero AR invoices, we now show 
-        // the "Gap" between your scheduled inflows and your historical bank average. 
-        // This creates a smoother 13-week runway by assuming that if you have weak AR 
-        // scheduled for a future week, more is coming to meet your average.
-        // FIXED BUG: Do not include Recurring or Manual in this sum! Variable baseline is additive to one-off adjustments and recurring revenue.
+        // ACF Cadence Logic: We accumulate baseline expectations and only "fill the gap" 
+        // on weeks that align with the business's natural collection rhythm.
+        let cadenceWeeks = 1;
+        // Fallback to weekly if confidence is low
+        if (input.baselineConfidenceTier === "high" || input.baselineConfidenceTier === "med") {
+            const days = input.baselineInflowCadence || 7;
+            cadenceWeeks = Math.max(1, Math.round(days / 7));
+        }
+
+        const baselineInflowWeekly = (input.baselineInflowWeekly || 0) * inflowMultiplier;
+        cumulativeInflowDeficit += baselineInflowWeekly;
+
         const scheduledInflowSum = inflowBreakdown
             .filter(i => i.sourceType === "invoice")
             .reduce((s, i) => s + i.amount, 0);
-        const baselineInflowWeekly = (input.baselineInflowWeekly || 0) * inflowMultiplier;
-        const inflowGap = Math.max(0, baselineInflowWeekly - scheduledInflowSum);
+
+        cumulativeInflowDeficit -= scheduledInflowSum;
+        if (cumulativeInflowDeficit < 0) cumulativeInflowDeficit = 0;
+
+        let inflowGap = 0;
+        const isCadenceWeek = (w % cadenceWeeks === (cadenceWeeks - 1));
+
+        if (isCadenceWeek && cumulativeInflowDeficit > 0) {
+            inflowGap = cumulativeInflowDeficit;
+            cumulativeInflowDeficit = 0;
+        }
 
         if (input.hasBankBaseline && inflowGap > 0) {
             inflowExpected += inflowGap;
@@ -831,19 +851,35 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         }
 
         // Variable outflow bucket — smoothly travels with the revenue.
-        // We now fill the "Gap" between your real variable bills and the expected variable spend 
-        // that typically accompanies your historical inflow average.
+        // ACF Cadence Logic: accumulate variable spend baseline and only fill gap on rhythm
+        let outCadenceWeeks = 1;
+        if (input.baselineConfidenceTier === "high" || input.baselineConfidenceTier === "med") {
+            const outDays = input.baselineOutflowCadence || 7;
+            outCadenceWeeks = Math.max(1, Math.round(outDays / 7));
+        }
+
+        const baselineVarOutWeekly = (input.variableOutflowWeekly || 0) * outflowMultiplier;
+        cumulativeOutflowDeficit += baselineVarOutWeekly;
+
         // FIXED BUG: Do not include Payroll, Rent, Recurring, or Manual in this sum! 
         // Variable baseline is additive to fixed overhead and one-off manual adjustments.
         const scheduledVariableOutflowSum = outflowBreakdown
             .filter(i => !["payroll", "recurring", "assumption", "manual"].includes(i.sourceType))
             .reduce((s, i) => s + i.amount, 0);
 
-        const baselineVarOutWeekly = (input.variableOutflowWeekly || 0) * outflowMultiplier;
-        
-        // Use the higher of historical baseline or COGS projected for this week
-        const targetOutflow = Math.max(baselineVarOutWeekly, pendingCogs[w]);
-        const outflowGap = Math.max(0, targetOutflow - scheduledVariableOutflowSum);
+        cumulativeOutflowDeficit -= scheduledVariableOutflowSum;
+        if (cumulativeOutflowDeficit < 0) cumulativeOutflowDeficit = 0;
+
+        let outflowGap = 0;
+        const isOutCadenceWeek = (w % outCadenceWeeks === (outCadenceWeeks - 1));
+
+        if (isOutCadenceWeek && cumulativeOutflowDeficit > 0) {
+            outflowGap = cumulativeOutflowDeficit;
+            cumulativeOutflowDeficit = 0;
+        }
+
+        // Use the higher of historical baseline gap or COGS projected for this week
+        outflowGap = Math.max(outflowGap, pendingCogs[w]);
 
         if (input.hasBankBaseline && outflowGap > 0) {
             outflowExpected += outflowGap;

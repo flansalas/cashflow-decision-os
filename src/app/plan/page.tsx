@@ -139,6 +139,15 @@ interface DashboardData {
         lowestExpectedBalance: number;
         lowestWorstBalance: number;
     };
+    baseline?: {
+        computedFrom: string;
+        hasSufficientHistory: boolean;
+        weeksAnalyzed: number;
+        note: string;
+        variableOutflowWeekly: number;
+        variableInflowWeekly: number;
+        methodNote?: string;
+    };
     confidence: { score: number; label: string; reasons: string[] };
     anomalies: Array<{ id: string; type: string; severity: string; message: string }>;
     anomalyCount: number;
@@ -600,6 +609,7 @@ function PlanContent() {
                                 <div className="mt-2 border rounded-xl overflow-hidden" style={{ borderColor: 'var(--border-subtle)' }}>
                                     <ForecastSummaryGrid 
                                         forecast={data.forecast} 
+                                        baselineMethodNote={data.baseline?.methodNote}
                                         categories={data.cashFlowCategories || []} 
                                         onCellClick={(type, week, extraId) => {
                                             if (type === "ar") {

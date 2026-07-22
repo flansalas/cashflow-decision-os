@@ -6,7 +6,8 @@ import prisma from "@/db/prisma";
 import { computeForecast, type ForecastInput, type ForecastInvoice, type ForecastBill, type ForecastRecurring } from "@/services/forecast";
 import { detectAnomalies, computeConfidence, computeDataQualityGate, type QAInput } from "@/services/qa";
 import { generateActions } from "@/services/actions";
-import { computeBaseline, type BankTxForBaseline, type RecurringPatternForBaseline } from "@/services/baseline";
+import { computeBaseline, type BankTxForBaseline, type RecurringPatternForBaseline, type BaselineResult } from "@/services/baseline";
+import { computeVarianceMultipliers } from "@/services/variance";
 import { computeCOGSCorrelation } from "@/services/cogs-correlation";
 import { computeTypicalDelayWeeks } from "@/services/payment-memory";
 import { computeExpectedPaymentDate, parsePaymentCurve, getMonday, addDays } from "@/services/forecast";
@@ -183,31 +184,65 @@ export async function GET(req: NextRequest) {
             projectionSafetyMargin: 1.0,
         };
 
-        // ── Compute baseline from bank transactions ────────────────────
-        const bankTxsForBaseline: BankTxForBaseline[] = bankTxs.map(tx => ({
-            // amount: positive for inflows (credit), negative for outflows (debit)
-            // direction column is "inflow" | "outflow"; amount in DB is always positive
-            amount: tx.direction === "inflow" ? tx.amount : -tx.amount,
-            date: tx.txDate,
-            merchantKey: tx.description ?? "",
-        }));
-
-        const patternsForBaseline: RecurringPatternForBaseline[] = recurringPatternsRaw.map(rp => ({
-            merchantKey: rp.merchantKey ?? rp.displayName,
-            direction: rp.direction,
-            category: rp.category,
-            isIncluded: rp.isIncluded,
-            typicalAmount: rp.typicalAmount,
-            amountStdDev: rp.amountStdDev,
-        }));
-
-        const baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate, {
-            payrollAllInAmount: assumptions.payrollAllInAmount,
-            payrollNextDate: assumptions.payrollNextDate,
-            payrollCadence: assumptions.payrollCadence,
-            rentMonthlyAmount: assumptions.rentMonthlyAmount,
-            rentDayOfMonth: assumptions.rentDayOfMonth,
+        const cachedBaseline = await prisma.baselineSnapshot.findUnique({
+            where: { companyId: cid }
         });
+
+        const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+        const now = Date.now();
+        const isCacheValid = cachedBaseline && (now - cachedBaseline.updatedAt.getTime() < CACHE_TTL_MS);
+
+        let baseline: BaselineResult;
+
+        if (isCacheValid) {
+            baseline = {
+                variableInflowWeekly: cachedBaseline.variableInflowWeekly,
+                variableOutflowWeekly: cachedBaseline.variableOutflowWeekly,
+                variableInflowBand: cachedBaseline.variableInflowBand,
+                variableOutflowBand: cachedBaseline.variableOutflowBand,
+                conservativeInflowWeekly: cachedBaseline.conservativeInflowWeekly,
+                conservativeOutflowWeekly: cachedBaseline.conservativeOutflowWeekly,
+                weeklyBuckets: JSON.parse(cachedBaseline.weeklyBucketsJson),
+                hasSufficientHistory: cachedBaseline.hasSufficientHistory,
+                baselineConfidenceTier: cachedBaseline.baselineConfidenceTier as any,
+                inflowCadence: parseInt(cachedBaseline.inflowCadence || "1", 10),
+                outflowCadence: parseInt(cachedBaseline.outflowCadence || "1", 10),
+                weeksAnalyzed: 0,
+                computedFrom: "bank_tx",
+                note: "Loaded from cache",
+                methodNote: "Cached",
+            };
+        } else {
+            // Compute baseline from bank transactions
+            const bankTxsForBaseline: BankTxForBaseline[] = bankTxs.map(tx => ({
+                amount: tx.direction === "inflow" ? tx.amount : -tx.amount,
+                date: tx.txDate,
+                merchantKey: tx.description ?? "",
+            }));
+
+            const patternsForBaseline: RecurringPatternForBaseline[] = recurringPatternsRaw.map(rp => ({
+                merchantKey: rp.merchantKey ?? rp.displayName,
+                direction: rp.direction,
+                category: rp.category,
+                isIncluded: rp.isIncluded,
+                typicalAmount: rp.typicalAmount,
+                amountStdDev: rp.amountStdDev,
+            }));
+
+            baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate, {
+                payrollAllInAmount: assumptions.payrollAllInAmount,
+                payrollNextDate: assumptions.payrollNextDate,
+                payrollCadence: assumptions.payrollCadence,
+                rentMonthlyAmount: assumptions.rentMonthlyAmount,
+                rentDayOfMonth: assumptions.rentDayOfMonth,
+            });
+
+            // Fire-and-forget: update cache in background
+            import("@/services/baseline-snapshot").then(({ buildAndCacheBaseline }) => {
+                buildAndCacheBaseline(cid).catch(err => console.error("Async baseline cache failed:", err));
+            });
+        }
+
         const hasBankBaseline = baseline.hasSufficientHistory;
         const cogsCorrelation = computeCOGSCorrelation(baseline.weeklyBuckets);
         // DEBUG: log baseline stats so we can verify projection activation
@@ -242,46 +277,12 @@ export async function GET(req: NextRequest) {
         //
         //   The resulting multiplier is bounded to [0.5, 2.0] as a sanity rail.
 
-        let varianceMultiplier = 1.0;
-        let averageVariancePct = 0;
-        let varianceMultiplierIn = 1.0;
-        let averageVariancePctIn = 0;
+        const multipliers = computeVarianceMultipliers(varianceLedger);
+        let varianceMultiplier = multipliers.outflow;
+        let varianceMultiplierIn = multipliers.inflow;
 
-        if (varianceLedger.length > 0) {
-            const CLIP = 0.75; // ±75% clip before weighting
-
-            // varianceLedger is ordered desc (most recent first)
-            const n = varianceLedger.length;
-            // weights[0] = most recent (highest weight)
-            const weights = varianceLedger.map((_, i) => Math.pow(2, n - 1 - i));
-            const sumWeights = weights.reduce((a, b) => a + b, 0);
-
-            // Outflow variance
-            let weightedSumOut = 0;
-            for (let i = 0; i < n; i++) {
-                const clipped = Math.max(-CLIP, Math.min(CLIP, varianceLedger[i].variancePct));
-                weightedSumOut += clipped * weights[i];
-            }
-            averageVariancePct = weightedSumOut / sumWeights;
-            varianceMultiplier = Math.max(0.5, Math.min(2.0, 1 + averageVariancePct));
-            baseline.conservativeOutflowWeekly = baseline.conservativeOutflowWeekly * varianceMultiplier;
-
-            // Inflow variance (same weighting, only on rows that have inflow data)
-            const inflowRows = varianceLedger
-                .map((v, i) => ({ v, w: weights[i] }))
-                .filter(({ v }) => v.variancePctIn !== null);
-            if (inflowRows.length > 0) {
-                const sumWIn = inflowRows.reduce((a, { w }) => a + w, 0);
-                let weightedSumIn = 0;
-                for (const { v, w } of inflowRows) {
-                    const clipped = Math.max(-CLIP, Math.min(CLIP, v.variancePctIn!));
-                    weightedSumIn += clipped * w;
-                }
-                averageVariancePctIn = weightedSumIn / sumWIn;
-                varianceMultiplierIn = Math.max(0.5, Math.min(2.0, 1 + averageVariancePctIn));
-                baseline.conservativeInflowWeekly = baseline.conservativeInflowWeekly * varianceMultiplierIn;
-            }
-        }
+        baseline.conservativeOutflowWeekly = baseline.conservativeOutflowWeekly * varianceMultiplier;
+        baseline.conservativeInflowWeekly = baseline.conservativeInflowWeekly * varianceMultiplierIn;
 
         // ── Build customer/vendor lookup ────────────────────────────────
         const customerMap = new Map(customerProfiles.map(c => [c.customerName, c]));
@@ -472,6 +473,8 @@ export async function GET(req: NextRequest) {
             variableOutflowBand: baseline.variableOutflowBand,
             baselineInflowWeekly: baseline.conservativeInflowWeekly,
             baselineInflowBand: baseline.variableInflowBand,
+            baselineInflowCadence: baseline.inflowCadence,
+            baselineOutflowCadence: baseline.outflowCadence,
             cashMarginRatio: cogsCorrelation.cashMarginRatio,
             cogsLagWeeks: cogsCorrelation.cogsLagWeeks,
             isARHeavy,
@@ -831,9 +834,9 @@ export async function GET(req: NextRequest) {
             })),
             macroMemory: {
                 varianceMultiplier,
-                averageVariancePct,
+                averageVariancePct: (varianceMultiplier - 1) * 100,
                 varianceMultiplierIn,
-                averageVariancePctIn,
+                averageVariancePctIn: (varianceMultiplierIn - 1) * 100,
                 weeksTracked: varianceLedger.length,
             },
             zoneBoundary,

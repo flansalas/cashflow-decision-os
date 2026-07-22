@@ -9,6 +9,7 @@ import {
     type ForecastInvoice, type ForecastBill, type ForecastRecurring, type ForecastInput,
 } from "@/services/forecast";
 import { computeBaseline, type BankTxForBaseline, type RecurringPatternForBaseline } from "@/services/baseline";
+import { computeVarianceMultipliers } from "@/services/variance";
 import { computeCOGSCorrelation } from "@/services/cogs-correlation";
 import { computeTypicalDelayWeeks } from "@/services/payment-memory";
 import { resolveTenant } from "@/lib/tenant";
@@ -61,7 +62,7 @@ export async function GET(req: NextRequest) {
         prisma.baselineVarianceLedger.findMany({
             where: { companyId: cid },
             orderBy: { weekStart: "desc" },
-            take: 4,
+            take: 8,
         }),
         prisma.customerPaymentObservation.findMany({
             where: { companyId: cid },
@@ -413,6 +414,13 @@ export async function GET(req: NextRequest) {
         rentDayOfMonth: assumptions.rentDayOfMonth,
     });
 
+    const multipliers = computeVarianceMultipliers(varianceLedger);
+    const varianceMultiplier = multipliers.outflow;
+    const varianceMultiplierIn = multipliers.inflow;
+
+    baseline.conservativeOutflowWeekly = baseline.conservativeOutflowWeekly * varianceMultiplier;
+    baseline.conservativeInflowWeekly = baseline.conservativeInflowWeekly * varianceMultiplierIn;
+
     // Build recurring forecast input (with skip dates for rescheduled occurrences)
     const skipDatesByPattern = new Map<string, string[]>();
     for (const ov of overrides) {
@@ -538,6 +546,8 @@ export async function GET(req: NextRequest) {
         variableOutflowBand: baseline.variableOutflowBand,
         baselineInflowWeekly: baseline.conservativeInflowWeekly,
         baselineInflowBand: baseline.variableInflowBand,
+        baselineInflowCadence: baseline.inflowCadence,
+        baselineOutflowCadence: baseline.outflowCadence,
         cashMarginRatio: cogsCorrelation.cashMarginRatio,
         cogsLagWeeks: cogsCorrelation.cogsLagWeeks,
         isARHeavy,

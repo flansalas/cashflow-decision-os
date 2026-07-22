@@ -54,9 +54,19 @@ interface DashboardData {
     backlog: {
         overdueAP: Array<{ id: string; vendorName: string; billNo: string; amountOpen: number; dueDate: string | null; daysPastDue: number | null; kind: "ap" }>;
         overdueAR: Array<{ id: string; customerName: string; invoiceNo: string; amountOpen: number; dueDate: string | null; daysPastDue: number | null; kind: "ar" }>;
-        totalOverdueAP: number;
-        totalOverdueAR: number;
+        lowestExpectedBalance: number;
+        lowestWorstBalance: number;
     };
+    baseline?: {
+        computedFrom: string;
+        hasSufficientHistory: boolean;
+        weeksAnalyzed: number;
+        note: string;
+        variableOutflowWeekly: number;
+        variableInflowWeekly: number;
+        methodNote?: string;
+    };
+    confidence: { score: number; label: string; reasons: string[] };
     cash?: {
         adjustments?: Array<{
             id: string; type: string; amount: number; note: string; date: string; status?: string; origin?: string; description?: string | null;

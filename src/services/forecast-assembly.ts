@@ -3,6 +3,7 @@ import { computeForecast, type ForecastInput, type ForecastInvoice, type Forecas
 import { computeBaseline, type BankTxForBaseline, type RecurringPatternForBaseline } from "@/services/baseline";
 import { computeTypicalDelayWeeks } from "@/services/payment-memory";
 import { computeCOGSCorrelation } from "@/services/cogs-correlation";
+import { computeVarianceMultipliers } from "@/services/variance";
 
 export async function assembleForecastData(companyId: string) {
     const [
@@ -44,7 +45,7 @@ export async function assembleForecastData(companyId: string) {
         prisma.baselineVarianceLedger.findMany({
             where: { companyId },
             orderBy: { weekStart: "desc" },
-            take: 4,
+            take: 8,
         }),
         prisma.customerPaymentObservation.findMany({
             where: { companyId },
@@ -94,21 +95,12 @@ export async function assembleForecastData(companyId: string) {
 
     const cogsCorrelation = computeCOGSCorrelation(baseline.weeklyBuckets);
 
-    let varianceMultiplier = 1.0;
-    let varianceMultiplierIn = 1.0;
+    const multipliers = computeVarianceMultipliers(varianceLedger);
+    const varianceMultiplier = multipliers.outflow;
+    const varianceMultiplierIn = multipliers.inflow;
 
-    if (varianceLedger.length > 0) {
-        const averageVariancePct = varianceLedger.reduce((sum, v) => sum + v.variancePct, 0) / varianceLedger.length;
-        varianceMultiplier = 1 + averageVariancePct;
-        baseline.variableOutflowWeekly = baseline.variableOutflowWeekly * varianceMultiplier;
-
-        const inflowVariances = varianceLedger.filter(v => v.variancePctIn !== null);
-        if (inflowVariances.length > 0) {
-            const averageVariancePctIn = inflowVariances.reduce((sum, v) => sum + v.variancePctIn!, 0) / inflowVariances.length;
-            varianceMultiplierIn = 1 + averageVariancePctIn;
-            baseline.variableInflowWeekly = baseline.variableInflowWeekly * varianceMultiplierIn;
-        }
-    }
+    baseline.variableOutflowWeekly = baseline.variableOutflowWeekly * varianceMultiplier;
+    baseline.variableInflowWeekly = baseline.variableInflowWeekly * varianceMultiplierIn;
 
     const customerMap = new Map(customerProfiles.map(c => [c.customerName, c]));
     const vendorMap = new Map(vendorProfiles.map(v => [v.vendorName, v]));
@@ -253,6 +245,8 @@ export async function assembleForecastData(companyId: string) {
         variableOutflowBand: baseline.variableOutflowBand,
         baselineInflowWeekly: baseline.conservativeInflowWeekly,
         baselineInflowBand: baseline.variableInflowBand,
+        baselineInflowCadence: baseline.inflowCadence,
+        baselineOutflowCadence: baseline.outflowCadence,
         cashMarginRatio: cogsCorrelation.cashMarginRatio,
         cogsLagWeeks: cogsCorrelation.cogsLagWeeks,
         isARHeavy,

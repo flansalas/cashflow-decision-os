@@ -163,12 +163,10 @@ export async function POST(req: NextRequest) {
             return newBatch;
         });
 
-        // Trigger the ACF auto-detection asynchronously so we don't block the upload response
-        // Note: For a production scale we'd want this in a real queue (like Inngest, defer, etc)
-        // For now we just kick off the promise and don't await it.
-        import("@/services/acf-worker").then(({ runACFWorker }) => {
-            runACFWorker(companyId).catch(err => {
-                console.error("Background ACF Worker failed:", err);
+        // Compute and cache the baseline asynchronously
+        import("@/services/baseline-snapshot").then(({ buildAndCacheBaseline }) => {
+            buildAndCacheBaseline(companyId).catch(err => {
+                console.error("Background Baseline Snapshot Worker failed:", err);
             });
         });
 

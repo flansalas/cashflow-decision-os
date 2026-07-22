@@ -29,6 +29,7 @@ export interface CustomerPaymentStats {
     onTimePct: number;         // % of payments on or before due date
     recentTrend: "improving" | "worsening" | "stable" | "insufficient_data";
     confidence: "high" | "medium" | "low" | "none";
+    behaviorCluster?: "fast" | "standard" | "slow";
     lastObservedAt: Date | null;
 }
 
@@ -120,6 +121,10 @@ export async function getCustomerPaymentStats(
     const confidence = deriveConfidence(observations.length);
     const recentTrend = deriveCustomerTrend(days);
     const lastObservedAt = observations[observations.length - 1]?.observedAt ?? null;
+    
+    let behaviorCluster: "fast" | "standard" | "slow" = "standard";
+    if (medianDaysLate <= 0) behaviorCluster = "fast";
+    else if (medianDaysLate > 14) behaviorCluster = "slow";
 
     return {
         customerName,
@@ -130,6 +135,7 @@ export async function getCustomerPaymentStats(
         recentTrend,
         confidence,
         lastObservedAt,
+        behaviorCluster,
     };
 }
 
@@ -144,8 +150,9 @@ export function computeTypicalDelayWeeks(
     if (observations.length < 2) return null;
     const days = observations.map(o => o.daysEarlyOrLate);
     const med = median(days);
-    // Floor at 0: if they pay early on average, don't shift the date backward
-    return Math.max(0, Math.round(med / 7));
+    // Cap negative delay at -14 days
+    const boundedDays = Math.max(-14, med);
+    return Math.round(boundedDays / 7);
 }
 
 // ────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import { BarChart2, CornerDownRight, ChevronDown, ChevronRight } from "lucide-re
 interface ForecastSummaryGridProps {
     forecast: any;
     categories: any[];
+    baselineMethodNote?: string;
     onCellClick?: (type: string, week: number, extraId?: string) => void;
 }
 
@@ -30,6 +31,7 @@ interface HoveredInfo {
     weekLabel: string;
     x: number;
     y: number;
+    baselineMethodNote?: string;
 }
 
 // ── Floating Provenance Card ──────────────────────────────────────────────────
@@ -62,9 +64,9 @@ function ProvenanceCard({ info }: { info: HoveredInfo }) {
         : info.x + OFFSET_X;
     const top = info.y + OFFSET_Y;
 
-    const methodNote = isIn
+    const methodNote = info.baselineMethodNote || (isIn
         ? "Gap between the 52-week recency-weighted avg. collection and the invoices + recurring items already logged for this week. Recent weeks count more than older ones. If known items cover the avg, this is $0."
-        : "Gap between the 52-week recency-weighted avg. outflow and the AP bills + recurring commitments already logged for this week. Recent weeks count more than older ones. If known items cover the avg, this is $0.";
+        : "Gap between the 52-week recency-weighted avg. outflow and the AP bills + recurring commitments already logged for this week. Recent weeks count more than older ones. If known items cover the avg, this is $0.");
 
     return (
         <div
@@ -105,7 +107,7 @@ function ProvenanceCard({ info }: { info: HoveredInfo }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function ForecastSummaryGrid({ forecast, categories, onCellClick }: ForecastSummaryGridProps) {
+export function ForecastSummaryGrid({ forecast, categories, onCellClick, baselineMethodNote }: ForecastSummaryGridProps) {
     const weeks = useMemo(() => forecast?.weeks || [], [forecast]);
     const [inflowsExpanded, setInflowsExpanded] = useState(false);
     const [outflowsExpanded, setOutflowsExpanded] = useState(false);
@@ -247,6 +249,7 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                                 total: w.inflowsExpected,
                                                 weekLabel: `W${w.weekNumber} · ${formatDateRange(w.weekStart, w.weekEnd)}`,
                                                 x: e.clientX, y: e.clientY,
+                                                baselineMethodNote
                                             })}
                                             onMouseMove={(e) => setHoveredInfo(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
                                             onMouseLeave={() => setHoveredInfo(null)}
@@ -382,6 +385,7 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick }: Forec
                                                 total: w.outflowsExpected,
                                                 weekLabel: `W${w.weekNumber} · ${formatDateRange(w.weekStart, w.weekEnd)}`,
                                                 x: e.clientX, y: e.clientY,
+                                                baselineMethodNote
                                             })}
                                             onMouseMove={(e) => setHoveredInfo(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
                                             onMouseLeave={() => setHoveredInfo(null)}
