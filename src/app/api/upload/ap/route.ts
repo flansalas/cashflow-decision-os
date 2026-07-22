@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // POST /api/upload/ap
 // Upserts PayableBill rows, saves MappingProfile, records ap_refresh_at timestamp.
 

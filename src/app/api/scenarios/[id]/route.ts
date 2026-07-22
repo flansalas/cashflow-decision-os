@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/scenarios/[id]/route.ts – PATCH (edit) and DELETE a scenario item
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";

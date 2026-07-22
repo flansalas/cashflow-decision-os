@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // API: PATCH /api/commitments/[id]
 // Toggle isIncluded, isCritical, or edit typicalAmount + nextExpectedDate
 // Changes persist to RecurringPattern table.

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // POST /api/onboarding/payroll
 // Step 2: Save payroll fields to Assumption row, advance onboardingStep to 2.
 

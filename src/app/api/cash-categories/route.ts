@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // API: GET /api/cash-categories  — List all categories for the active tenant
 // API: POST /api/cash-categories  — Create a new category
 

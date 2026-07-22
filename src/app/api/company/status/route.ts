@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // GET /api/company/status?companyId=xxx
 // Returns onboarding status for the given company (or the most recent non-demo company).
 

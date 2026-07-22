@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // API: GET /api/cash-entries?companyId=xxx   — List all entries with category info
 // API: POST /api/cash-entries                — Create a new entry
 

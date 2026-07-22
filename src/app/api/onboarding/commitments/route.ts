@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // POST /api/onboarding/commitments
 // Step 4: Save 0-5 recurring outflow commitments, advance onboardingStep to 4.
 

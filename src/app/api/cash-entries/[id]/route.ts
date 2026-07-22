@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // API: PATCH /api/cash-entries/[id]  — Update an entry
 // API: DELETE /api/cash-entries/[id] — Delete an entry
 

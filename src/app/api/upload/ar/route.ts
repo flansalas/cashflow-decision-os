@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // POST /api/upload/ar
 // Upserts ReceivableInvoice rows, saves MappingProfile, records ar_refresh_at timestamp.
 

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // POST /api/cash-checkin
 // Weekly roll ritual: saves a new CashSnapshot with today's balance.
 // Does NOT delete old snapshots — history is preserved.

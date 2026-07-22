@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // GET /api/triage?companyId=xxx
 // Returns open AR invoices and AP bills whose expected/due date is before today.
 // These are "slipped" items — they were forecast to pay/receive last week but didn't.

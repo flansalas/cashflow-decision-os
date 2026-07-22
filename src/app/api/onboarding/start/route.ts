@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // POST /api/onboarding/start
 // Create (or find existing incomplete) non-demo Company. Returns companyId.
 

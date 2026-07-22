@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // api/cashflow-grid/route.ts — returns invoices, bills, recurring, and week metadata for the grid
 // NOTE: Now also runs computeForecast (the canonical engine) so the Ledger balance row
 // matches the Dashboard chart/table exactly — one pipeline, one story.

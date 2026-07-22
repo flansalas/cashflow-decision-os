@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // POST /api/recurring-reschedule
 // Atomically reschedules one occurrence of a recurring commitment:
 //   1. Creates a skip_recurring_occurrence override for the source week

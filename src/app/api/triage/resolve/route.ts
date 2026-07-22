@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // POST /api/triage/resolve
 // Bulk-resolves slipped items from the Week Roll triage drawer.
 // Each action can be:

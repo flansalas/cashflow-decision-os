@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // GET /api/ingest/mapping?companyId=xxx&type=AR|AP
 // Returns saved MappingProfile for a company + file type, or {} if not found.
 

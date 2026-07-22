@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // API: PATCH /api/cash-categories/[id]  — Update a category
 // API: DELETE /api/cash-categories/[id] — Delete a category (cascade entries)
 

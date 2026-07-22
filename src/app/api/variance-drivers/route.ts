@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/variance-drivers/route.ts
 // GET /api/variance-drivers?checkpointId=<uuid>
 // GET /api/variance-drivers?latest=true

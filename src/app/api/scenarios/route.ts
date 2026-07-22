@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/scenarios/route.ts – GET (list) and POST (create) scenario items
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";

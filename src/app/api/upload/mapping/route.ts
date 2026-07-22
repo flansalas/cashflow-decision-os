@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // GET /api/upload/mapping?companyId=xxx&kind=ar|ap
 // Returns saved MappingProfile.mappingJson or {} if not found.
 

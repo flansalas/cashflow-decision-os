@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // POST /api/onboarding/cash-adjustment
 // Appends a single CashAdjustment without wiping existing ones.
 // Used by the Reality Check step to add a correction without duplicating Step 1 adjustments.

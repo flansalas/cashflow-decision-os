@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // POST /api/onboarding/buffer
 // Step 3: Save bufferMin to Assumption row, advance onboardingStep to 3.
 

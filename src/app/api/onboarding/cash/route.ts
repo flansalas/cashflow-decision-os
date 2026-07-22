@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // POST /api/onboarding/cash
 // Step 1: Save CashSnapshot + CashAdjustments, advance onboardingStep to 1.
 

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // API: POST /api/commitments
 // Creates a new RecurringPattern (outflow commitment) from the dashboard.
 

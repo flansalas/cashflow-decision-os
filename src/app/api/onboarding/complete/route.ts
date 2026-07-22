@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // POST /api/onboarding/complete
 // Step 5: Mark onboarding complete. If mismatchUnreconciled, store CompanyNote for confidence penalty.
 
