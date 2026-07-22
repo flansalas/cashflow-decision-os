@@ -100,6 +100,8 @@ export function computeBaseline(
         let outflowSum = 0;
 
         for (const tx of txs) {
+            // Skip invalid dates to prevent them from matching all buckets
+            if (!tx.date || isNaN(tx.date.getTime())) continue;
             if (tx.date < wStart || tx.date > wEnd) continue;
             // Exclude known recurring patterns
             const normalizedTxKey = normalizeDescription(tx.merchantKey || "");

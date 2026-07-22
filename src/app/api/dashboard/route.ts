@@ -213,7 +213,7 @@ export async function GET(req: NextRequest) {
         } else {
             // Compute baseline from bank transactions
             const bankTxsForBaseline: BankTxForBaseline[] = bankTxs.map(tx => ({
-                amount: tx.direction === "inflow" ? tx.amount : -tx.amount,
+                amount: tx.amount,
                 date: tx.txDate,
                 merchantKey: tx.description ?? "",
             }));

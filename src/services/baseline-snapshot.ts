@@ -30,7 +30,7 @@ export async function buildAndCacheBaseline(companyId: string) {
     };
 
     const bankTxsForBaseline: BankTxForBaseline[] = bankTxs.map(tx => ({
-        amount: tx.direction === "inflow" ? tx.amount : -tx.amount,
+        amount: tx.amount,
         date: tx.txDate,
         merchantKey: tx.description ?? "",
     }));
