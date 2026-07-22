@@ -4,6 +4,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
+
+export const maxDuration = 300; // Allow 5 minutes for pattern detection on 1,600+ rows
 import { detectPatterns, type BankTxForDetection } from "@/services/detectPatterns";
 import { auth } from "@clerk/nextjs/server";
 import { resolveTenant } from "@/lib/tenant";
