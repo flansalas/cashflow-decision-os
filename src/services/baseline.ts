@@ -174,7 +174,7 @@ export function computeBaseline(
                 
                 if (p.lastMatchedDate) {
                     const daysSince = Math.abs(daysBetween(p.lastMatchedDate, tx.date));
-                    const cooldown = p.cadence === "weekly" ? 5 : p.cadence === "biweekly" ? 10 : 20;
+                    const cooldown = p.cadence === "weekly" ? 5 : p.cadence === "biweekly" ? 12 : 26;
                     if (daysSince < cooldown) return false;
                 }
                 
