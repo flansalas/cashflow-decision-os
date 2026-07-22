@@ -9,16 +9,18 @@ import { auth } from "@clerk/nextjs/server";
 import { resolveTenant } from "@/lib/tenant";
 
 export async function POST(req: NextRequest) {
-    const authResult = await auth();
-    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const tenantId = await resolveTenant(req);
-    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    let bodyCompanyId: string | undefined;
+    try {
+        const body = await req.json() as { companyId?: string };
+        bodyCompanyId = body.companyId;
+    } catch {}
 
-    const { companyId: bodyCompanyId } = await req.json() as { companyId?: string };
-
-    if (bodyCompanyId && bodyCompanyId !== tenantId) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    let tenantId = await resolveTenant(req);
+    if (!tenantId && bodyCompanyId) {
+        const comp = await prisma.company.findUnique({ where: { id: bodyCompanyId }, select: { id: true } });
+        if (comp) tenantId = comp.id;
     }
+    if (!tenantId) return NextResponse.json({ error: "Missing or invalid company" }, { status: 401 });
 
     const companyId = tenantId;
 

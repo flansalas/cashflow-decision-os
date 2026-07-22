@@ -494,7 +494,7 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
     async function runDetection() {
         setPhase("detecting");
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20_000); // 20s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 6_000); // 6s quick timeout
         try {
             const r = await fetch("/api/upload/bank/detect", {
                 method: "POST",
@@ -530,7 +530,6 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
             setPhase("review");
         } catch (err: unknown) {
             clearTimeout(timeoutId);
-            // Show detect-error phase rather than spinning forever
             const isTimeout = err instanceof Error && (err.name === "AbortError" || err.message?.includes("abort"));
             console.warn("Pattern detection failed:", isTimeout ? "timeout" : err);
             setPhase("detect-error");
@@ -751,6 +750,15 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
                     <div>
                         <p className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Scanning transactions…</p>
                         <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Looking for recurring merchants and payment patterns</p>
+                    </div>
+                    <div className="pt-2">
+                        <button
+                            onClick={() => onDone()}
+                            className="px-4 py-2 rounded-xl text-xs font-semibold transition-colors border shadow-sm"
+                            style={{ background: "var(--bg-surface)", color: "var(--text-secondary)", borderColor: "var(--border-default)" }}
+                        >
+                            Skip & Go to Dashboard →
+                        </button>
                     </div>
                 </div>
             )}
