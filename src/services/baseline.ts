@@ -82,9 +82,13 @@ export function computeBaseline(
                 key: normalizeDescription(p.merchantKey || ""),
                 direction: p.direction,
                 minAmount: p.typicalAmount - Math.max(p.typicalAmount * tolerance, p.amountStdDev * 2),
-                maxAmount: p.typicalAmount + Math.max(p.typicalAmount * tolerance, p.amountStdDev * 2)
+                maxAmount: p.typicalAmount + Math.max(p.typicalAmount * tolerance, p.amountStdDev * 2),
+                cadence: p.cadence,
+                lastMatchedDate: null as Date | null
             };
         });
+
+    let lastPayrollMatchedDate: Date | null = null;
 
     // Compute week boundaries: last WEEKS_TO_ANALYZE complete weeks before asOfDate
     const weekBuckets: { inflow: number; outflow: number }[] = [];
@@ -118,12 +122,22 @@ export function computeBaseline(
                     absAmount >= assumptions.payrollAllInAmount * 0.5 &&
                     absAmount <= assumptions.payrollAllInAmount * 1.5
                 ) {
-                    const daysDiff = Math.abs(daysBetween(tx.date, assumptions.payrollNextDate));
-                    const cadenceDays = assumptions.payrollCadence === "weekly" ? 7 : assumptions.payrollCadence === "biweekly" ? 14 : 30;
-                    const remainder = daysDiff % cadenceDays;
-                    const toleranceDays = cadenceDays === 7 ? 1 : 3;
-                    if (remainder <= toleranceDays || remainder >= cadenceDays - toleranceDays) {
-                        matchesAssumption = true;
+                    let canMatch = true;
+                    if (lastPayrollMatchedDate) {
+                        const daysSince = Math.abs(daysBetween(lastPayrollMatchedDate, tx.date));
+                        const cooldown = assumptions.payrollCadence === "weekly" ? 5 : assumptions.payrollCadence === "biweekly" ? 10 : 20;
+                        if (daysSince < cooldown) canMatch = false;
+                    }
+                    
+                    if (canMatch) {
+                        const daysDiff = Math.abs(daysBetween(tx.date, assumptions.payrollNextDate));
+                        const cadenceDays = assumptions.payrollCadence === "weekly" ? 7 : assumptions.payrollCadence === "biweekly" ? 14 : 30;
+                        const remainder = daysDiff % cadenceDays;
+                        const toleranceDays = cadenceDays === 7 ? 1 : 3;
+                        if (remainder <= toleranceDays || remainder >= cadenceDays - toleranceDays) {
+                            matchesAssumption = true;
+                            lastPayrollMatchedDate = tx.date;
+                        }
                     }
                 }
 
@@ -151,13 +165,25 @@ export function computeBaseline(
 
             // Relaxed matching: manual recurring patterns won't match scrubbed bank 
             // descriptions (e.g. "PREAUTHORIZED ACH DEBIT"), so we exclude purely by 
-            // amount and direction to prevent double-counting massive recurring bills.
-            const isExcluded = excludedPatterns.some(p => 
-                p.direction === txDirection &&
-                absAmount >= p.minAmount && 
-                absAmount <= p.maxAmount
-            );
-            if (isExcluded) continue;
+            // amount and direction. We use a cadence cooldown to prevent over-excluding 
+            // multiple transactions within the same cycle.
+            const matchedPattern = excludedPatterns.find(p => {
+                if (p.direction !== txDirection) return false;
+                if (absAmount < p.minAmount || absAmount > p.maxAmount) return false;
+                
+                if (p.lastMatchedDate) {
+                    const daysSince = Math.abs(daysBetween(p.lastMatchedDate, tx.date));
+                    const cooldown = p.cadence === "weekly" ? 5 : p.cadence === "biweekly" ? 10 : 20;
+                    if (daysSince < cooldown) return false;
+                }
+                
+                return true;
+            });
+
+            if (matchedPattern) {
+                matchedPattern.lastMatchedDate = tx.date;
+                continue;
+            }
 
             const dayIndex = daysBetween(weekStart0, tx.date);
             if (tx.amount > 0) {
