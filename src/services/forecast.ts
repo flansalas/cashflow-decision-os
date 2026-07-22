@@ -587,18 +587,14 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 nextD.setMonth(nextD.getMonth() + 1);
             } else break;
 
-            if (nextD <= addDays(currentMonday, 6)) {
-                d = nextD;
-            } else {
-                break;
-            }
+            d = nextD;
         }
 
         while (d <= endDate) {
             for (let w = 0; w < 13; w++) {
                 const weekStart = addWeeks(currentMonday, w);
                 const weekEnd = addDays(weekStart, 6);
-                if (isInWeek(d, weekStart, weekEnd) || (w === 0 && d < weekStart)) {
+                if (isInWeek(d, weekStart, weekEnd)) {
                     recurringInflowsByWeek.get(w)!.push({ pattern: rec, amount: rec.typicalAmount });
                     break;
                 }
@@ -732,15 +728,6 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         const outflowMultiplier = spendFade * (2 - safetyMargin);
 
         // Baseline inflow bucket — "Gap-Filling" logic:
-        // ACF Cadence Logic: We accumulate baseline expectations and only "fill the gap" 
-        // on weeks that align with the business's natural collection rhythm.
-        let cadenceWeeks = 1;
-        // Fallback to weekly if confidence is low
-        if (input.baselineConfidenceTier === "high" || input.baselineConfidenceTier === "med") {
-            const days = input.baselineInflowCadence || 7;
-            cadenceWeeks = Math.max(1, Math.round(days / 7));
-        }
-
         const baselineInflowWeekly = (input.baselineInflowWeekly || 0) * inflowMultiplier;
         cumulativeInflowDeficit += baselineInflowWeekly;
 
@@ -752,9 +739,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         if (cumulativeInflowDeficit < 0) cumulativeInflowDeficit = 0;
 
         let inflowGap = 0;
-        const isCadenceWeek = (w % cadenceWeeks === (cadenceWeeks - 1));
-
-        if (isCadenceWeek && cumulativeInflowDeficit > 0) {
+        if (cumulativeInflowDeficit > 0) {
             inflowGap = cumulativeInflowDeficit;
             cumulativeInflowDeficit = 0;
         }
@@ -876,13 +861,6 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         }
 
         // Variable outflow bucket — smoothly travels with the revenue.
-        // ACF Cadence Logic: accumulate variable spend baseline and only fill gap on rhythm
-        let outCadenceWeeks = 1;
-        if (input.baselineConfidenceTier === "high" || input.baselineConfidenceTier === "med") {
-            const outDays = input.baselineOutflowCadence || 7;
-            outCadenceWeeks = Math.max(1, Math.round(outDays / 7));
-        }
-
         const baselineVarOutWeekly = (input.variableOutflowWeekly || 0) * outflowMultiplier;
         cumulativeOutflowDeficit += baselineVarOutWeekly;
 
@@ -896,9 +874,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         if (cumulativeOutflowDeficit < 0) cumulativeOutflowDeficit = 0;
 
         let outflowGap = 0;
-        const isOutCadenceWeek = (w % outCadenceWeeks === (outCadenceWeeks - 1));
-
-        if (isOutCadenceWeek && cumulativeOutflowDeficit > 0) {
+        if (cumulativeOutflowDeficit > 0) {
             outflowGap = cumulativeOutflowDeficit;
             cumulativeOutflowDeficit = 0;
         }

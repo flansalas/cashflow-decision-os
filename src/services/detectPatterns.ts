@@ -33,7 +33,7 @@ export function normalizeDescription(raw: string): string {
     s = s.replace(/\s+\d{4,}\s*$/, "");
 
     // Remove common bank prefixes
-    s = s.replace(/^(POS |ACH |CHECK |DEBIT |WIRE |XFER |EFT |CCD |CHECKCARD |DDA |WEB )/i, "");
+    s = s.replace(/^(POS |ACH |CHECK |DEBIT |WIRE |XFER |EFT |CCD |CHECKCARD |DDA |WEB )+/i, "");
 
     // Remove common suffixes like state abbreviations " FL", " TX", " CA"
     s = s.replace(/\s+[A-Z]{2}\s*$/, "");

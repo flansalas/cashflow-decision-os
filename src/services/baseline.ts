@@ -115,9 +115,7 @@ export function computeBaseline(
                     assumptions.payrollAllInAmount &&
                     assumptions.payrollNextDate &&
                     txCategory === "payroll" &&
-                    txDirection === "outflow" &&
-                    absAmount >= assumptions.payrollAllInAmount * 0.8 &&
-                    absAmount <= assumptions.payrollAllInAmount * 1.2
+                    txDirection === "outflow"
                 ) {
                     const daysDiff = Math.abs(daysBetween(tx.date, assumptions.payrollNextDate));
                     const cadenceDays = assumptions.payrollCadence === "weekly" ? 7 : assumptions.payrollCadence === "biweekly" ? 14 : 30;
@@ -133,9 +131,7 @@ export function computeBaseline(
                     assumptions.rentMonthlyAmount &&
                     assumptions.rentDayOfMonth &&
                     txCategory === "rent" &&
-                    txDirection === "outflow" &&
-                    absAmount >= assumptions.rentMonthlyAmount * 0.8 &&
-                    absAmount <= assumptions.rentMonthlyAmount * 1.2
+                    txDirection === "outflow"
                 ) {
                     const txDay = tx.date.getDate();
                     const rentDay = assumptions.rentDayOfMonth;
