@@ -13,13 +13,18 @@ interface NormalizedBankRow {
 }
 
 export async function POST(req: NextRequest) {
-    const { rows, mappingJson, filename } = await req.json() as {
+    const { rows, mappingJson, filename, companyId: bodyCompanyId } = await req.json() as {
         rows: NormalizedBankRow[];
         mappingJson: Record<string, string>;
         filename?: string;
+        companyId?: string;
     };
 
-    const tenantId = await resolveTenant(req);
+    let tenantId = await resolveTenant(req);
+    if (!tenantId && bodyCompanyId) {
+        const comp = await prisma.company.findUnique({ where: { id: bodyCompanyId }, select: { id: true } });
+        if (comp) tenantId = comp.id;
+    }
     if (!tenantId) return NextResponse.json({ error: "Missing or invalid company" }, { status: 401 });
     const companyId = tenantId;
 
@@ -145,12 +150,14 @@ export async function POST(req: NextRequest) {
                 .map((row, index) => ({ row, staged: stagedRowsData[index] }))
                 .filter(item => item.staged.proposedAction === "insert")
                 .map(item => {
+                    const parsedD = item.row.date ? new Date(item.row.date) : new Date();
+                    const txDate = isNaN(parsedD.getTime()) ? new Date() : parsedD;
                     return {
                         companyId,
-                        txDate: new Date(item.row.date!),
-                        description: item.row.description,
-                        amount: item.row.amount,
-                        direction: item.row.amount >= 0 ? "inflow" : "outflow",
+                        txDate,
+                        description: item.row.description || "Bank Transaction",
+                        amount: item.row.amount || 0,
+                        direction: (item.row.amount || 0) >= 0 ? "inflow" : "outflow",
                     };
                 });
 
@@ -199,6 +206,6 @@ export async function POST(req: NextRequest) {
             console.warn("Failed batch creation failed:", batchErr);
         }
 
-        return NextResponse.json({ error: "Import failed" }, { status: 500 });
+        return NextResponse.json({ error: (err as Error).message ?? "Import failed" }, { status: 500 });
     }
 }
