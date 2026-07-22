@@ -50,7 +50,12 @@ export async function POST(req: NextRequest) {
             if (date) {
                 const dObj = new Date(date);
                 if (!isNaN(dObj.getTime())) {
-                    dStr = dObj.toISOString().slice(0, 10);
+                    try {
+                        const yr = dObj.getFullYear();
+                        if (yr >= 1900 && yr <= 2100) {
+                            dStr = dObj.toISOString().slice(0, 10);
+                        }
+                    } catch { /* safe fallback */ }
                 }
             }
             const cleanDesc = (desc || "").toLowerCase().replace(/\s+/g, "");
