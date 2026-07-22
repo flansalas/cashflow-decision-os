@@ -406,6 +406,23 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         const windowStart = new Date(currentMonday);
 
 
+        // Advance past-due occurrences to current window to prevent historical stacking in W0
+        while (d < currentMonday) {
+            let nextD: Date;
+            if (rec.cadence === "weekly") nextD = addDays(d, 7);
+            else if (rec.cadence === "biweekly") nextD = addDays(d, 14);
+            else if (rec.cadence === "monthly") {
+                nextD = new Date(d);
+                nextD.setMonth(nextD.getMonth() + 1);
+            } else break;
+
+            if (nextD <= addDays(currentMonday, 6)) {
+                d = nextD;
+            } else {
+                break;
+            }
+        }
+
         while (d <= endDate) {
             for (let w = 0; w < 13; w++) {
                 const weekStart = addWeeks(currentMonday, w);
@@ -563,6 +580,23 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         const endDate = addWeeks(currentMonday, 13);
         const windowStart = new Date(currentMonday);
 
+
+        // Advance past-due occurrences to current window to prevent historical stacking in W0
+        while (d < currentMonday) {
+            let nextD: Date;
+            if (rec.cadence === "weekly") nextD = addDays(d, 7);
+            else if (rec.cadence === "biweekly") nextD = addDays(d, 14);
+            else if (rec.cadence === "monthly") {
+                nextD = new Date(d);
+                nextD.setMonth(nextD.getMonth() + 1);
+            } else break;
+
+            if (nextD <= addDays(currentMonday, 6)) {
+                d = nextD;
+            } else {
+                break;
+            }
+        }
 
         while (d <= endDate) {
             for (let w = 0; w < 13; w++) {
