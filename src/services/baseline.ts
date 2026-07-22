@@ -114,8 +114,9 @@ export function computeBaseline(
                 if (
                     assumptions.payrollAllInAmount &&
                     assumptions.payrollNextDate &&
-                    txCategory === "payroll" &&
-                    txDirection === "outflow"
+                    txDirection === "outflow" &&
+                    absAmount >= assumptions.payrollAllInAmount * 0.5 &&
+                    absAmount <= assumptions.payrollAllInAmount * 1.5
                 ) {
                     const daysDiff = Math.abs(daysBetween(tx.date, assumptions.payrollNextDate));
                     const cadenceDays = assumptions.payrollCadence === "weekly" ? 7 : assumptions.payrollCadence === "biweekly" ? 14 : 30;
@@ -148,8 +149,10 @@ export function computeBaseline(
 
             if (matchesAssumption) continue;
 
+            // Relaxed matching: manual recurring patterns won't match scrubbed bank 
+            // descriptions (e.g. "PREAUTHORIZED ACH DEBIT"), so we exclude purely by 
+            // amount and direction to prevent double-counting massive recurring bills.
             const isExcluded = excludedPatterns.some(p => 
-                p.key === normalizedTxKey &&
                 p.direction === txDirection &&
                 absAmount >= p.minAmount && 
                 absAmount <= p.maxAmount
