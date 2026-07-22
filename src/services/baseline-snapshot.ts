@@ -42,6 +42,7 @@ export async function buildAndCacheBaseline(companyId: string) {
         isIncluded: rp.isIncluded,
         typicalAmount: rp.typicalAmount,
         amountStdDev: rp.amountStdDev,
+        cadence: rp.cadence as any,
     }));
 
     const asOfDate = cashSnapshot?.asOfDate ?? new Date();

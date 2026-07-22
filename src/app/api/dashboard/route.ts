@@ -225,7 +225,8 @@ export async function GET(req: NextRequest) {
                 isIncluded: rp.isIncluded,
                 typicalAmount: rp.typicalAmount,
                 amountStdDev: rp.amountStdDev,
-            }));
+        cadence: rp.cadence as any,
+    }));
 
             baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate, {
                 payrollAllInAmount: assumptions.payrollAllInAmount,

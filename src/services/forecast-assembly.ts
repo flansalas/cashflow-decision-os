@@ -83,6 +83,7 @@ export async function assembleForecastData(companyId: string) {
         isIncluded: rp.isIncluded,
         typicalAmount: rp.typicalAmount,
         amountStdDev: rp.amountStdDev,
+        cadence: rp.cadence as any,
     }));
 
     const baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate, {

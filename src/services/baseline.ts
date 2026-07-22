@@ -19,6 +19,7 @@ export interface RecurringPatternForBaseline {
     isIncluded: boolean;
     typicalAmount: number;
     amountStdDev: number;
+    cadence?: string;
 }
 
 export type BaselineConfidenceTier = "high" | "med" | "low" | "none";
