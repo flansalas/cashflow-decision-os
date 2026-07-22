@@ -245,8 +245,8 @@ export function computeExpectedPaymentDate(
     } else if (invoice.daysPastDue != null) {
         baseDueDate = addDays(today, -invoice.daysPastDue);
     } else {
-        // Missing date anomaly: assume today + 14 days
-        baseDueDate = addDays(today, 14);
+        // Missing date anomaly: assume today + 30 days as standard Net 30 fallback
+        baseDueDate = addDays(today, 30);
         missingDate = true;
     }
 

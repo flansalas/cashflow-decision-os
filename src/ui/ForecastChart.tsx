@@ -115,9 +115,8 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
             scenario: hasScenario ? Math.round(w.startCash + currentScenarioCashForStart) : undefined,
             planExpected,
             organicExpected,
+            shield: organicExpected !== undefined ? [organicExpected, Math.round(w.startCash)] : undefined,
             zone: w.zone,
-            bandHigh: w.zone !== "committed" ? Math.round(w.endCashBest) : undefined,
-            bandLow: w.zone !== "committed" ? Math.round(w.endCashWorst) : undefined,
         };
     });
 
@@ -207,6 +206,12 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
             <div className="w-full h-full flex flex-col relative group">
             <ResponsiveContainer width="100%" height={400}>
                     <ComposedChart data={chartData} margin={{ top: 5, right: 40, left: 10, bottom: 5 }}>
+                        <defs>
+                            <linearGradient id="colorShield" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#10B981" stopOpacity={0.25} />
+                                <stop offset="95%" stopColor="#10B981" stopOpacity={0.02} />
+                            </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                         <XAxis
                             dataKey="name"
@@ -232,57 +237,35 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
                             wrapperStyle={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-muted)', paddingTop: '10px' }}
                         />
 
-                        {/* Band (best/worst range) */}
+                        {/* Management Delta Shield */}
                         <Area
-                            dataKey="bandHigh"
+                            dataKey="shield"
                             stroke="none"
-                            fill="var(--color-risk-low)"
-                            fillOpacity={0.08}
-                            type="monotone"
-                            connectNulls={false}
-                            legendType="none"
-                        />
-                        <Area
-                            dataKey="bandLow"
-                            stroke="none"
-                            fill="var(--color-risk-high)"
-                            fillOpacity={0.08}
+                            fill="url(#colorShield)"
                             type="monotone"
                             connectNulls={false}
                             legendType="none"
                         />
 
-                        {/* Best line (dashed, faint) */}
+                        {/* Organic Baseline (Do Nothing) */}
                         <Line
                             type="monotone"
-                            dataKey="best"
-                            name="Best Case"
-                            stroke="var(--color-positive)"
-                            strokeWidth={1.5}
-                            strokeDasharray="4 4"
+                            dataKey="organicExpected"
+                            name="Organic Baseline"
+                            stroke="#64748B"
+                            strokeWidth={2}
+                            strokeDasharray="6 4"
                             dot={false}
-                            opacity={0.6}
+                            opacity={0.8}
                         />
 
-                        {/* Worst line (dashed, faint) */}
-                        <Line
-                            type="monotone"
-                            dataKey="worst"
-                            name="Worst Case"
-                            stroke="var(--color-danger)"
-                            strokeWidth={1.5}
-                            strokeDasharray="4 4"
-                            dot={false}
-                            opacity={0.6}
-                        />
-
-                        {/* Expected line (main) – dots are clickable */}
+                        {/* Managed Horizon (Active Plan) */}
                         <Line
                             type="monotone"
                             dataKey="expected"
-                            name="Live Forecast"
-                            stroke="#0f172a"
-                            strokeWidth={3}
+                            name="Managed Horizon"
+                            stroke="#10B981"
+                            strokeWidth={3.5}
                             strokeLinecap="round"
                             dot={{ 
                                 r: 3.5, 
