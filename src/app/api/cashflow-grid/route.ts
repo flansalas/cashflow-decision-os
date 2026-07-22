@@ -418,8 +418,7 @@ export async function GET(req: NextRequest) {
     const varianceMultiplier = multipliers.outflow;
     const varianceMultiplierIn = multipliers.inflow;
 
-    baseline.conservativeOutflowWeekly = baseline.conservativeOutflowWeekly * varianceMultiplier;
-    baseline.conservativeInflowWeekly = baseline.conservativeInflowWeekly * varianceMultiplierIn;
+    // We now apply variance multipliers inline when building the forecast inputs.
 
     // Build recurring forecast input (with skip dates for rescheduled occurrences)
     const skipDatesByPattern = new Map<string, string[]>();
@@ -542,9 +541,9 @@ export async function GET(req: NextRequest) {
         },
         hasBankBaseline: baseline.hasSufficientHistory,
         baselineConfidenceTier: baseline.baselineConfidenceTier,
-        variableOutflowWeekly: baseline.conservativeOutflowWeekly,
+        variableOutflowWeekly: baseline.variableOutflowWeekly * varianceMultiplier,
         variableOutflowBand: baseline.variableOutflowBand,
-        baselineInflowWeekly: baseline.conservativeInflowWeekly,
+        baselineInflowWeekly: baseline.variableInflowWeekly * varianceMultiplierIn,
         baselineInflowBand: baseline.variableInflowBand,
         baselineInflowCadence: baseline.inflowCadence,
         baselineOutflowCadence: baseline.outflowCadence,

@@ -122,7 +122,8 @@ export function computeBaseline(
                     const daysDiff = Math.abs(daysBetween(tx.date, assumptions.payrollNextDate));
                     const cadenceDays = assumptions.payrollCadence === "weekly" ? 7 : assumptions.payrollCadence === "biweekly" ? 14 : 30;
                     const remainder = daysDiff % cadenceDays;
-                    if (remainder <= 3 || remainder >= cadenceDays - 3) {
+                    const toleranceDays = cadenceDays === 7 ? 1 : 3;
+                    if (remainder <= toleranceDays || remainder >= cadenceDays - toleranceDays) {
                         matchesAssumption = true;
                     }
                 }
@@ -234,7 +235,8 @@ export function computeBaseline(
     // Most recent 4 weeks get full weight, older data decays
     for (let i = 0; i < WEEKS_TO_ANALYZE; i++) {
         const b = weekBuckets[i];
-        if (b.inflow === 0 && b.outflow === 0) continue; // Skip inactive weeks
+        // We used to skip inactive weeks, but this artificially inflates the average for lumpy businesses
+        // if (b.inflow === 0 && b.outflow === 0) continue;
 
         const ageWeeks = (WEEKS_TO_ANALYZE - 1) - i;
         let weight = 1.0;

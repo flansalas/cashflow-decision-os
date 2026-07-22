@@ -99,8 +99,7 @@ export async function assembleForecastData(companyId: string) {
     const varianceMultiplier = multipliers.outflow;
     const varianceMultiplierIn = multipliers.inflow;
 
-    baseline.variableOutflowWeekly = baseline.variableOutflowWeekly * varianceMultiplier;
-    baseline.variableInflowWeekly = baseline.variableInflowWeekly * varianceMultiplierIn;
+    // We apply multipliers inline when building the forecast inputs.
 
     const customerMap = new Map(customerProfiles.map(c => [c.customerName, c]));
     const vendorMap = new Map(vendorProfiles.map(v => [v.vendorName, v]));
@@ -241,9 +240,9 @@ export async function assembleForecastData(companyId: string) {
         },
         hasBankBaseline: baseline.hasSufficientHistory,
         baselineConfidenceTier: baseline.baselineConfidenceTier,
-        variableOutflowWeekly: baseline.variableOutflowWeekly,
+        variableOutflowWeekly: baseline.variableOutflowWeekly * varianceMultiplier,
         variableOutflowBand: baseline.variableOutflowBand,
-        baselineInflowWeekly: baseline.conservativeInflowWeekly,
+        baselineInflowWeekly: baseline.variableInflowWeekly * varianceMultiplierIn,
         baselineInflowBand: baseline.variableInflowBand,
         baselineInflowCadence: baseline.inflowCadence,
         baselineOutflowCadence: baseline.outflowCadence,

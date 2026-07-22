@@ -279,10 +279,8 @@ export async function GET(req: NextRequest) {
         let varianceMultiplier = multipliers.outflow;
         let varianceMultiplierIn = multipliers.inflow;
 
-        baseline.conservativeOutflowWeekly = baseline.conservativeOutflowWeekly * varianceMultiplier;
-        baseline.conservativeInflowWeekly = baseline.conservativeInflowWeekly * varianceMultiplierIn;
-        baseline.variableOutflowWeekly = baseline.variableOutflowWeekly * varianceMultiplier;
-        baseline.variableInflowWeekly = baseline.variableInflowWeekly * varianceMultiplierIn;
+        // We used to mutate baseline directly here, but that corrupts QA checks.
+        // We now apply the multipliers inline when building the forecast inputs.
 
         // ── Build customer/vendor lookup ────────────────────────────────
         const customerMap = new Map(customerProfiles.map(c => [c.customerName, c]));
@@ -469,9 +467,9 @@ export async function GET(req: NextRequest) {
             },
             hasBankBaseline,
             baselineConfidenceTier: baseline.baselineConfidenceTier,
-            variableOutflowWeekly: baseline.variableOutflowWeekly,
+            variableOutflowWeekly: baseline.variableOutflowWeekly * varianceMultiplier,
             variableOutflowBand: baseline.variableOutflowBand,
-            baselineInflowWeekly: baseline.variableInflowWeekly,
+            baselineInflowWeekly: baseline.variableInflowWeekly * varianceMultiplierIn,
             baselineInflowBand: baseline.variableInflowBand,
             baselineInflowCadence: baseline.inflowCadence,
             baselineOutflowCadence: baseline.outflowCadence,

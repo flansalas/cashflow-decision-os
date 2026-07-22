@@ -687,18 +687,13 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         }
 
         // ── Baseline Gap-Filling Fade logic ──
-        // We aggressively fade *uncertain future revenue* downwards over time,
-        // but we hold *variable spend* flat (or inflate it) to remain conservative in later weeks.
         let revenueFade = 1.0;
         let spendFade = 1.0;
         
-        if (w >= 4 && w <= 7) {
-            revenueFade = 0.85; // Weeks 5-8
-            spendFade = 1.0;    // Expected spend persists
-        } else if (w >= 8) {
-            revenueFade = 0.70; // Weeks 9-13
-            spendFade = 1.05;   // Expected spend slightly inflates due to uncertainty
-        }
+        // We used to aggressively fade *uncertain future revenue* downwards over time,
+        // and hold *variable spend* flat (or inflate it).
+        // However, since we are projecting statistical means, fading a mean over time is mathematically incorrect
+        // and causes the projection to artificially drift. So we now keep them flat at 1.0.
         
         const safetyMargin = input.assumptions.projectionSafetyMargin ?? 1.0;
         const inflowMultiplier = revenueFade * safetyMargin;
@@ -878,8 +873,10 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             cumulativeOutflowDeficit = 0;
         }
 
-        // Use the higher of historical baseline gap or COGS projected for this week
-        outflowGap = Math.max(outflowGap, pendingCogs[w]);
+        // Use the higher of historical baseline gap or COGS projected for this week.
+        // Prevent double counting by reducing the COGS floor by the AP bills we already know about.
+        const remainingCogs = Math.max(0, pendingCogs[w] - scheduledVariableOutflowSum);
+        outflowGap = Math.max(outflowGap, remainingCogs);
 
         if (input.hasBankBaseline && outflowGap > 0) {
             outflowExpected += outflowGap;
