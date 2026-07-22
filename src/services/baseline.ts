@@ -49,8 +49,8 @@ export interface BaselineAssumptions {
     rentDayOfMonth: number | null;
 }
 
-// Minimum weeks required to enable gap-fill projections
-export const MIN_WEEKS_REQUIRED = 2;
+// Minimum weeks required to enable gap-fill projections (12 weeks = 3 months for reliable 52w model)
+export const MIN_WEEKS_REQUIRED = 12;
 // Analyze up to 52 weeks (1 year) of history — recency weighting handles the bias
 const WEEKS_TO_ANALYZE = 52;
 
@@ -231,12 +231,16 @@ export function computeBaseline(
     const outflowValues: number[] = [];
     const weights: number[] = [];
 
+    const firstActiveIdx = weekBuckets.findIndex(b => b.inflow > 0 || b.outflow > 0);
+    const lastActiveIdx = weekBuckets.length - 1 - [...weekBuckets].reverse().findIndex(b => b.inflow > 0 || b.outflow > 0);
+
     // Recency-weighted: divide the 52-week window into tiers
     // Most recent 4 weeks get full weight, older data decays
     for (let i = 0; i < WEEKS_TO_ANALYZE; i++) {
+        // Skip unpopulated weeks outside the active span of uploaded history
+        if (firstActiveIdx !== -1 && (i < firstActiveIdx || i > lastActiveIdx)) continue;
+
         const b = weekBuckets[i];
-        // We used to skip inactive weeks, but this artificially inflates the average for lumpy businesses
-        // if (b.inflow === 0 && b.outflow === 0) continue;
 
         const ageWeeks = (WEEKS_TO_ANALYZE - 1) - i;
         let weight = 1.0;

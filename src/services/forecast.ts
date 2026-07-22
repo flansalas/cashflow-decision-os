@@ -416,18 +416,14 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 nextD.setMonth(nextD.getMonth() + 1);
             } else break;
 
-            if (nextD <= addDays(currentMonday, 6)) {
-                d = nextD;
-            } else {
-                break;
-            }
+            d = nextD;
         }
 
         while (d <= endDate) {
             for (let w = 0; w < 13; w++) {
                 const weekStart = addWeeks(currentMonday, w);
                 const weekEnd = addDays(weekStart, 6);
-                if (isInWeek(d, weekStart, weekEnd) || (w === 0 && d < weekStart)) {
+                if (isInWeek(d, weekStart, weekEnd)) {
                     // Skip this occurrence if it has been rescheduled away
                     const weekStartISO = isNaN(weekStart.getTime()) ? "0000-00-00" : weekStart.toISOString().slice(0, 10);
                     if (!skipSet.has(weekStartISO)) {
