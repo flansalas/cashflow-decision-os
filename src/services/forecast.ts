@@ -683,34 +683,18 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         }
 
         // ── Baseline Gap-Filling Fade logic ──
-        // Asymmetric fading: We aggressively fade *uncertain future revenue* downwards over time,
+        // We aggressively fade *uncertain future revenue* downwards over time,
         // but we hold *variable spend* flat (or inflate it) to remain conservative in later weeks.
         let revenueFade = 1.0;
         let spendFade = 1.0;
         
-        // If the business relies heavily on AR, we don't want to slam the historical baseline
-        // into Week 1 or 2 if they have zero invoices scheduled. We fade it in to blend smoothly.
-        if (input.isARHeavy) {
-            if (w === 0) revenueFade = 0.25;
-            else if (w === 1) revenueFade = 0.50;
-            else if (w === 2) revenueFade = 0.75;
-            else if (w === 3) revenueFade = 1.0;
-            else if (w >= 4 && w <= 7) revenueFade = 0.85; // Weeks 5-8
-            else if (w >= 8) revenueFade = 0.70; // Weeks 9-13
-        } else {
-            // For retail/cash businesses, no short-term fade-in needed
-            if (w >= 4 && w <= 7) {
-                revenueFade = 0.85; // Weeks 5-8
-                spendFade = 1.0;    // Expected spend persists
-            } else if (w >= 8) {
-                revenueFade = 0.70; // Weeks 9-13
-                spendFade = 1.05;   // Expected spend slightly inflates due to uncertainty
-            }
+        if (w >= 4 && w <= 7) {
+            revenueFade = 0.85; // Weeks 5-8
+            spendFade = 1.0;    // Expected spend persists
+        } else if (w >= 8) {
+            revenueFade = 0.70; // Weeks 9-13
+            spendFade = 1.05;   // Expected spend slightly inflates due to uncertainty
         }
-
-        // Apply same spend fade logic for both
-        if (w >= 4 && w <= 7) spendFade = 1.0;
-        else if (w >= 8) spendFade = 1.05;
         
         const safetyMargin = input.assumptions.projectionSafetyMargin ?? 1.0;
         const inflowMultiplier = revenueFade * safetyMargin;
