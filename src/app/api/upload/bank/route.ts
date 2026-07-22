@@ -46,9 +46,15 @@ export async function POST(req: NextRequest) {
             select: { id: true, txDate: true, description: true, amount: true }
         });
         const getBankFingerprint = (date: Date | string | null, desc: string, amt: number) => {
-            const d = date ? new Date(date).toISOString().slice(0, 10) : "";
+            let dStr = "";
+            if (date) {
+                const dObj = new Date(date);
+                if (!isNaN(dObj.getTime())) {
+                    dStr = dObj.toISOString().slice(0, 10);
+                }
+            }
             const cleanDesc = (desc || "").toLowerCase().replace(/\s+/g, "");
-            return `${d}|||${cleanDesc}|||${amt}`;
+            return `${dStr}|||${cleanDesc}|||${amt}`;
         };
         const existingFingerprints = new Set(existingTx.map(tx => getBankFingerprint(tx.txDate, tx.description, tx.amount)));
         const batchFingerprints = new Set<string>();
@@ -81,10 +87,11 @@ export async function POST(req: NextRequest) {
                     const existing = existingTx.find(tx => getBankFingerprint(tx.txDate, tx.description, tx.amount) === fingerprint);
                     if (existing) matchedRecordId = existing.id;
                 } else {
-                    const rowDate = new Date(row.date!).getTime();
+                    const parsedRowDate = row.date ? new Date(row.date) : null;
+                    const rowDate = (parsedRowDate && !isNaN(parsedRowDate.getTime())) ? parsedRowDate.getTime() : 0;
                     const nearMatch = existingTx.find(tx => {
                         const txDate = tx.txDate.getTime();
-                        return tx.amount === row.amount && Math.abs(txDate - rowDate) <= 3 * 86400000;
+                        return tx.amount === row.amount && rowDate > 0 && Math.abs(txDate - rowDate) <= 3 * 86400000;
                     });
                     if (nearMatch) {
                         conflictType = "possible_duplicate";
