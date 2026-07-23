@@ -643,40 +643,6 @@ function PlanContent() {
                     </div>
                 </div>
 
-                {/* ── Getting Started Checklist (only when setup incomplete) ── */}
-                {(() => {
-                    const hasBalance = data.cash.bankBalance > 0;
-                    const hasPayroll = data.payroll !== null;
-                    const hasCommitments = data.commitmentsCount > 1;
-                    const hasARAPData = (data.backlog.overdueAP.length + data.backlog.overdueAR.length) > 0;
-                    const hasBuffer = data.assumptions.bufferMin > 0;
-                    const isAllDone = hasBalance && hasPayroll && hasCommitments && hasARAPData && hasBuffer;
-                    if (isAllDone) return null;
-                    return (
-                        <details className="rounded-2xl border overflow-hidden shadow-sm group transition-shadow hover:shadow-[0_8px_16px_rgba(15,23,42,0.04)]" style={{ background: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}>
-                            <summary className="px-6 py-4 cursor-pointer text-xs font-semibold uppercase tracking-wider select-none flex items-center justify-between" style={{ color: "var(--text-secondary)" }}>
-                                <span className="flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4 text-emerald-500" />
-                                    Setup Checklist
-                                </span>
-                                <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180 transition-transform" />
-                            </summary>
-                            <div className="px-5 py-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-                                <GettingStartedTracker
-                                    companyId={data.company.id}
-                                    hasBalance={hasBalance}
-                                    hasPayroll={hasPayroll}
-                                    hasCommitments={hasCommitments}
-                                    hasARAPData={hasARAPData}
-                                    hasBuffer={hasBuffer}
-                                    onOpenSetup={() => setSetupOpen(true)}
-                                    onOpenCommitments={() => window.location.href = "/planned"}
-                                />
-                            </div>
-                        </details>
-                    );
-                })()}
-
 
 
 
