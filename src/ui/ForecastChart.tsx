@@ -237,15 +237,7 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
                             wrapperStyle={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-muted)', paddingTop: '10px' }}
                         />
 
-                        {/* Management Delta Shield */}
-                        <Area
-                            dataKey="shield"
-                            stroke="none"
-                            fill="url(#colorShield)"
-                            type="monotone"
-                            connectNulls={false}
-                            legendType="none"
-                        />
+
 
 
                         {/* Managed Horizon (Active Plan) */}
@@ -278,18 +270,7 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
                             animationDuration={1500}
                         />
 
-                        {organicWeeks && organicWeeks.length > 0 && (
-                            <Line
-                                type="monotone"
-                                dataKey="organicExpected"
-                                name="Do-Nothing Trajectory"
-                                stroke="#94a3b8"
-                                strokeWidth={2}
-                                strokeDasharray="3 3"
-                                dot={{ r: 2, fill: "#94a3b8" }}
-                                activeDot={{ r: 4, fill: "#94a3b8" }}
-                            />
-                        )}
+
 
                         {comparePlan && (
                             <Line

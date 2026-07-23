@@ -113,11 +113,7 @@ export function ForecastPulseView({ weeks, organicWeeks, buffer, constraintWeek,
                             <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> Sim Active</span>
                         </span>
                     )}
-                    {hasOrganic && (
-                        <span className="flex items-center gap-1.5 ml-2">
-                            <span className="w-3 h-0.5 border-t border-dashed inline-block" style={{ borderColor: "var(--text-faint)" }} /> Do-Nothing Trajectory
-                        </span>
-                    )}
+
                 </div>
             </div>            {/* SVG Waterfall Chart */}
             <div className="relative w-full overflow-x-auto pt-4">
@@ -264,13 +260,7 @@ export function ForecastPulseView({ weeks, organicWeeks, buffer, constraintWeek,
                                     />
                                 )}
 
-                                {/* Organic baseline dot (gray outline) */}
-                                {organicY !== null && Math.abs(organicY - endY) > 2 && (
-                                    <circle
-                                        cx={barX + barW / 2} cy={organicY}
-                                        r={4} fill="none" stroke="var(--text-faint)" strokeWidth={1.5} strokeDasharray="2 2"
-                                    />
-                                )}
+
 
                                 {/* Constraint "OUT OF CASH" marker */}
                                 {isConstraint && (
