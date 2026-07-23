@@ -342,9 +342,7 @@ export async function POST(req: NextRequest) {
 
         // Trigger variance sync after transaction completes
         try {
-            syncVarianceLedger(companyId).catch(err => {
-                console.error("Failed to sync variance ledger in cash-checkin:", err);
-            });
+            await syncVarianceLedger(companyId);
         } catch (syncErr) {
             console.error("Failed to trigger variance sync in cash-checkin:", syncErr);
         }

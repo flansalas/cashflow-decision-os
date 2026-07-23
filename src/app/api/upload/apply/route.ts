@@ -289,10 +289,7 @@ export async function POST(req: NextRequest) {
         // Trigger variance sync if this was a bank import
         if (batch.importType === "bank") {
             try {
-                // Run async without awaiting to not block the request
-                syncVarianceLedger(tenantId).catch(err => {
-                    console.error("Failed to sync variance ledger:", err);
-                });
+                await syncVarianceLedger(tenantId);
             } catch (syncErr) {
                 console.error("Failed to trigger variance sync:", syncErr);
             }
