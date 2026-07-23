@@ -247,17 +247,6 @@ export function ForecastChart({ weeks, planWeeks, organicWeeks, buffer, constrai
                             legendType="none"
                         />
 
-                        {/* Organic Baseline (Do Nothing) */}
-                        <Line
-                            type="monotone"
-                            dataKey="organicExpected"
-                            name="Organic Baseline"
-                            stroke="#64748B"
-                            strokeWidth={2}
-                            strokeDasharray="6 4"
-                            dot={false}
-                            opacity={0.8}
-                        />
 
                         {/* Managed Horizon (Active Plan) */}
                         <Line
