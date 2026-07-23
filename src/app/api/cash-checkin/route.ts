@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveTenant } from "@/lib/tenant";
 import prisma from "@/db/prisma";
 import { resolveForecastHashAfter } from "@/services/forecast-hash";
+import { syncVarianceLedger } from "@/services/variance-sync";
 
 /**
  * Rolls a date forward by the given cadence until it is >= the asOfDate.
@@ -254,78 +255,9 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-
         // ── Macro-Memory: Grade Baseline Variance ───────────────────────
-        if (priorWeekForecast && priorWeekForecast.breakdownJson) {
-            try {
-                const weekStart = new Date(priorWeekForecast.weekStart);
-                const weekEnd = new Date(priorWeekForecast.weekEnd);
-
-                // 1. Get Projected Baseline from prior week forecast
-                const breakdown = JSON.parse(priorWeekForecast.breakdownJson);
-
-                const baselineOutflowItem = breakdown.outflows?.find((item: any) => item.sourceType === "baseline");
-                const projectedOutflow = baselineOutflowItem ? baselineOutflowItem.amount : 0;
-
-                const baselineInflowItem = breakdown.inflows?.find((item: any) => item.sourceType === "baseline");
-                const projectedInflow = baselineInflowItem ? baselineInflowItem.amount : 0;
-
-                // 2. Get Actual Bank Txs for that week
-                const bankTxs = await tx.bankTransaction.findMany({
-                    where: {
-                        companyId,
-                        txDate: { gte: weekStart, lte: weekEnd },
-                    }
-                });
-
-                if (bankTxs.length === 0) {
-                    bankDataMissing = true;
-                    if (!warningMsg) warningMsg = "Bank data is missing for the rolled week. Variance logic will run with lower confidence.";
-                }
-
-                if (!bankDataMissing && (projectedOutflow > 0 || projectedInflow > 0)) {
-                    // Filter out recurring patterns
-                    const patterns = await tx.recurringPattern.findMany({
-                        where: { companyId, isIncluded: true }
-                    });
-                    const recurringKeys = new Set(
-                        patterns.map(p => p.merchantKey.toUpperCase().trim())
-                    );
-
-                    let actualOutflow = 0;
-                    let actualInflow = 0;
-
-                    for (const tx of bankTxs) {
-                        const key = tx.description.toUpperCase().trim();
-                        if (recurringKeys.has(key)) continue;
-
-                        if (tx.direction === "outflow") {
-                            actualOutflow += tx.amount;
-                        } else if (tx.direction === "inflow") {
-                            actualInflow += tx.amount;
-                        }
-                    }
-
-                    const variancePct = projectedOutflow > 0 ? (actualOutflow - projectedOutflow) / projectedOutflow : 0;
-                    const variancePctIn = projectedInflow > 0 ? (actualInflow - projectedInflow) / projectedInflow : null;
-
-                    await tx.baselineVarianceLedger.create({
-                        data: {
-                            companyId,
-                            weekStart,
-                            projectedOutflow,
-                            actualOutflow,
-                            variancePct,
-                            projectedInflow: projectedInflow > 0 ? projectedInflow : null,
-                            actualInflow: projectedInflow > 0 ? actualInflow : null,
-                            variancePctIn,
-                        }
-                    });
-                }
-            } catch (err) {
-                console.warn("Failed to grade baseline variance:", err);
-            }
-        }
+        // Variance grading has been extracted to a background service that runs automatically
+        // on bank uploads as well as here, comparing actuals against total projected variable spend.
 
         if (priorWeekForecast && bankDataMissing) {
             const unexplainedGap = bankBalance - priorWeekForecast.endCashExpected;
@@ -407,6 +339,15 @@ export async function POST(req: NextRequest) {
 
         return { snapshot, changeLogId: changeLog.id, checkpoint, autoMissChangeLogId };
         }); // End of transaction
+
+        // Trigger variance sync after transaction completes
+        try {
+            syncVarianceLedger(companyId).catch(err => {
+                console.error("Failed to sync variance ledger in cash-checkin:", err);
+            });
+        } catch (syncErr) {
+            console.error("Failed to trigger variance sync in cash-checkin:", syncErr);
+        }
 
         let checkpoint = coreResult.checkpoint;
 

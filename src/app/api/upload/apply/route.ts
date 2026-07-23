@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
 import { resolveTenant } from "@/lib/tenant";
 import { assembleForecastData } from "@/services/forecast-assembly";
+import { syncVarianceLedger } from "@/services/variance-sync";
 
 export async function POST(req: NextRequest) {
     try {
@@ -283,6 +284,18 @@ export async function POST(req: NextRequest) {
                 where: { id: applyResult.appRec.changeLogId! },
                 data: { forecastVersionHashAfter: "error" }
             });
+        }
+
+        // Trigger variance sync if this was a bank import
+        if (batch.importType === "bank") {
+            try {
+                // Run async without awaiting to not block the request
+                syncVarianceLedger(tenantId).catch(err => {
+                    console.error("Failed to sync variance ledger:", err);
+                });
+            } catch (syncErr) {
+                console.error("Failed to trigger variance sync:", syncErr);
+            }
         }
 
         return NextResponse.json({
