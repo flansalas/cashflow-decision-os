@@ -125,9 +125,9 @@ export function AppSidebar() {
         },
         {
             icon: <Repeat2 className="w-[18px] h-[18px]" />,
-            label: "Cash Commitments",
+            label: "Recurring Commitments",
             href: "/planned",
-            section: "tools",
+            section: "manage",
         },
         {
             icon: <GitBranch className="w-[18px] h-[18px]" />,

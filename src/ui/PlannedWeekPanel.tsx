@@ -234,17 +234,6 @@ export function PlannedWeekPanel({
                     })}
                 </div>
 
-                {/* Footer */}
-                {!hideManageAll && onManageAll && (
-                    <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-center">
-                        <button 
-                            onClick={onManageAll}
-                            className="text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1"
-                        >
-                            Manage All Cash Commitments <ArrowRight className="w-4 h-4" />
-                        </button>
-                    </div>
-                )}
             </div>
 
             {overrideState && overrideState.item.sourceId && (
