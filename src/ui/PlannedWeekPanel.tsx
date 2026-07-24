@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, ArrowRight, ArrowLeft, Calendar, FileEdit, Ban, AlertTriangle, Settings } from "lucide-react";
+import { X, ArrowRight, ArrowLeft, Calendar, FileEdit, AlertTriangle, Settings } from "lucide-react";
 import { OccurrenceOverridePopover } from "./OccurrenceOverridePopover";
 
 interface BreakdownItem {
@@ -94,12 +94,6 @@ export function PlannedWeekPanel({
         }
     };
 
-    const handleSkip = async (item: BreakdownItem) => {
-        // To skip, we can defer it to some far future, or maybe we have a skip endpoint?
-        // Let's assume there is an endpoint or we just show a message for now if not implemented.
-        setError("Skip is not yet fully implemented on backend. Please use Defer or Edit.");
-    };
-
     return (
         <div className="fixed inset-0 z-[100] flex justify-end">
             <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm transition-opacity" onClick={onClose} />
@@ -184,12 +178,6 @@ export function PlannedWeekPanel({
                                         className="px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
                                     >
                                         <FileEdit className="w-3.5 h-3.5" /> Edit Pattern
-                                    </button>
-                                    <button 
-                                        onClick={() => handleSkip(item)}
-                                        className="px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 text-slate-600 hover:bg-rose-50 hover:text-rose-700 transition-colors"
-                                    >
-                                        <Ban className="w-3.5 h-3.5" /> Skip
                                     </button>
                                 </div>
 
