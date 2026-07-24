@@ -108,19 +108,21 @@ export function PlannedWeekPanel({
                 {/* Header */}
                 <div className="px-6 py-5 border-b border-slate-100 bg-slate-50 flex items-start justify-between">
                     <div>
-                        <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 flex items-center gap-1">
-                                <ArrowLeft className="w-3 h-3 cursor-pointer hover:text-indigo-800" onClick={onClose} /> Week {weekNumber}
-                            </span>
-                            <span className="text-slate-400 text-xs">—</span>
-                            <span className="text-xs text-slate-500 font-medium flex items-center gap-2">
-                                Cash Commitments
-                                {!hideManageAll && onManageAll && (
-                                    <button onClick={onManageAll} className="text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 ml-2 transition-colors">
-                                        <Settings className="w-3 h-3" /> Manage
-                                    </button>
-                                )}
-                            </span>
+                        <div className="flex items-center justify-between w-[370px] mb-1">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 flex items-center gap-1">
+                                    <ArrowLeft className="w-3 h-3 cursor-pointer hover:text-indigo-800" onClick={onClose} /> Week {weekNumber}
+                                </span>
+                                <span className="text-slate-400 text-xs">—</span>
+                                <span className="text-xs text-slate-500 font-medium">
+                                    Cash Commitments
+                                </span>
+                            </div>
+                            {!hideManageAll && onManageAll && (
+                                <button onClick={onManageAll} className="bg-white border border-slate-200 shadow-sm text-slate-700 hover:text-indigo-700 hover:border-indigo-300 hover:bg-indigo-50 px-2.5 py-1 rounded-md flex items-center gap-1.5 transition-all text-xs font-bold whitespace-nowrap">
+                                    <Settings className="w-3.5 h-3.5" /> Manage Rules
+                                </button>
+                            )}
                         </div>
                         <h2 className="text-lg font-bold text-slate-900 mt-1">
                             {new Date(weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} – {new Date(weekEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}
