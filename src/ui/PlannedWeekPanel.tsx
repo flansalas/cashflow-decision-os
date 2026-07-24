@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, ArrowRight, ArrowLeft, Calendar, FileEdit, Ban, AlertTriangle } from "lucide-react";
+import { X, ArrowRight, ArrowLeft, Calendar, FileEdit, Ban, AlertTriangle, Settings } from "lucide-react";
 import { OccurrenceOverridePopover } from "./OccurrenceOverridePopover";
 
 interface BreakdownItem {
@@ -113,7 +113,14 @@ export function PlannedWeekPanel({
                                 <ArrowLeft className="w-3 h-3 cursor-pointer hover:text-indigo-800" onClick={onClose} /> Week {weekNumber}
                             </span>
                             <span className="text-slate-400 text-xs">—</span>
-                            <span className="text-xs text-slate-500 font-medium">Cash Commitments</span>
+                            <span className="text-xs text-slate-500 font-medium flex items-center gap-2">
+                                Cash Commitments
+                                {!hideManageAll && onManageAll && (
+                                    <button onClick={onManageAll} className="text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 ml-2 transition-colors">
+                                        <Settings className="w-3 h-3" /> Manage
+                                    </button>
+                                )}
+                            </span>
                         </div>
                         <h2 className="text-lg font-bold text-slate-900 mt-1">
                             {new Date(weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} – {new Date(weekEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}
