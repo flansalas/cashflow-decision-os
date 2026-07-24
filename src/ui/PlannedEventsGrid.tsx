@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { OccurrenceOverridePopover } from "./OccurrenceOverridePopover";
 
 export interface Commitment {
@@ -150,12 +150,26 @@ export function PlannedEventsGrid({ commitments, weeks, bufferMin, onEdit, onWee
             <tr key={c.id} id={`commitment-${c.id}`} className={`group hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 ${rowBg} ${highlightId === c.id ? "persistent-focus-glow relative z-20" : ""}`}>
                 <td 
                     style={{ width: colWidth, minWidth: colWidth, maxWidth: colWidth }}
-                    className={`px-3 py-1.5 whitespace-nowrap text-sm font-medium text-slate-800 border-r border-slate-200 cursor-pointer hover:text-indigo-600 transition-colors leading-snug sticky left-0 z-10 ${rowBg} shadow-[1px_0_0_0_#e2e8f0] group-hover:bg-slate-50 overflow-hidden text-ellipsis`}
-                    onClick={() => onEdit(c)}
+                    className={`px-3 py-1.5 whitespace-nowrap text-sm font-medium text-slate-800 border-r border-slate-200 sticky left-0 z-10 ${rowBg} shadow-[1px_0_0_0_#e2e8f0] group-hover:bg-slate-50 overflow-hidden text-ellipsis`}
                 >
-                    <div>{c.displayName}</div>
-                    <div className="text-[10px] text-slate-400 font-normal uppercase tracking-wider">
-                        {c.direction === "inflow" ? "Inflow" : "Outflow"}
+                    <div className="flex items-center justify-between w-full">
+                        <div>
+                            <div>{c.displayName}</div>
+                            <div className="text-[10px] text-slate-400 font-normal uppercase tracking-wider">
+                                {c.direction === "inflow" ? "Inflow" : "Outflow"}
+                            </div>
+                        </div>
+                        
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onEdit(c);
+                            }} 
+                            className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+                            aria-label="Edit Commitment"
+                        >
+                            <Pencil className="w-3.5 h-3.5" />
+                        </button>
                     </div>
                 </td>
                 {weeks.map(w => {
