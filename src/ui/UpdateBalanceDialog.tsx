@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { CheckCircle2, Inbox, Upload, X, TrendingUp, Landmark, AlertTriangle, ShieldCheck, ShieldAlert } from "lucide-react";
 import { VarianceDriverPanel } from "@/ui/VarianceDriverPanel";
-import type { VarianceDriverResult } from "@/services/variance-drivers";
+import type { UnifiedVarianceResult } from "@/types/variance";
 import { ARAPUploadStep } from "@/ui/ARAPUploadStep";
 import { BankUploadStep } from "@/ui/BankUploadStep";
 
@@ -90,7 +90,7 @@ export function UpdateBalanceDialog({
 
     // Variance driver state
     const [checkpointId, setCheckpointId] = useState<string | null>(null);
-    const [driverData, setDriverData] = useState<VarianceDriverResult | null>(null);
+    const [driverData, setDriverData] = useState<UnifiedVarianceResult | null>(null);
     const [driverLoading, setDriverLoading] = useState(false);
     const [driverOpen, setDriverOpen] = useState(false);
     const [driverError, setDriverError] = useState(false);

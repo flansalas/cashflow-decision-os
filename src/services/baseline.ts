@@ -83,8 +83,8 @@ export function computeBaseline(
             const isVolatile = ["utilities", "fuel", "taxes", "card_payment", "payroll"].includes(p.category);
             const tolerance = isVolatile ? 0.5 : 0.2;
             return {
-                merchantKey: p.merchantKey || p.displayName,
-                displayName: p.displayName,
+                merchantKey: (p.merchantKey || p.displayName || ""),
+                displayName: p.displayName || "",
                 direction: p.direction,
                 typicalAmount: p.typicalAmount,
                 amountStdDev: p.amountStdDev,

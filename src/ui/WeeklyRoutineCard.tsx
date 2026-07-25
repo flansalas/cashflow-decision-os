@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { ArrowRight, TrendingUp, X } from "lucide-react";
 import { VarianceDriverPanel } from "@/ui/VarianceDriverPanel";
-import type { VarianceDriverResult } from "@/services/variance-drivers";
+import type { UnifiedVarianceResult } from "@/types/variance";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -18,7 +18,7 @@ function fmtVariance(n: number): string {
 // ─── Variance Modal ───────────────────────────────────────────────────────────
 
 interface VarianceModalProps {
-    data: VarianceDriverResult;
+    data: UnifiedVarianceResult;
     onClose: () => void;
 }
 
@@ -60,7 +60,7 @@ interface WeeklyRoutineCardProps {
 }
 
 export function WeeklyRoutineCard({ onPlannedEventsClick }: WeeklyRoutineCardProps = {}) {
-    const [latestDriverData, setLatestDriverData] = useState<VarianceDriverResult | null>(null);
+    const [latestDriverData, setLatestDriverData] = useState<UnifiedVarianceResult | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [loaded, setLoaded] = useState(false);
 
@@ -72,7 +72,7 @@ export function WeeklyRoutineCard({ onPlannedEventsClick }: WeeklyRoutineCardPro
                 if (!r.ok) throw new Error("no checkpoint");
                 return r.json();
             })
-            .then((data: VarianceDriverResult) => {
+            .then((data: UnifiedVarianceResult) => {
                 if (!cancelled) {
                     setLatestDriverData(data);
                 }
@@ -83,7 +83,9 @@ export function WeeklyRoutineCard({ onPlannedEventsClick }: WeeklyRoutineCardPro
         return () => { cancelled = true; };
     }, []);
 
-    const variance = latestDriverData?.totalVariance;
+    const variance = latestDriverData
+        ? (latestDriverData.isDeterministic ? latestDriverData.totals.balanceBasedEndingCashVariance : latestDriverData.totalVariance)
+        : undefined;
     const hasCheckpoint = loaded && latestDriverData !== null && variance !== undefined;
 
     return (

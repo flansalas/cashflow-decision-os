@@ -120,8 +120,10 @@ export async function runEvaluationForWeek(companyId: string, weekStart: Date) {
                         sourceType: snap.sourceType,
                         sourceId: snap.sourceId,
                         direction: snap.direction,
-                        targetWeekStart: { gte: shiftStart, lte: shiftEnd },
-                        targetWeekStart: { not: weekStart } // Must be in a different week
+                        AND: [
+                            { targetWeekStart: { gte: shiftStart, lte: shiftEnd } },
+                            { targetWeekStart: { not: weekStart } }
+                        ]
                     },
                     include: { bankTransaction: true }
                 });
@@ -212,12 +214,11 @@ export async function runEvaluationForWeek(companyId: string, weekStart: Date) {
             netVariance: ((actualInflows + actualOutflows) - (expectedInflows + expectedOutflows)) / 100,
             components: {
                 create: componentEvaluations.map(comp => {
-                    const linked = comp._linkedAttributions;
-                    delete comp._linkedAttributions;
+                    const { _linkedAttributions, ...restComp } = comp;
                     return {
-                        ...comp,
+                        ...restComp,
                         attributions: {
-                            create: linked
+                            create: _linkedAttributions
                         }
                     };
                 })

@@ -10,7 +10,7 @@ import {
 import { HelpBubble } from "@/ui/HelpBubble";
 import { UpdateBalanceDialog } from "@/ui/UpdateBalanceDialog";
 import { VarianceDriverPanel } from "@/ui/VarianceDriverPanel";
-import type { VarianceDriverResult } from "@/services/variance-drivers";
+import type { UnifiedVarianceResult } from "@/types/variance";
 import { BacklogTriage } from "@/ui/BacklogTriage";
 import { CommittedActionsReview } from "@/ui/CommittedActionsReview";
 import { LearningProposals } from "@/ui/LearningProposals";
@@ -57,7 +57,7 @@ function ReviewPageInner() {
     const [error, setError] = useState<string | null>(null);
     const [showRoll, setShowRoll] = useState(false);
     const [viewHistorical, setViewHistorical] = useState<string | null>(null);
-    const [driverData, setDriverData] = useState<VarianceDriverResult | null>(null);
+    const [driverData, setDriverData] = useState<UnifiedVarianceResult | null>(null);
     const [driverLoading, setDriverLoading] = useState(false); // null means Active
     const [showAuditorView, setShowAuditorView] = useState(false);
 

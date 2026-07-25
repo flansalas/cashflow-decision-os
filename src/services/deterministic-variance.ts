@@ -141,7 +141,7 @@ export async function getDeterministicVarianceDrivers(
             varianceImpact: comp.varianceAmount,
             expectedDate: expectedDateIso,
             evidenceRole: comp.attributions.length > 0 ? comp.attributions[0].evidenceRole : "current_week_actual",
-            linkedAttributions: comp.attributions.map(attr => ({
+            linkedAttributions: comp.attributions.map((attr: any) => ({
                 bankTransactionId: attr.bankTransactionId,
                 amountApplied: attr.amountApplied,
                 confidenceTier: attr.confidenceTier,
