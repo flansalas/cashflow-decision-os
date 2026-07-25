@@ -226,3 +226,69 @@ export function detectPatterns(
 
     return suggestions.slice(0, MAX_SUGGESTIONS);
 }
+
+export interface RecurringMatchCandidate {
+    merchantKey: string;
+    displayName: string;
+    direction: string;
+    typicalAmount: number;
+    amountStdDev: number;
+    cadence?: string;
+    nextExpectedDate?: Date | null;
+}
+
+export function isRecurringIdentityMatch(
+    tx: { description: string; direction: string; amount: number; txDate: Date },
+    pattern: RecurringMatchCandidate,
+    lastMatchedDate: Date | null,
+    cadence?: string
+): boolean {
+    if (tx.direction !== pattern.direction) return false;
+
+    // Reject generic words as identity
+    const genericWords = ["payment", "loan", "insurance", "subscription", "transfer", "deposit", "withdrawal", "fee", "ach", "wire", "check", "credit", "debit"];
+    const txNorm = normalizeDescription(tx.description);
+    const patKeyNorm = normalizeDescription(pattern.merchantKey);
+
+    // Strict Identity match
+    let isIdentityMatch = false;
+    
+    // Explicit merchant key match (if the key isn't just a generic word)
+    if (patKeyNorm.length > 2 && !genericWords.includes(patKeyNorm)) {
+        // Use exact match or contains
+        if (txNorm.includes(patKeyNorm) || patKeyNorm.includes(txNorm)) {
+            isIdentityMatch = true;
+        }
+    }
+
+    if (!isIdentityMatch) return false;
+
+    // Must also be within reasonable amount bounds (+/- 50% or 2 stddev)
+    const absAmount = Math.abs(tx.amount);
+    const minAmount = pattern.typicalAmount - Math.max(pattern.typicalAmount * 0.5, pattern.amountStdDev * 2);
+    const maxAmount = pattern.typicalAmount + Math.max(pattern.typicalAmount * 0.5, pattern.amountStdDev * 2);
+
+    if (absAmount < minAmount || absAmount > maxAmount) return false;
+    
+    // Enforce cadence / timing check if available
+    const cadenceStr = cadence || pattern.cadence;
+    
+    // 1. Cadence Cooldown Check
+    if (lastMatchedDate && cadenceStr) {
+        const daysSince = Math.abs(Math.round((tx.txDate.getTime() - lastMatchedDate.getTime()) / 86400000));
+        const cooldown = cadenceStr === "weekly" ? 5 : cadenceStr === "biweekly" ? 12 : 26;
+        if (daysSince < cooldown) return false; // Too soon since last match
+    }
+
+    // 2. Expected Date Window Check
+    if (pattern.nextExpectedDate) {
+        const daysDiff = Math.round((tx.txDate.getTime() - pattern.nextExpectedDate.getTime()) / 86400000);
+        // Allow a window around the expected date
+        const windowDays = cadenceStr === "weekly" ? 3 : cadenceStr === "biweekly" ? 5 : 7;
+        if (Math.abs(daysDiff) > windowDays) {
+            return false; // Transaction falls outside the expected cadence window
+        }
+    }
+
+    return true;
+}

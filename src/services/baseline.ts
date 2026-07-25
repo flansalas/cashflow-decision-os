@@ -9,7 +9,7 @@ export interface BankTxForBaseline {
     merchantKey: string;  // typically the description field from bank tx
 }
 
-import { normalizeDescription, categorize } from "./detectPatterns";
+import { normalizeDescription, categorize, isRecurringIdentityMatch } from "./detectPatterns";
 import { computeACF, detectDominantCadence } from "./acf";
 
 export interface RecurringPatternForBaseline {
@@ -20,6 +20,9 @@ export interface RecurringPatternForBaseline {
     typicalAmount: number;
     amountStdDev: number;
     cadence?: string;
+    minAmount?: number;
+    maxAmount?: number;
+    displayName?: string;
 }
 
 export type BaselineConfidenceTier = "high" | "med" | "low" | "none";
@@ -80,11 +83,14 @@ export function computeBaseline(
             const isVolatile = ["utilities", "fuel", "taxes", "card_payment", "payroll"].includes(p.category);
             const tolerance = isVolatile ? 0.5 : 0.2;
             return {
-                key: normalizeDescription(p.merchantKey || ""),
+                merchantKey: p.merchantKey || p.displayName,
+                displayName: p.displayName,
                 direction: p.direction,
-                minAmount: p.typicalAmount - Math.max(p.typicalAmount * tolerance, p.amountStdDev * 2),
-                maxAmount: p.typicalAmount + Math.max(p.typicalAmount * tolerance, p.amountStdDev * 2),
+                typicalAmount: p.typicalAmount,
+                amountStdDev: p.amountStdDev,
                 cadence: p.cadence,
+                minAmount: p.minAmount || p.typicalAmount * (1 - tolerance),
+                maxAmount: p.maxAmount || p.typicalAmount * (1 + tolerance),
                 lastMatchedDate: null as Date | null
             };
         });
@@ -109,7 +115,6 @@ export function computeBaseline(
             if (!tx.date || isNaN(tx.date.getTime())) continue;
             if (tx.date < wStart || tx.date > wEnd) continue;
             // Exclude known recurring patterns
-            const normalizedTxKey = normalizeDescription(tx.merchantKey || "");
             const txDirection = tx.amount >= 0 ? "inflow" : "outflow";
             const absAmount = Math.abs(tx.amount);
             const txCategory = categorize(tx.merchantKey || "");
@@ -164,21 +169,15 @@ export function computeBaseline(
 
             if (matchesAssumption) continue;
 
-            // Relaxed matching: manual recurring patterns won't match scrubbed bank 
-            // descriptions (e.g. "PREAUTHORIZED ACH DEBIT"), so we exclude purely by 
-            // amount and direction. We use a cadence cooldown to prevent over-excluding 
-            // multiple transactions within the same cycle.
+            // Strict Identity Match: Uses shared identity match logic
+            // preventing generic words or wildly wrong amounts from masking actual baseline variation.
             const matchedPattern = excludedPatterns.find(p => {
-                if (p.direction !== txDirection) return false;
-                if (absAmount < p.minAmount || absAmount > p.maxAmount) return false;
-                
-                if (p.lastMatchedDate) {
-                    const daysSince = Math.abs(daysBetween(p.lastMatchedDate, tx.date));
-                    const cooldown = p.cadence === "weekly" ? 5 : p.cadence === "biweekly" ? 12 : 26;
-                    if (daysSince < cooldown) return false;
-                }
-                
-                return true;
+                return isRecurringIdentityMatch(
+                    { description: tx.merchantKey, direction: txDirection, amount: absAmount, txDate: tx.date },
+                    p,
+                    p.lastMatchedDate,
+                    p.cadence
+                );
             });
 
             if (matchedPattern) {

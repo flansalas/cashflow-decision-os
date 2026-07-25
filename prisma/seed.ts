@@ -4,13 +4,45 @@
 
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import pg from "pg";
 import path from "path";
 
-const dbUrl = process.env.DATABASE_URL ?? "file:./dev.db";
-const filePath = dbUrl.replace(/^file:/, "");
-const absPath = path.resolve(process.cwd(), filePath);
-const adapter = new PrismaBetterSqlite3({ url: absPath });
+function enforceSafetyGuards() {
+    if (process.env.ALLOW_DESTRUCTIVE_SEED !== "true") {
+        throw new Error("Safety Guard: ALLOW_DESTRUCTIVE_SEED=true is required to run this script.");
+    }
+
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) {
+        throw new Error("Safety Guard: DATABASE_URL is not set.");
+    }
+
+    const allowedHosts = [
+        "ep-plain-truth-anxarbfz-pooler.c-6.us-east-1.aws.neon.tech",
+        "ep-still-wind-an0l4e45-pooler.c-6.us-east-1.aws.neon.tech",
+        "ep-holy-cloud-ands7kvy-pooler.c-6.us-east-1.aws.neon.tech",
+        "localhost",
+        "127.0.0.1"
+    ];
+
+    try {
+        const url = new URL(dbUrl);
+        const host = url.hostname;
+        if (!allowedHosts.includes(host)) {
+            throw new Error(`Safety Guard: Database host '${host}' is not in the approved allowlist.`);
+        }
+        console.log(`[SAFETY] Target Database Host: ${host}`);
+        console.log(`[SAFETY] Target Database Name: ${url.pathname.replace(/^\//, '')}`);
+    } catch (e: any) {
+        throw new Error(`Safety Guard: Could not parse DATABASE_URL. ${e.message}`);
+    }
+}
+
+enforceSafetyGuards();
+
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 function d(iso: string): Date {

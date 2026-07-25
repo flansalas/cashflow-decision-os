@@ -10,6 +10,7 @@ import { resolveTenant } from "@/lib/tenant";
 import prisma from "@/db/prisma";
 import { resolveForecastHashAfter } from "@/services/forecast-hash";
 import { syncVarianceLedger } from "@/services/variance-sync";
+import * as crypto from "crypto";
 
 /**
  * Rolls a date forward by the given cadence until it is >= the asOfDate.
@@ -332,6 +333,83 @@ export async function POST(req: NextRequest) {
                         breakdownJson: finalBreakdownJson,
                     }
                 });
+
+                // Slice 1: Snapshot generation
+                if (finalBreakdownJson) {
+                    const parsedBreakdown = JSON.parse(finalBreakdownJson);
+                    // Find the exact week matching the checkpoint
+                    const targetWeek = parsedBreakdown.find((w: any) => new Date(w.weekStart).getTime() === checkpoint!.weekStart.getTime());
+                    
+                    if (targetWeek) {
+                        let snapshotInflowSum = 0;
+                        let snapshotOutflowSum = 0;
+                        const snapshotData = [];
+
+                        for (const item of (targetWeek.breakdown?.inflows || [])) {
+                            snapshotInflowSum += Math.round(item.amount * 100);
+                            
+                            const metadata = item.metadata || {};
+                            const sourceStateJson = JSON.stringify(metadata);
+                            const sourceStateHash = crypto.createHash("sha256").update(sourceStateJson).digest("hex");
+                            
+                            snapshotData.push({
+                                forecastCheckpointId: checkpoint!.id,
+                                targetWeekStart: checkpoint!.weekStart,
+                                direction: "inflow",
+                                componentCategory: item.section || "unknown",
+                                sourceType: item.sourceType || "unknown",
+                                sourceId: item.sourceId || null,
+                                sourceAmountAtForecast: metadata.sourceAmountAtForecast ?? null,
+                                sourceDateAtForecast: metadata.sourceDateAtForecast ? new Date(metadata.sourceDateAtForecast) : null,
+                                sourceStatusAtForecast: metadata.sourceStatusAtForecast ?? null,
+                                overrideId: metadata.overrideId ?? null,
+                                projectedAmount: item.amount,
+                                confidenceTier: item.confidence || "none",
+                                sourceStateJson: sourceStateJson,
+                                sourceStateHash: sourceStateHash,
+                                isUserOverridden: item.type === "overridden"
+                            });
+                        }
+                        
+                        for (const item of (targetWeek.breakdown?.outflows || [])) {
+                            snapshotOutflowSum += Math.round(item.amount * 100);
+                            
+                            const metadata = item.metadata || {};
+                            const sourceStateJson = JSON.stringify(metadata);
+                            const sourceStateHash = crypto.createHash("sha256").update(sourceStateJson).digest("hex");
+                            
+                            snapshotData.push({
+                                forecastCheckpointId: checkpoint!.id,
+                                targetWeekStart: checkpoint!.weekStart,
+                                direction: "outflow",
+                                componentCategory: item.section || "unknown",
+                                sourceType: item.sourceType || "unknown",
+                                sourceId: item.sourceId || null,
+                                sourceAmountAtForecast: metadata.sourceAmountAtForecast ?? null,
+                                sourceDateAtForecast: metadata.sourceDateAtForecast ? new Date(metadata.sourceDateAtForecast) : null,
+                                sourceStatusAtForecast: metadata.sourceStatusAtForecast ?? null,
+                                overrideId: metadata.overrideId ?? null,
+                                projectedAmount: item.amount,
+                                confidenceTier: item.confidence || "none",
+                                sourceStateJson: sourceStateJson,
+                                sourceStateHash: sourceStateHash,
+                                isUserOverridden: item.type === "overridden"
+                            });
+                        }
+
+                        const expectedInflowSumCents = Math.round(checkpoint!.inflowsExpected * 100);
+                        const expectedOutflowSumCents = Math.round(checkpoint!.outflowsExpected * 100);
+
+                        if (snapshotInflowSum !== expectedInflowSumCents || snapshotOutflowSum !== expectedOutflowSumCents) {
+                            throw new Error(`Snapshot reconciliation failed. Checkpoint: In=${expectedInflowSumCents}/Out=${expectedOutflowSumCents}. Snapshots: In=${snapshotInflowSum}/Out=${snapshotOutflowSum}.`);
+                        }
+
+                        if (snapshotData.length > 0) {
+                            await tx.forecastComponentSnapshot.createMany({ data: snapshotData });
+                        }
+                    }
+                }
+
             } else {
                 throw new Error("Missing or invalid required forecast fields for checkpoint preservation.");
             }

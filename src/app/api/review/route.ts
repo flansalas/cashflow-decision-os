@@ -25,6 +25,12 @@ function extractWeekFromPlan(plan: any, targetWeekStartStr: string) {
 export async function GET(req: NextRequest) {
     const tenantId = await resolveTenant(req);
     if (!tenantId) return NextResponse.json({ error: "Missing or invalid company" }, { status: 401 });
+    
+    const requestedCompanyId = req.nextUrl.searchParams.get("companyId");
+    if (requestedCompanyId && requestedCompanyId !== tenantId) {
+        return NextResponse.json({ error: "Forbidden: cross-tenant access denied" }, { status: 403 });
+    }
+    
     const companyId = tenantId;
 
     try {

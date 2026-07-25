@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveTenant } from "@/lib/tenant";
 import prisma from "@/db/prisma";
 import { computeVarianceDrivers } from "@/services/variance-drivers";
+import { getDeterministicVarianceDrivers } from "@/services/deterministic-variance";
 
 export async function GET(req: NextRequest) {
     try {
@@ -19,6 +20,12 @@ export async function GET(req: NextRequest) {
         }
 
         const { searchParams } = req.nextUrl;
+        
+        const requestedCompanyId = searchParams.get("companyId");
+        if (requestedCompanyId && requestedCompanyId !== companyId) {
+            return NextResponse.json({ error: "Forbidden: cross-tenant access denied" }, { status: 403 });
+        }
+
         const checkpointIdParam = searchParams.get("checkpointId");
         const latestParam = searchParams.get("latest");
 
@@ -45,8 +52,15 @@ export async function GET(req: NextRequest) {
             );
         }
 
-        const result = await computeVarianceDrivers(targetCheckpointId, companyId);
-        return NextResponse.json(result);
+        const deterministicResult = await getDeterministicVarianceDrivers(targetCheckpointId, companyId);
+        
+        if (deterministicResult) {
+            return NextResponse.json(deterministicResult);
+        }
+
+        // Fallback to legacy
+        const legacyResult = await computeVarianceDrivers(targetCheckpointId, companyId);
+        return NextResponse.json({ ...legacyResult, isDeterministic: false });
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Unknown error";
         // Not-found errors from the service become 404

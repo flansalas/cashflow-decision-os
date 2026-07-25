@@ -64,7 +64,7 @@ function ReviewPageInner() {
     const loadData = () => {
         if (!companyId) return;
         setLoading(true);
-        fetch('/api/review', { headers: { 'Accept': 'application/json' } })
+        fetch(`/api/review?companyId=${companyId}`, { headers: { 'Accept': 'application/json' } })
             .then(r => r.json())
             .then(d => {
                 if (d.error) setError(d.error);
@@ -98,7 +98,7 @@ function ReviewPageInner() {
     useEffect(() => {
         if (isHistorical && activeData?.checkpoint?.id) {
             setDriverLoading(true);
-            fetch(`/api/variance-drivers?checkpointId=${activeData.checkpoint.id}`)
+            fetch(`/api/variance-drivers?checkpointId=${activeData.checkpoint.id}&companyId=${companyId}`)
                 .then(r => r.json())
                 .then(d => setDriverData(d.error ? null : d))
                 .catch(() => setDriverData(null))

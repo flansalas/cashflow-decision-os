@@ -150,7 +150,7 @@ export async function assembleForecastData(companyId: string) {
         }
         if (isExcluded) return null;
         return {
-            id: bill.id, vendorName: bill.vendorName, billNo: bill.billNo, amountOpen: bill.amountOpen, billDate: bill.billDate, dueDate: bill.dueDate, daysPastDue: bill.daysPastDue, status: bill.status, criticality: vp?.criticality, overrideDueDate, overrideAmount, markedPaid,
+            id: bill.id, vendorName: bill.vendorName, billNo: bill.billNo, amountOpen: bill.amountOpen, billDate: bill.billDate, dueDate: bill.dueDate, daysPastDue: bill.daysPastDue, status: bill.status, criticality: vp?.criticality, overrideDueDate, overrideAmount, markedPaid, expenseClass: (bill as any).expenseClass,
         };
     }).filter((bill): bill is NonNullable<typeof bill> => bill !== null);
 
@@ -284,7 +284,7 @@ export async function assembleForecastData(companyId: string) {
         }
         if (isExcluded) return null;
         return {
-            id: bill.id, vendorName: bill.vendorName, billNo: bill.billNo, amountOpen: bill.amountOpen, billDate: bill.billDate, dueDate: bill.dueDate, daysPastDue: bill.daysPastDue, status: bill.status, criticality: vp?.criticality, overrideDueDate: null, overrideAmount, markedPaid,
+            id: bill.id, vendorName: bill.vendorName, billNo: bill.billNo, amountOpen: bill.amountOpen, billDate: bill.billDate, dueDate: bill.dueDate, daysPastDue: bill.daysPastDue, status: bill.status, criticality: vp?.criticality, overrideDueDate: null, overrideAmount, markedPaid, expenseClass: (bill as any).expenseClass,
         };
     }).filter((bill): bill is NonNullable<typeof bill> => bill !== null);
 

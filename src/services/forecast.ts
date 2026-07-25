@@ -48,6 +48,7 @@ export interface ForecastBill {
     overrideDueDate?: Date | null;
     overrideAmount?: number | null;
     markedPaid?: boolean;
+    expenseClass?: string;
 }
 
 export interface ForecastRecurring {
@@ -673,6 +674,12 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 sourceId: item.invoice.id,
                 confidence: item.confidence,
                 section: "AR Receipts",
+                metadata: {
+                    sourceAmountAtForecast: item.invoice.amountOpen,
+                    sourceDateAtForecast: item.invoice.dueDate,
+                    sourceStatusAtForecast: item.invoice.status,
+                    overrideId: null // We'll add this if we have it in the future
+                }
             });
         }
 
@@ -690,7 +697,11 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 sourceId: item.pattern.id,
                 confidence: item.pattern.confidence,
                 section: "Recurring Inflows",
-                metadata: item.meta,
+                metadata: {
+                    ...(item.meta || {}),
+                    sourceAmountAtForecast: item.pattern.typicalAmount,
+                    sourceDateAtForecast: item.pattern.nextExpectedDate,
+                }
             });
         }
 
@@ -801,6 +812,12 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 sourceId: item.bill.id,
                 confidence: "high",
                 section: "AP Bills",
+                metadata: {
+                    sourceAmountAtForecast: item.bill.amountOpen,
+                    sourceDateAtForecast: item.bill.dueDate,
+                    sourceStatusAtForecast: item.bill.status,
+                    expenseClass: item.bill.expenseClass,
+                }
             });
         }
 
@@ -821,7 +838,11 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 sourceId: item.pattern.id,
                 confidence: item.pattern.confidence,
                 section: "Recurring Commitments",
-                metadata: item.meta,
+                metadata: {
+                    ...(item.meta || {}),
+                    sourceAmountAtForecast: item.pattern.typicalAmount,
+                    sourceDateAtForecast: item.pattern.nextExpectedDate,
+                }
             });
         }
 
@@ -866,8 +887,14 @@ export function computeForecast(input: ForecastInput): ForecastResult {
 
         // FIXED BUG: Do not include Payroll, Rent, Recurring, or Manual in this sum! 
         // Variable baseline is additive to fixed overhead and one-off manual adjustments.
+        // Slice 4 BUG FIX: Also only include AP bills that are explicitly classified as "cogs", 
+        // to prevent OPEX/unknown bills from masking the variable COGS floor.
         const scheduledVariableOutflowSum = outflowBreakdown
-            .filter(i => !["payroll", "recurring", "assumption", "manual"].includes(i.sourceType))
+            .filter(i => {
+                if (["payroll", "recurring", "assumption", "manual"].includes(i.sourceType)) return false;
+                if (i.sourceType === "bill" && i.metadata?.expenseClass !== "cogs") return false;
+                return true;
+            })
             .reduce((s, i) => s + i.amount, 0);
 
         cumulativeOutflowDeficit -= scheduledVariableOutflowSum;
