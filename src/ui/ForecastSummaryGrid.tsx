@@ -87,7 +87,7 @@ function ProvenanceCard({ info }: { info: HoveredInfo }) {
             {/* Label */}
             <div className="flex items-center justify-between mb-2">
                 <span className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--text-muted)" }}>
-                    {isIn ? "Projected Collections" : "Projected Spend"}
+                    Baseline Projection
                 </span>
                 <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-400 font-semibold">est.</span>
             </div>
@@ -239,20 +239,8 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick, baselin
                                             className="px-3 py-2 border-b border-r text-right text-xs font-bold cursor-default transition-colors"
                                             style={{
                                                 borderColor: "var(--border-subtle)",
-                                                background: hoveredInfo?.type === "in" && hoveredInfo.week === w.weekNumber
-                                                    ? "rgba(5,150,105,0.06)"
-                                                    : "var(--bg-base)",
+                                                background: "var(--bg-base)",
                                             }}
-                                            onMouseEnter={(e) => setHoveredInfo({
-                                                type: "in", week: w.weekNumber,
-                                                scheduled, recurring, projected,
-                                                total: w.inflowsExpected,
-                                                weekLabel: `W${w.weekNumber} · ${formatDateRange(w.weekStart, w.weekEnd)}`,
-                                                x: e.clientX, y: e.clientY,
-                                                baselineMethodNote
-                                            })}
-                                            onMouseMove={(e) => setHoveredInfo(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
-                                            onMouseLeave={() => setHoveredInfo(null)}
                                         >
                                             <span className="text-emerald-700">{fmt(w.inflowsExpected)}</span>
                                         </td>
@@ -331,8 +319,24 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick, baselin
                                                 return (
                                                     <td
                                                         key={w.weekNumber}
-                                                        className="px-3 py-2 border-b border-r text-right text-xs"
-                                                        style={{ borderColor: "var(--border-subtle)", color: amount > 0 ? "#065f46" : undefined }}
+                                                        className="px-3 py-2 border-b border-r text-right text-xs transition-colors cursor-default"
+                                                        style={{
+                                                            borderColor: "var(--border-subtle)",
+                                                            color: "#065f46",
+                                                            background: hoveredInfo?.type === "in" && hoveredInfo.week === w.weekNumber
+                                                                ? "rgba(5,150,105,0.06)"
+                                                                : "inherit",
+                                                        }}
+                                                        onMouseEnter={(e) => setHoveredInfo({
+                                                            type: "in", week: w.weekNumber,
+                                                            scheduled: 0, recurring: 0, projected: amount,
+                                                            total: amount,
+                                                            weekLabel: `W${w.weekNumber} · ${formatDateRange(w.weekStart, w.weekEnd)}`,
+                                                            x: e.clientX, y: e.clientY,
+                                                            baselineMethodNote
+                                                        })}
+                                                        onMouseMove={(e) => setHoveredInfo(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
+                                                        onMouseLeave={() => setHoveredInfo(null)}
                                                         title={amount > 0 ? "Engine-projected inflow based on 52-week bank history" : undefined}
                                                     >
                                                         {amount === 0
@@ -360,35 +364,14 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick, baselin
                                     TOTAL OUTFLOW
                                 </td>
                                 {weeks.map((w: any) => {
-                                    const scheduled = w.breakdown.outflows
-                                        .filter((i: any) => i.sourceType === "bill")
-                                        .reduce((s: number, i: any) => s + i.amount, 0);
-                                    const recurring = w.breakdown.outflows
-                                        .filter((i: any) => i.sourceType === "recurring")
-                                        .reduce((s: number, i: any) => s + i.amount, 0);
-                                    const projected = w.breakdown.outflows
-                                        .filter((i: any) => i.sourceType === "baseline")
-                                        .reduce((s: number, i: any) => s + i.amount, 0);
                                     return (
                                         <td
                                             key={w.weekNumber}
-                                            className="px-3 py-2 border-b border-r text-right text-xs font-bold cursor-default transition-colors"
+                                            className="px-3 py-2 border-b border-r text-right text-xs font-bold cursor-default"
                                             style={{
                                                 borderColor: "var(--border-subtle)",
-                                                background: hoveredInfo?.type === "out" && hoveredInfo.week === w.weekNumber
-                                                    ? "rgba(225,29,72,0.05)"
-                                                    : "var(--bg-base)",
+                                                background: "var(--bg-base)",
                                             }}
-                                            onMouseEnter={(e) => setHoveredInfo({
-                                                type: "out", week: w.weekNumber,
-                                                scheduled, recurring, projected,
-                                                total: w.outflowsExpected,
-                                                weekLabel: `W${w.weekNumber} · ${formatDateRange(w.weekStart, w.weekEnd)}`,
-                                                x: e.clientX, y: e.clientY,
-                                                baselineMethodNote
-                                            })}
-                                            onMouseMove={(e) => setHoveredInfo(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
-                                            onMouseLeave={() => setHoveredInfo(null)}
                                         >
                                             <span className="text-red-700">{fmt(w.outflowsExpected)}</span>
                                         </td>
@@ -484,8 +467,24 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick, baselin
                                                 return (
                                                     <td
                                                         key={w.weekNumber}
-                                                        className="px-3 py-2 border-b border-r text-right text-xs"
-                                                        style={{ borderColor: "var(--border-subtle)", color: amount > 0 ? "#92400e" : undefined }}
+                                                        className="px-3 py-2 border-b border-r text-right text-xs transition-colors cursor-default"
+                                                        style={{
+                                                            borderColor: "var(--border-subtle)",
+                                                            color: "#92400e",
+                                                            background: hoveredInfo?.type === "out" && hoveredInfo.week === w.weekNumber
+                                                                ? "rgba(225,29,72,0.05)"
+                                                                : "inherit",
+                                                        }}
+                                                        onMouseEnter={(e) => setHoveredInfo({
+                                                            type: "out", week: w.weekNumber,
+                                                            scheduled: 0, recurring: 0, projected: amount,
+                                                            total: amount,
+                                                            weekLabel: `W${w.weekNumber} · ${formatDateRange(w.weekStart, w.weekEnd)}`,
+                                                            x: e.clientX, y: e.clientY,
+                                                            baselineMethodNote
+                                                        })}
+                                                        onMouseMove={(e) => setHoveredInfo(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
+                                                        onMouseLeave={() => setHoveredInfo(null)}
                                                         title={amount > 0 ? "Engine-projected outflow based on 52-week bank history" : undefined}
                                                     >
                                                         {amount === 0
