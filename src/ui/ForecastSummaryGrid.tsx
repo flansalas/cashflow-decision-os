@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { BarChart2, CornerDownRight, ChevronDown, ChevronRight } from "lucide-react";
 
 interface ForecastSummaryGridProps {
@@ -68,7 +69,9 @@ function ProvenanceCard({ info }: { info: HoveredInfo }) {
         ? "Expected routine cash collections based on your historical bank activity. This fills the portion of your normal collections not already represented by Scheduled Invoices."
         : "Expected routine operating expenses based on your historical bank activity. This fills the portion of your normal variable spending not already represented by Scheduled Bills classified as COGS. It runs parallel to your fixed costs like payroll and rent.");
 
-    return (
+    if (typeof document === "undefined") return null;
+
+    return createPortal(
         <div
             style={{
                 position: "fixed",
@@ -101,7 +104,8 @@ function ProvenanceCard({ info }: { info: HoveredInfo }) {
             <p className="text-[10px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
                 {methodNote}
             </p>
-        </div>
+        </div>,
+        document.body
     );
 }
 
@@ -337,7 +341,6 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick, baselin
                                                         })}
                                                         onMouseMove={(e) => setHoveredInfo(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
                                                         onMouseLeave={() => setHoveredInfo(null)}
-                                                        title={amount > 0 ? "Engine-projected inflow based on 52-week bank history" : undefined}
                                                     >
                                                         {amount === 0
                                                             ? <span style={{ color: "var(--text-muted)", opacity: 0.3 }}>—</span>
@@ -485,7 +488,6 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick, baselin
                                                         })}
                                                         onMouseMove={(e) => setHoveredInfo(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
                                                         onMouseLeave={() => setHoveredInfo(null)}
-                                                        title={amount > 0 ? "Engine-projected outflow based on 52-week bank history" : undefined}
                                                     >
                                                         {amount === 0
                                                             ? <span style={{ color: "var(--text-muted)", opacity: 0.3 }}>—</span>
