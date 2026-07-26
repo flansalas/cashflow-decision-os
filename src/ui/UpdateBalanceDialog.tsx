@@ -363,7 +363,7 @@ export function UpdateBalanceDialog({
                             } catch (e) {
                                 console.error(e);
                             }
-                            setStep("uncleared");
+                            setStep("balance");
                         }}
                     />
                 )}
@@ -402,8 +402,7 @@ export function UpdateBalanceDialog({
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2">
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-lg border bg-blue-50 text-blue-600 border-blue-100 italic">Roll Protocol</span>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Step 01 / 03</span>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-lg border bg-violet-50 text-violet-600 border-violet-100 italic">Roll Protocol • Step 3 of 4</span>
                     </div>
                     <h2 className="text-2xl font-black mt-0.5 leading-tight text-slate-900">Check-in Terminal</h2>
                     <p className="text-sm mt-3 leading-relaxed text-slate-500 font-medium">
