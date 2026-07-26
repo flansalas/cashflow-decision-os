@@ -55,7 +55,7 @@ export function RiskOptimismDial({ companyId, initialMargin, onChanged }: Props)
                 <HelpBubble
                     position="bottom-left"
                     width="w-72"
-                    text="Adjusts the safety margin applied to your variable spend projections. Decrease below 1.0x to model extreme skepticism (conservative). Increase above 1.0x for aggressive growth assumptions."
+                    text="Adjusts your expected day-to-day expenses. Use this to see how sudden cost increases or planned budget cuts would affect your cash runway."
                 />
             </div>
 

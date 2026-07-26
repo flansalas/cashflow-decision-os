@@ -8,7 +8,7 @@ export function LearningProposals({ proposals, onAction }: { proposals: any[], o
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-8">
             <div className="px-6 py-4 border-b border-slate-100 bg-amber-50/50 flex items-center gap-2">
                 <Lightbulb className="w-4 h-4 text-amber-600" />
-                <h3 className="font-bold text-slate-800 text-sm">Learning Proposals</h3>
+                <h3 className="font-bold text-slate-800 text-sm">Suggested Adjustments</h3>
             </div>
             <div className="divide-y divide-slate-100">
                 {proposals.map(p => (

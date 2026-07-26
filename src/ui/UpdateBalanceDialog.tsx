@@ -321,7 +321,7 @@ export function UpdateBalanceDialog({
                                 <div>
                                     <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Why bank transactions matter</p>
                                     <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                                        When bank transactions are present, your weekly roll is saved as <strong>Verified</strong> and Macro-Memory can learn from actual vs. forecast variance. Without them, the roll is saved as <strong>Unverified</strong> and no learning occurs.
+                                        Closing the week with actual bank transactions allows the system to measure forecast accuracy. Those completed weeks become part of the historical record used in future projections.
                                     </p>
                                 </div>
                             </div>
@@ -630,8 +630,8 @@ export function UpdateBalanceDialog({
                             </p>
                             <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                                 {isVerified
-                                    ? "Baseline Variance Ledger will be created. Macro-Memory will learn from this week."
-                                    : "Baseline Variance Ledger will NOT be created. Macro-Memory will not learn from this week."}
+                                    ? "Actual bank activity is available, so the system can compare this week’s forecast with what actually happened."
+                                    : "Actual bank activity is unavailable, so the system cannot reliably measure this week’s forecast accuracy."}
                             </p>
                         </div>
                     </div>
@@ -641,8 +641,8 @@ export function UpdateBalanceDialog({
                         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
                             <div className="flex items-start gap-2">
                                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                                    Bank transactions were not uploaded. This roll can continue, but it will be saved as unverified. Macro-Memory will not learn from this week unless bank transactions are uploaded before the roll or a future reprocess feature is added.
+                                <p className="text-xs font-semibold text-amber-700 mt-2 p-2 bg-amber-100 rounded-md border border-amber-200">
+                                    Warning: Actual bank activity was not uploaded. You can still close the week, but its forecast accuracy cannot be verified.
                                 </p>
                             </div>
                             <button

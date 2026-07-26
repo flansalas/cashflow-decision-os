@@ -545,17 +545,26 @@ function SectionBlock({
                                                         <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-indigo-400 opacity-75"></span>
                                                         <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
                                                     </span>
-                                                    <span className="text-indigo-600 font-black">AI Variance Engine Active</span>
+                                                    <span className="text-indigo-600 font-black">Baseline Adjustment Active</span>
                                                 </div>
                                                 <p className="normal-case tracking-normal text-xs font-medium text-slate-500 mt-0.5">
-                                                    Applied a <strong className="text-slate-700">{(sign === "+" ? macroMemory.varianceMultiplierIn : macroMemory.varianceMultiplier).toFixed(2)}x</strong> multiplier based on your {macroMemory.weeksTracked}-week historical baseline variance.
+                                                    {(() => {
+                                                        const multiplier = sign === "+" ? macroMemory.varianceMultiplierIn : macroMemory.varianceMultiplier;
+                                                        const pct = Math.round(Math.abs(multiplier - 1) * 100);
+                                                        if (multiplier > 1.0) {
+                                                            return <>Adjusted <strong className="text-slate-700">{pct}%</strong> higher because recent actual cash activity has been higher than the historical baseline.</>;
+                                                        } else if (multiplier < 1.0) {
+                                                            return <>Adjusted <strong className="text-slate-700">{pct}%</strong> lower because recent actual cash activity has been lower than the historical baseline.</>;
+                                                        }
+                                                        return "No recent adjustment is being applied to the historical baseline.";
+                                                    })()}
                                                 </p>
                                             </div>
                                         )}
                                         {/* Projection origin note — shown when no macro-memory yet */}
                                         {item.sourceType === "baseline" && !(macroMemory && macroMemory.weeksTracked > 0) && (
                                             <div className="mt-1.5 text-[9px] uppercase tracking-wide font-semibold text-slate-400 bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 w-fit">
-                                                <span className="text-amber-600 font-black">Auto-Projection</span>
+                                                <span className="text-amber-600 font-black">Historical Baseline</span>
                                                 <p className="normal-case tracking-normal text-xs font-medium text-slate-500 mt-0.5">
                                                     {item.label.includes("limited history")
                                                         ? "Estimated from a small sample of bank history. Upload more bank data to improve accuracy."

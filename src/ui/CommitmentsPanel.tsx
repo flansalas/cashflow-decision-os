@@ -932,7 +932,7 @@ export function CommitmentsPanel({ commitments, count, companyId, weeks, backlog
                     <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
                         The Cash Belt
                     </span>
-                    <HelpBubble text="Your recurring promises — rent, loans, utilities, and payroll. We track these so you never forget a payment and your forecast stays accurate." />
+                    <HelpBubble text="Your scheduled commitments, such as rent, payroll, and loan payments. We track these exactly as they are owed so your forecast always reflects your fixed obligations." />
                 </div>
                 
                 <div className="flex items-center gap-2 ml-auto">
@@ -951,8 +951,8 @@ export function CommitmentsPanel({ commitments, count, companyId, weeks, backlog
                     {hasScheduleData && (
                         <div className="flex border-b" style={{ borderColor: "var(--border-subtle)" }}>
                             {([
-                                { id: "schedule", label: <span className="flex items-center justify-center gap-1.5"><Calendar className="w-4 h-4" /> Schedule <HelpBubble text="View exactly when cash leaves your bank. Drag to reschedule or manage backlog items." /></span> },
-                                { id: "manage", label: <span className="flex items-center justify-center gap-1.5"><Settings className="w-4 h-4" /> Manage <HelpBubble text="Edit your recurring promises setup, typical amounts, and cadence." /></span> },
+                                { id: "schedule", label: <span className="flex items-center justify-center gap-1.5"><Calendar className="w-4 h-4" /> Schedule <HelpBubble text="See exactly when cash is scheduled to leave your bank. Adjust the dates if a payment will clear earlier or later than expected." /></span> },
+                                { id: "manage", label: <span className="flex items-center justify-center gap-1.5"><Settings className="w-4 h-4" /> Manage <HelpBubble text="Define your recurring payment schedules, typical amounts, and categories." /></span> },
                             ] as const).map(t => (
                                 <button
                                     key={t.id}

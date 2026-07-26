@@ -295,7 +295,7 @@ function ReviewPageInner() {
                                     { label: "Beginning Cash", field: "startCash" },
                                     { label: "Total Inflows", field: "inflowsExpected" },
                                     { label: "Total Outflows", field: "outflowsExpected" },
-                                    { label: "Reconciliation Difference", field: "reconciliationDifference", help: "Difference between the reported bank balance and the balance implied by imported bank transactions for this week." },
+                                    { label: "Reconciliation Difference", field: "reconciliationDifference", help: "The difference between your reported bank balance and the balance calculated from the week’s imported bank transactions. A non-zero amount may mean some transactions are missing, pending, duplicated, or have not synced yet." },
                                     { label: "Expected Ending Cash", field: "endCashExpected" }
                                 ].map(row => {
                                     const orig = getOriginalMetric(row.field);

@@ -65,8 +65,8 @@ function ProvenanceCard({ info }: { info: HoveredInfo }) {
     const top = info.y + OFFSET_Y;
 
     const methodNote = info.baselineMethodNote || (isIn
-        ? "Gap between the 52-week recency-weighted avg. variable collection and the AR invoices already logged for this week. This adaptive baseline runs parallel to known recurring inflows. If invoices cover the avg, this is $0."
-        : "Gap between the 52-week recency-weighted avg. variable spend and the AP bills already logged for this week. This baseline runs parallel to your known fixed costs (payroll, rent, recurring). If AP bills cover the avg, this is $0.");
+        ? "Expected routine cash collections based on your historical bank activity. This fills the portion of your normal collections not already represented by Scheduled Invoices."
+        : "Expected routine operating expenses based on your historical bank activity. This fills the portion of your normal variable spending not already represented by Scheduled Bills classified as COGS. It runs parallel to your fixed costs like payroll and rent.");
 
     return (
         <div
