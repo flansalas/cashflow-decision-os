@@ -28,7 +28,19 @@ export async function GET(req: NextRequest) {
     
     const requestedCompanyId = req.nextUrl.searchParams.get("companyId");
     if (requestedCompanyId && requestedCompanyId !== tenantId) {
-        return NextResponse.json({ error: "Forbidden: cross-tenant access denied" }, { status: 403 });
+        let isAuthorized = false;
+        if (requestedCompanyId.startsWith("org_")) {
+            const company = await prisma.company.findUnique({
+                where: { clerkOrgId: requestedCompanyId },
+                select: { id: true }
+            });
+            if (company?.id === tenantId) {
+                isAuthorized = true;
+            }
+        }
+        if (!isAuthorized) {
+            return NextResponse.json({ error: "Forbidden: cross-tenant access denied" }, { status: 403 });
+        }
     }
     
     const companyId = tenantId;
