@@ -742,8 +742,13 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         const baselineInflowWeekly = (input.baselineInflowWeekly || 0) * inflowMultiplier;
         cumulativeInflowDeficit += baselineInflowWeekly;
 
+        // Absorb baseline with ALL operating revenue inflows:
+        // invoices (AR) and recurring inflows (retainers, subscriptions) both
+        // represent customer cash the baseline already anticipates.
+        // Non-operating inflows (loans, capital) have sourceType 'manual' and
+        // intentionally do NOT absorb — they are pure liquidity events.
         const scheduledInflowSum = inflowBreakdown
-            .filter(i => i.sourceType === "invoice")
+            .filter(i => i.sourceType === "invoice" || i.sourceType === "recurring")
             .reduce((s, i) => s + i.amount, 0);
 
         cumulativeInflowDeficit -= scheduledInflowSum;
@@ -904,10 +909,11 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             cumulativeOutflowDeficit = 0;
         }
 
-        // Use the higher of historical baseline gap or COGS projected for this week.
-        // Prevent double counting by reducing the COGS floor by the AP bills we already know about.
-        const remainingCogs = Math.max(0, pendingCogs[w] - scheduledVariableOutflowSum);
-        outflowGap = Math.max(outflowGap, remainingCogs);
+        // COGS secondary floor removed: the historical outflow baseline already
+        // implicitly contains COGS from 52 weeks of real spend data.
+        // A synthetic COGS floor override breaks the AP absorption decay curve
+        // and causes double-counting. Outflow baseline is governed solely by
+        // the cumulative AP deficit accumulator above.
 
         if (input.hasBankBaseline && outflowGap > 0) {
             outflowExpected += outflowGap;
