@@ -345,7 +345,7 @@ export async function POST(req: NextRequest) {
                         let snapshotOutflowSum = 0;
                         const snapshotData = [];
 
-                        for (const item of (targetWeek.breakdown?.inflows || [])) {
+                        for (const item of (targetWeek.inflows || [])) {
                             snapshotInflowSum += Math.round(item.amount * 100);
                             
                             const metadata = item.metadata || {};
@@ -371,7 +371,7 @@ export async function POST(req: NextRequest) {
                             });
                         }
                         
-                        for (const item of (targetWeek.breakdown?.outflows || [])) {
+                        for (const item of (targetWeek.outflows || [])) {
                             snapshotOutflowSum += Math.round(item.amount * 100);
                             
                             const metadata = item.metadata || {};
