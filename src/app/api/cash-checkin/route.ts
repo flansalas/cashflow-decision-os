@@ -502,9 +502,9 @@ export async function POST(req: NextRequest) {
             warning: postRollHashWarning || warningMsg
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Cash check-in error:", error);
-        return NextResponse.json({ error: "Failed to save balance and adjustments" }, { status: 500 });
+        return NextResponse.json({ error: error.message || "Failed to save balance and adjustments" }, { status: 500 });
     }
 }
 

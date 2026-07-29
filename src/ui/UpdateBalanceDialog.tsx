@@ -155,7 +155,16 @@ export function UpdateBalanceDialog({
                     } : {})
                 }),
             });
-            if (!res.ok) { setError("Failed to save — try again"); setSaving(false); return; }
+            if (!res.ok) {
+                try {
+                    const errData = await res.json();
+                    setError(errData.error || `Failed to save — try again (${res.status})`);
+                } catch (e) {
+                    setError(`Failed to save — try again (${res.status})`);
+                }
+                setSaving(false);
+                return;
+            }
 
             // Read response body once — capture checkpoint id for variance driver lookup
             try {
