@@ -337,8 +337,8 @@ export async function POST(req: NextRequest) {
                 // Slice 1: Snapshot generation
                 if (finalBreakdownJson) {
                     const parsedBreakdown = JSON.parse(finalBreakdownJson);
-                    // Find the exact week matching the checkpoint
-                    const targetWeek = parsedBreakdown.find((w: any) => new Date(w.weekStart).getTime() === checkpoint!.weekStart.getTime());
+                    // The UI passes the breakdown for the exact week being checked in
+                    const targetWeek = parsedBreakdown;
                     
                     if (targetWeek) {
                         let snapshotInflowSum = 0;
