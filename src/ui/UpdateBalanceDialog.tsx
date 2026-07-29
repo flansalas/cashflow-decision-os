@@ -653,6 +653,12 @@ export function UpdateBalanceDialog({
                             </button>
                         </div>
                     )}
+
+                    {error && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 p-4 mt-2">
+                            <p className="text-sm font-semibold text-red-700">{error}</p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer */}

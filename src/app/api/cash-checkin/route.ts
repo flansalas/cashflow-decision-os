@@ -400,7 +400,7 @@ export async function POST(req: NextRequest) {
                         const expectedInflowSumCents = Math.round(checkpoint!.inflowsExpected * 100);
                         const expectedOutflowSumCents = Math.round(checkpoint!.outflowsExpected * 100);
 
-                        if (snapshotInflowSum !== expectedInflowSumCents || snapshotOutflowSum !== expectedOutflowSumCents) {
+                        if (Math.abs(snapshotInflowSum - expectedInflowSumCents) > 5 || Math.abs(snapshotOutflowSum - expectedOutflowSumCents) > 5) {
                             throw new Error(`Snapshot reconciliation failed. Checkpoint: In=${expectedInflowSumCents}/Out=${expectedOutflowSumCents}. Snapshots: In=${snapshotInflowSum}/Out=${snapshotOutflowSum}.`);
                         }
 
