@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
         // Get the most recent cash snapshot date to anchor the adjustment
         const snapshot = await prisma.cashSnapshot.findFirst({
             where: { companyId },
-            orderBy: { asOfDate: "desc" },
+            orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }],
         });
 
         await prisma.cashAdjustment.create({

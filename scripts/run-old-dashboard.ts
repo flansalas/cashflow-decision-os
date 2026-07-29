@@ -11,7 +11,7 @@ async function run() {
     // Replicating GET /api/dashboard logic
     const cashSnapshot = await prisma.cashSnapshot.findFirst({
         where: { companyId },
-        orderBy: { asOfDate: 'desc' }
+        orderBy: [{ asOfDate: 'desc' }, { createdAt: 'desc' }]
     });
     const cashAdjustments = await prisma.cashAdjustment.findMany({
         where: { companyId }

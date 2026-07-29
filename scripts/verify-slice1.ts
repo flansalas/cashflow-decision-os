@@ -6,7 +6,7 @@ async function run() {
     const companyId = "6f8b9b14-4b04-48dd-988b-4d28bef4ec16";
     const cashSnapshot = await prisma.cashSnapshot.findFirst({
         where: { companyId },
-        orderBy: { asOfDate: 'desc' }
+        orderBy: [{ asOfDate: 'desc' }, { createdAt: 'desc' }]
     });
     const cashAdjustments = await prisma.cashAdjustment.findMany({ where: { companyId } });
     const adjustmentsTotal = cashAdjustments.reduce((s, a) => s + a.amount, 0);

@@ -14,7 +14,7 @@ async function main() {
             select: { amount: true, txDate: true, description: true, direction: true },
         }),
         prisma.recurringPattern.findMany({ where: { companyId: cid } }),
-        prisma.cashSnapshot.findFirst({ where: { companyId: cid }, orderBy: { asOfDate: "desc" } }),
+        prisma.cashSnapshot.findFirst({ where: { companyId: cid }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] }),
     ]);
 
     const bankTxsForBaseline: BankTxForBaseline[] = bankTxs.map(tx => ({

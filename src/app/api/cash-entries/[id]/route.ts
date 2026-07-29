@@ -33,7 +33,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     let targetDate: Date | undefined;
     if (body.weekNumber !== undefined) {
         // Use the same Monday the forecast uses: getMonday(cashSnapshot.asOfDate)
-        const snapshot = await prisma.cashSnapshot.findFirst({ where: { companyId: tenantId }, orderBy: { asOfDate: "desc" } });
+        const snapshot = await prisma.cashSnapshot.findFirst({ where: { companyId: tenantId }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] });
         const baseMonday = snapshot ? getMondayUTC(new Date(snapshot.asOfDate)) : getMondayUTC(new Date());
         targetDate = new Date(baseMonday.getTime() + (body.weekNumber - 1) * 7 * 24 * 60 * 60 * 1000);
     }

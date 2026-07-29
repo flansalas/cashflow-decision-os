@@ -103,7 +103,7 @@ async function main() {
             if (actualStartCash === undefined) {
                 const fallbackSnapshot = await prisma.cashSnapshot.findFirst({
                     where: { companyId, asOfDate: { lte: weekStart } },
-                    orderBy: { asOfDate: 'desc' }
+                    orderBy: [{ asOfDate: 'desc' }, { createdAt: 'desc' }]
                 });
                 actualStartCash = fallbackSnapshot?.bankBalance ?? 0;
             }

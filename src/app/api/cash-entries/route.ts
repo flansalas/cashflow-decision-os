@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
             include: { category: true },
             orderBy: [{ targetDate: "asc" }, { createdAt: "asc" }],
         }),
-        prisma.cashSnapshot.findFirst({ where: { companyId }, orderBy: { asOfDate: "desc" } }),
+        prisma.cashSnapshot.findFirst({ where: { companyId }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] }),
     ]);
 
     // Use the same Monday the forecast uses: getMonday(cashSnapshot.asOfDate)
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     if (!weekNumber || weekNumber < 1 || weekNumber > 13) return NextResponse.json({ error: "Week number must be 1-13" }, { status: 400 });
 
     // Use the same Monday the forecast uses: getMonday(cashSnapshot.asOfDate)
-    const snapshot = await prisma.cashSnapshot.findFirst({ where: { companyId: tenantId }, orderBy: { asOfDate: "desc" } });
+    const snapshot = await prisma.cashSnapshot.findFirst({ where: { companyId: tenantId }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] });
     const baseMonday = snapshot ? getMondayUTC(new Date(snapshot.asOfDate)) : getMondayUTC(new Date());
     const targetDate = new Date(baseMonday.getTime() + (weekNumber - 1) * 7 * 24 * 60 * 60 * 1000);
 

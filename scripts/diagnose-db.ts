@@ -44,7 +44,7 @@ async function main() {
 
     console.log("\n=== DASHBOARD DATA CHECK for", cascio.name, "===");
     const [snapshot, invoices, bills, assumptions, adjustments, recurring] = await Promise.all([
-        prisma.cashSnapshot.findFirst({ where: { companyId: cid }, orderBy: { asOfDate: "desc" }, select: { id: true, asOfDate: true, bankBalance: true } }),
+        prisma.cashSnapshot.findFirst({ where: { companyId: cid }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }], select: { id: true, asOfDate: true, bankBalance: true } }),
         prisma.receivableInvoice.count({ where: { companyId: cid } }),
         prisma.payableBill.count({ where: { companyId: cid } }),
         prisma.assumption.findFirst({ where: { companyId: cid }, select: { id: true } }),

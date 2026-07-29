@@ -14,7 +14,7 @@ export async function buildAndCacheBaseline(companyId: string) {
 
     const cashSnapshot = await prisma.cashSnapshot.findFirst({
         where: { companyId },
-        orderBy: { asOfDate: "desc" },
+        orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }],
     });
 
     const assumptionsRaw = await prisma.assumption.findFirst({

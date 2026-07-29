@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
 
         // Get Cash state
         const [cashSnapshot, adjustments] = await Promise.all([
-            prisma.cashSnapshot.findFirst({ where: { companyId }, orderBy: { asOfDate: "desc" } }),
+            prisma.cashSnapshot.findFirst({ where: { companyId }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] }),
             prisma.cashAdjustment.findMany({ where: { companyId } })
         ]);
         const cash = {
@@ -134,7 +134,7 @@ export async function GET(req: NextRequest) {
             if (actualStartCash === undefined) {
                 const fallbackSnapshot = await prisma.cashSnapshot.findFirst({
                     where: { companyId, asOfDate: { lte: weekStart } },
-                    orderBy: { asOfDate: 'desc' }
+                    orderBy: [{ asOfDate: 'desc' }, { createdAt: 'desc' }]
                 });
                 actualStartCash = fallbackSnapshot?.bankBalance ?? 0;
             }

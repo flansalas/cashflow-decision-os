@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
         varianceLedger,
         customerPaymentObs,
     ] = await Promise.all([
-        prisma.cashSnapshot.findFirst({ where: { companyId: cid }, orderBy: { asOfDate: "desc" } }),
+        prisma.cashSnapshot.findFirst({ where: { companyId: cid }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] }),
         prisma.cashAdjustment.findMany({ where: { companyId: cid } }),
         prisma.receivableInvoice.findMany({ where: { companyId: cid } }),
         prisma.payableBill.findMany({ where: { companyId: cid } }),

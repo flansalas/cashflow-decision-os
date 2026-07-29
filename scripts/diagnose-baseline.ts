@@ -22,7 +22,7 @@ async function main() {
                 orderBy: { txDate: "desc" },
             }),
             prisma.recurringPattern.findMany({ where: { companyId: company.id } }),
-            prisma.cashSnapshot.findFirst({ where: { companyId: company.id }, orderBy: { asOfDate: "desc" } }),
+            prisma.cashSnapshot.findFirst({ where: { companyId: company.id }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] }),
         ]);
 
         console.log(`  Bank transactions (last 84 days): ${bankTxs.length}`);

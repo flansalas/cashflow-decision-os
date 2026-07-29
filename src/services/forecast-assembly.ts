@@ -23,7 +23,7 @@ export async function assembleForecastData(companyId: string) {
         varianceLedger,
         customerPaymentObs,
     ] = await Promise.all([
-        prisma.cashSnapshot.findFirst({ where: { companyId }, orderBy: { asOfDate: "desc" } }),
+        prisma.cashSnapshot.findFirst({ where: { companyId }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] }),
         prisma.cashAdjustment.findMany({ where: { companyId } }),
         prisma.receivableInvoice.findMany({ where: { companyId } }),
         prisma.payableBill.findMany({ where: { companyId } }),
