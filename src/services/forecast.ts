@@ -887,12 +887,10 @@ export function computeForecast(input: ForecastInput): ForecastResult {
 
         // FIXED BUG: Do not include Payroll, Rent, Recurring, or Manual in this sum! 
         // Variable baseline is additive to fixed overhead and one-off manual adjustments.
-        // Slice 4 BUG FIX: Also only include AP bills that are explicitly classified as "cogs", 
-        // to prevent OPEX/unknown bills from masking the variable COGS floor.
+        // We now allow ALL AP Bills to absorb the baseline to prevent double-counting.
         const scheduledVariableOutflowSum = outflowBreakdown
             .filter(i => {
                 if (["payroll", "recurring", "assumption", "manual"].includes(i.sourceType)) return false;
-                if (i.sourceType === "bill" && i.metadata?.expenseClass !== "cogs") return false;
                 return true;
             })
             .reduce((s, i) => s + i.amount, 0);
