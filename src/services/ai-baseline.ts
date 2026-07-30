@@ -21,7 +21,13 @@ export async function computeAIBaseline(
     try {
         if (!process.env.GEMINI_API_KEY) {
             console.warn("GEMINI_API_KEY not set. Skipping AI baseline accuracy layer.");
-            return null;
+            return {
+                inflowFactors: new Array(13).fill(1.0),
+                outflowFactors: new Array(13).fill(1.0),
+                inflowExplanations: new Array(13).fill("AI Error: GEMINI_API_KEY is not set in environment variables."),
+                outflowExplanations: new Array(13).fill("AI Error: GEMINI_API_KEY is not set in environment variables."),
+                reasoningLog: "AI Generation Failed: GEMINI_API_KEY is not set in environment variables."
+            };
         }
 
         const company = await prisma.company.findUnique({ where: { id: companyId } });
@@ -151,8 +157,14 @@ Respond strictly in the requested JSON format.
         
         return parsed;
 
-    } catch (e) {
+    } catch (e: any) {
         console.error("AI Baseline Generation Failed:", e);
-        return null;
+        return {
+            inflowFactors: new Array(13).fill(1.0),
+            outflowFactors: new Array(13).fill(1.0),
+            inflowExplanations: new Array(13).fill("AI Error: " + (e.message || String(e))),
+            outflowExplanations: new Array(13).fill("AI Error: " + (e.message || String(e))),
+            reasoningLog: "AI Generation Failed: " + (e.message || String(e))
+        };
     }
 }
