@@ -331,14 +331,17 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick, baselin
                                                                 ? "rgba(5,150,105,0.06)"
                                                                 : "inherit",
                                                         }}
-                                                        onMouseEnter={(e) => setHoveredInfo({
-                                                            type: "in", week: w.weekNumber,
-                                                            scheduled: 0, recurring: 0, projected: amount,
-                                                            total: amount,
-                                                            weekLabel: `W${w.weekNumber} · ${formatDateRange(w.weekStart, w.weekEnd)}`,
-                                                            x: e.clientX, y: e.clientY,
-                                                            baselineMethodNote
-                                                        })}
+                                                        onMouseEnter={(e) => {
+                                                            const baselineItem = w.breakdown.inflows.find((i: any) => i.sourceType === "baseline");
+                                                            setHoveredInfo({
+                                                                type: "in", week: w.weekNumber,
+                                                                scheduled: 0, recurring: 0, projected: amount,
+                                                                total: amount,
+                                                                weekLabel: `W${w.weekNumber} · ${formatDateRange(w.weekStart, w.weekEnd)}`,
+                                                                x: e.clientX, y: e.clientY,
+                                                                baselineMethodNote: baselineItem?.label || baselineMethodNote
+                                                            });
+                                                        }}
                                                         onMouseMove={(e) => setHoveredInfo(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
                                                         onMouseLeave={() => setHoveredInfo(null)}
                                                     >
@@ -478,14 +481,17 @@ export function ForecastSummaryGrid({ forecast, categories, onCellClick, baselin
                                                                 ? "rgba(225,29,72,0.05)"
                                                                 : "inherit",
                                                         }}
-                                                        onMouseEnter={(e) => setHoveredInfo({
-                                                            type: "out", week: w.weekNumber,
-                                                            scheduled: 0, recurring: 0, projected: amount,
-                                                            total: amount,
-                                                            weekLabel: `W${w.weekNumber} · ${formatDateRange(w.weekStart, w.weekEnd)}`,
-                                                            x: e.clientX, y: e.clientY,
-                                                            baselineMethodNote
-                                                        })}
+                                                        onMouseEnter={(e) => {
+                                                            const baselineItem = w.breakdown.outflows.find((o: any) => o.sourceType === "baseline");
+                                                            setHoveredInfo({
+                                                                type: "out", week: w.weekNumber,
+                                                                scheduled: 0, recurring: 0, projected: amount,
+                                                                total: amount,
+                                                                weekLabel: `W${w.weekNumber} · ${formatDateRange(w.weekStart, w.weekEnd)}`,
+                                                                x: e.clientX, y: e.clientY,
+                                                                baselineMethodNote: baselineItem?.label || baselineMethodNote
+                                                            });
+                                                        }}
                                                         onMouseMove={(e) => setHoveredInfo(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
                                                         onMouseLeave={() => setHoveredInfo(null)}
                                                     >
