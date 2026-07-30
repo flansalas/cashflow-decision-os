@@ -72,7 +72,7 @@ export async function computeAIBaseline(
 
         // Compute AR reliance
         const arRelianceInfo = varianceLedger.map(v => {
-            const actualTotalInflow = v.actualInflow;
+            const actualTotalInflow = v.actualInflow ?? 0;
             const invoicedInflow = actualTotalInflow * (Math.random() * 0.2 + 0.8); // Mocking AR reliance for now until we add real fields
             return `Week ${v.weekStart.toISOString().split('T')[0]}: Total Variable Inflow $${actualTotalInflow}, Estimated AR Portion $${invoicedInflow.toFixed(2)}`;
         }).join("\n");
