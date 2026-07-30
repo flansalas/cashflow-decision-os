@@ -1,5 +1,6 @@
 import prisma from "@/db/prisma";
 import { computeBaseline, BankTxForBaseline, RecurringPatternForBaseline } from "./baseline";
+import { computeAIBaseline } from "./ai-baseline";
 
 export async function buildAndCacheBaseline(companyId: string) {
     const bankTxs = await prisma.bankTransaction.findMany({
@@ -55,6 +56,13 @@ export async function buildAndCacheBaseline(companyId: string) {
         rentDayOfMonth: assumptions.rentDayOfMonth,
     });
 
+    // Compute AI accuracy adjustment and articulation layer
+    const aiBaseline = await computeAIBaseline(
+        companyId,
+        baseline.variableInflowWeekly,
+        baseline.variableOutflowWeekly
+    );
+
     // Save BaselineSnapshot
     await prisma.baselineSnapshot.upsert({
         where: { companyId },
@@ -71,6 +79,14 @@ export async function buildAndCacheBaseline(companyId: string) {
             conservativeInflowWeekly: baseline.conservativeInflowWeekly,
             conservativeOutflowWeekly: baseline.conservativeOutflowWeekly,
             weeklyBucketsJson: JSON.stringify(baseline.weeklyBuckets),
+            
+            // AI Fields
+            aiInflowFactorsJson: aiBaseline ? JSON.stringify(aiBaseline.inflowFactors) : null,
+            aiOutflowFactorsJson: aiBaseline ? JSON.stringify(aiBaseline.outflowFactors) : null,
+            aiInflowExplanationsJson: aiBaseline ? JSON.stringify(aiBaseline.inflowExplanations) : null,
+            aiOutflowExplanationsJson: aiBaseline ? JSON.stringify(aiBaseline.outflowExplanations) : null,
+            aiReasoningLogJson: aiBaseline ? aiBaseline.reasoningLog : null,
+            aiGeneratedAt: aiBaseline ? new Date() : null,
         },
         create: {
             companyId,
@@ -86,6 +102,14 @@ export async function buildAndCacheBaseline(companyId: string) {
             conservativeInflowWeekly: baseline.conservativeInflowWeekly,
             conservativeOutflowWeekly: baseline.conservativeOutflowWeekly,
             weeklyBucketsJson: JSON.stringify(baseline.weeklyBuckets),
+            
+            // AI Fields
+            aiInflowFactorsJson: aiBaseline ? JSON.stringify(aiBaseline.inflowFactors) : null,
+            aiOutflowFactorsJson: aiBaseline ? JSON.stringify(aiBaseline.outflowFactors) : null,
+            aiInflowExplanationsJson: aiBaseline ? JSON.stringify(aiBaseline.inflowExplanations) : null,
+            aiOutflowExplanationsJson: aiBaseline ? JSON.stringify(aiBaseline.outflowExplanations) : null,
+            aiReasoningLogJson: aiBaseline ? aiBaseline.reasoningLog : null,
+            aiGeneratedAt: aiBaseline ? new Date() : null,
         }
     });
 }

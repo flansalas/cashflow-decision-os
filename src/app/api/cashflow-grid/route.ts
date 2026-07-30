@@ -420,6 +420,10 @@ export async function GET(req: NextRequest) {
     const varianceMultiplier = multipliers.outflow;
     const varianceMultiplierIn = multipliers.inflow;
 
+    const cachedBaseline = await prisma.baselineSnapshot.findUnique({
+        where: { companyId: cid }
+    });
+
     // We now apply variance multipliers inline when building the forecast inputs.
 
     // Build recurring forecast input (with skip dates for rescheduled occurrences)
@@ -553,6 +557,10 @@ export async function GET(req: NextRequest) {
         cogsLagWeeks: cogsCorrelation.cogsLagWeeks,
         isARHeavy,
         oneTimeOutflows,
+        aiInflowFactors: cachedBaseline?.aiInflowFactorsJson ? JSON.parse(cachedBaseline.aiInflowFactorsJson) : undefined,
+        aiOutflowFactors: cachedBaseline?.aiOutflowFactorsJson ? JSON.parse(cachedBaseline.aiOutflowFactorsJson) : undefined,
+        aiInflowExplanations: cachedBaseline?.aiInflowExplanationsJson ? JSON.parse(cachedBaseline.aiInflowExplanationsJson) : undefined,
+        aiOutflowExplanations: cachedBaseline?.aiOutflowExplanationsJson ? JSON.parse(cachedBaseline.aiOutflowExplanationsJson) : undefined,
         cashFlowEntries: [
             ...cashFlowEntries.map((e: any) => ({
                 categoryId: e.categoryId,
@@ -593,10 +601,14 @@ export async function GET(req: NextRequest) {
                 endCashExpected: w.endCashExpected,
                 inflowsExpected: w.inflowsExpected,
                 outflowsExpected: w.outflowsExpected,
-                // projected = inflows beyond the visible AR cards + recurring (baseline gap-filling + manual entries)
                 projectedInflow: Math.max(0, w.inflowsExpected -
                     w.breakdown.inflows
                         .filter((i: any) => i.sourceType === "invoice" || i.sourceType === "recurring")
+                        .reduce((s: number, i: any) => s + i.amount, 0)
+                ),
+                projectedOutflow: Math.max(0, w.outflowsExpected -
+                    w.breakdown.outflows
+                        .filter((i: any) => i.sourceType === "bill" || i.sourceType === "recurring")
                         .reduce((s: number, i: any) => s + i.amount, 0)
                 ),
                 breakdown: w.breakdown,

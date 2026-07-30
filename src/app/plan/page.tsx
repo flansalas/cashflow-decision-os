@@ -690,6 +690,7 @@ function PlanContent() {
                         viewMode={forecastView === "actions" || forecastView === "bar" || forecastView === "table" ? "chart" : forecastView}
                         buffer={data.assumptions.bufferMin}
                         macroMemory={data.macroMemory}
+                        aiReasoningLog={data.baseline?.aiReasoningLog}
                         onReschedule={() => { setSelectedWeekNumber(null); fetchDashboard(); }}
                         onNavigateWeek={(delta) => {
                             const newNum = selectedWeekNumber + delta;

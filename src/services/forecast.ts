@@ -107,6 +107,12 @@ export interface ForecastInput {
     oneTimeOutflows?: Array<{ patternId: string; displayName: string; amount: number; weekStart: Date; sourceWeekStart?: string | null }>;
     /** Manual cash flow entries from the Cash Adjustments screen */
     cashFlowEntries?: Array<{ categoryId: string; categoryName: string; direction: "inflow" | "outflow"; label: string; amount: number; targetDate: Date; sourceId?: string }>;
+    
+    // AI Baseline Features
+    aiInflowFactors?: number[];       // AI-driven overrides/multipliers for each week (0-12)
+    aiOutflowFactors?: number[];      // AI-driven overrides/multipliers for each week (0-12)
+    aiInflowExplanations?: string[];  // Explanations for tooltip
+    aiOutflowExplanations?: string[]; // Explanations for tooltip
 }
  
 interface RecurrenceInstance {
@@ -623,8 +629,6 @@ export function computeForecast(input: ForecastInput): ForecastResult {
     let worstRunOut: number | null = null;
 
     const pendingCogs: number[] = new Array(13).fill(0);
-    let cumulativeInflowDeficit = 0;
-    let cumulativeOutflowDeficit = 0;
 
     for (let w = 0; w < 13; w++) {
         const weekStart = addWeeks(currentMonday, w);
@@ -738,56 +742,60 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         // We use (2 - safetyMargin) to keep the 0.5-1.5 range symmetric around 1.0.
         const outflowMultiplier = spendFade * (2 - safetyMargin);
 
-        // Baseline inflow bucket — "Gap-Filling" logic:
-        const baselineInflowWeekly = (input.baselineInflowWeekly || 0) * inflowMultiplier;
-        cumulativeInflowDeficit += baselineInflowWeekly;
-
-        // Absorb baseline with ALL operating revenue inflows:
-        // invoices (AR) and recurring inflows (retainers, subscriptions) both
-        // represent customer cash the baseline already anticipates.
-        // Non-operating inflows (loans, capital) have sourceType 'manual' and
-        // intentionally do NOT absorb — they are pure liquidity events.
+        // ── Stage 1 & 2: Pipeline-Aware AI Baseline (Inflow) ──
         const scheduledInflowSum = inflowBreakdown
             .filter(i => i.sourceType === "invoice" || i.sourceType === "recurring")
             .reduce((s, i) => s + i.amount, 0);
 
-        cumulativeInflowDeficit -= scheduledInflowSum;
-        if (cumulativeInflowDeficit < 0) cumulativeInflowDeficit = 0;
-
         let inflowGap = 0;
-        if (cumulativeInflowDeficit > 0) {
-            inflowGap = cumulativeInflowDeficit;
-            cumulativeInflowDeficit = 0;
-        }
+        let projConfidence: ConfidenceLevel = "low";
+        let projLabel = "";
+        
+        if (input.hasBankBaseline && input.baselineInflowWeekly > 0) {
+            // Stage 1: Deterministic Pipeline Coverage
+            // How much of the historical baseline is already represented in the pipeline this week?
+            const pipelineCoverage = Math.min(1.0, scheduledInflowSum / input.baselineInflowWeekly);
+            
+            // The remaining un-invoiced gap
+            let baselineInflowWeekly = input.baselineInflowWeekly * inflowMultiplier * (1 - pipelineCoverage);
+            
+            // Stage 2: AI Accuracy Override
+            const aiFactor = input.aiInflowFactors?.[w] ?? 1.0;
+            baselineInflowWeekly = baselineInflowWeekly * aiFactor;
 
-        if (input.hasBankBaseline && inflowGap > 0) {
-            inflowExpected += inflowGap;
-            inflowBest += inflowGap * (1 + (input.baselineInflowBand || 0.1));
-            inflowWorst += inflowGap * (1 - (input.baselineInflowBand || 0.15));
+            if (baselineInflowWeekly > 0) {
+                inflowGap = baselineInflowWeekly;
+                inflowExpected += inflowGap;
+                inflowBest += inflowGap * (1 + (input.baselineInflowBand || 0.1));
+                inflowWorst += inflowGap * (1 - (input.baselineInflowBand || 0.15));
 
-            // Derive label and confidence from baseline tier so the Weekly Intelligence
-            // card always explains where the projection came from and how certain it is.
-            const tier = input.baselineConfidenceTier ?? "none";
-            const projLabel =
-                tier === "high" ? "Projected inflow (historical baseline)" :
-                tier === "med"  ? "Projected inflow (moderate history — growing accuracy)" :
-                tier === "low"  ? "Projected inflow (limited history — early estimate)" :
-                                  "Projected inflow (recurring patterns only)";
-            const projConfidence: ConfidenceLevel =
-                tier === "high" ? "med" : "low";
+                const tier = input.baselineConfidenceTier ?? "none";
+                projConfidence = tier === "high" ? "med" : "low";
+                
+                // Stage 3: AI Articulation
+                if (input.aiInflowExplanations && input.aiInflowExplanations[w]) {
+                    projLabel = input.aiInflowExplanations[w];
+                } else {
+                    const coveragePct = Math.round(pipelineCoverage * 100);
+                    const tierStr = tier === "high" ? "historical baseline" : 
+                                  tier === "med" ? "moderate history" : 
+                                  "limited history";
+                    projLabel = `Projected inflow (${tierStr}) — AR covers ${coveragePct}% of baseline`;
+                }
 
-            inflowBreakdown.push({
-                label: projLabel,
-                amount: inflowGap,
-                type: "assumed",
-                sourceType: "baseline",
-                confidence: projConfidence,
-                section: "Baseline Inflow",
-            });
+                inflowBreakdown.push({
+                    label: projLabel,
+                    amount: inflowGap,
+                    type: "assumed",
+                    sourceType: "baseline",
+                    confidence: projConfidence,
+                    section: "Baseline Inflow",
+                });
+            }
         }
 
         // flag for variable outflow logic later
-        const addedAnyInflowBaseline = (input.hasBankBaseline && inflowGap > 0) || (input.hasBankBaseline && scheduledInflowSum === 0);
+        const addedAnyInflowBaseline = (input.hasBankBaseline && inflowGap > 0);
 
         // COGS-linked outflow projection
         const cashMarginRatio = input.cashMarginRatio ?? 1.0; 
@@ -886,13 +894,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             });
         }
 
-        // Variable outflow bucket — smoothly travels with the revenue.
-        const baselineVarOutWeekly = (input.variableOutflowWeekly || 0) * outflowMultiplier;
-        cumulativeOutflowDeficit += baselineVarOutWeekly;
-
-        // FIXED BUG: Do not include Payroll, Rent, Recurring, or Manual in this sum! 
-        // Variable baseline is additive to fixed overhead and one-off manual adjustments.
-        // We now allow ALL AP Bills to absorb the baseline to prevent double-counting.
+        // ── Stage 1 & 2: Pipeline-Aware AI Baseline (Outflow) ──
         const scheduledVariableOutflowSum = outflowBreakdown
             .filter(i => {
                 if (["payroll", "recurring", "assumption", "manual"].includes(i.sourceType)) return false;
@@ -900,43 +902,51 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             })
             .reduce((s, i) => s + i.amount, 0);
 
-        cumulativeOutflowDeficit -= scheduledVariableOutflowSum;
-        if (cumulativeOutflowDeficit < 0) cumulativeOutflowDeficit = 0;
-
         let outflowGap = 0;
-        if (cumulativeOutflowDeficit > 0) {
-            outflowGap = cumulativeOutflowDeficit;
-            cumulativeOutflowDeficit = 0;
-        }
+        let projOutConfidence: ConfidenceLevel = "low";
+        let projOutLabel = "";
 
-        // COGS secondary floor removed: the historical outflow baseline already
-        // implicitly contains COGS from 52 weeks of real spend data.
-        // A synthetic COGS floor override breaks the AP absorption decay curve
-        // and causes double-counting. Outflow baseline is governed solely by
-        // the cumulative AP deficit accumulator above.
+        if (input.hasBankBaseline && input.variableOutflowWeekly > 0) {
+            // Stage 1: Deterministic Pipeline Coverage
+            // How much of the historical variable outflow baseline is already represented in AP Bills this week?
+            const pipelineCoverageOut = Math.min(1.0, scheduledVariableOutflowSum / input.variableOutflowWeekly);
+            
+            // The remaining un-billed gap
+            let baselineVarOutWeekly = input.variableOutflowWeekly * outflowMultiplier * (1 - pipelineCoverageOut);
+            
+            // Stage 2: AI Accuracy Override
+            const aiOutFactor = input.aiOutflowFactors?.[w] ?? 1.0;
+            baselineVarOutWeekly = baselineVarOutWeekly * aiOutFactor;
 
-        if (input.hasBankBaseline && outflowGap > 0) {
-            outflowExpected += outflowGap;
-            outflowBest += outflowGap * (1 - (input.variableOutflowBand || 0.1));
-            outflowWorst += outflowGap * (1 + (input.variableOutflowBand || 0.2));
+            if (baselineVarOutWeekly > 0) {
+                outflowGap = baselineVarOutWeekly;
+                outflowExpected += outflowGap;
+                outflowBest += outflowGap * (1 - (input.variableOutflowBand || 0.1));
+                outflowWorst += outflowGap * (1 + (input.variableOutflowBand || 0.2));
 
-            const tier = input.baselineConfidenceTier ?? "none";
-            const projOutLabel =
-                tier === "high" ? "Projected variable spend (historical baseline)" :
-                tier === "med"  ? "Projected variable spend (moderate history)" :
-                tier === "low"  ? "Projected variable spend (limited history — early estimate)" :
-                                  "Projected variable spend (recurring patterns only)";
-            const projOutConfidence: ConfidenceLevel =
-                tier === "high" ? "med" : "low";
+                const tier = input.baselineConfidenceTier ?? "none";
+                projOutConfidence = tier === "high" ? "med" : "low";
+                
+                // Stage 3: AI Articulation
+                if (input.aiOutflowExplanations && input.aiOutflowExplanations[w]) {
+                    projOutLabel = input.aiOutflowExplanations[w];
+                } else {
+                    const coveragePct = Math.round(pipelineCoverageOut * 100);
+                    const tierStr = tier === "high" ? "historical baseline" : 
+                                  tier === "med" ? "moderate history" : 
+                                  "limited history";
+                    projOutLabel = `Projected variable spend (${tierStr}) — AP covers ${coveragePct}% of baseline`;
+                }
 
-            outflowBreakdown.push({
-                label: projOutLabel,
-                amount: outflowGap,
-                type: "assumed",
-                sourceType: "baseline" as OverrideTargetType,
-                confidence: projOutConfidence,
-                section: "Baseline Outflow",
-            });
+                outflowBreakdown.push({
+                    label: projOutLabel,
+                    amount: outflowGap,
+                    type: "assumed",
+                    sourceType: "baseline" as OverrideTargetType,
+                    confidence: projOutConfidence,
+                    section: "Baseline Outflow",
+                });
+            }
         }
 
         // Push payroll to the top of the outflows list

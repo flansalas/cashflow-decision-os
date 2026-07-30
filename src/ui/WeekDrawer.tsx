@@ -53,6 +53,7 @@ interface Props {
         averageVariancePctIn: number;
         weeksTracked: number;
     };
+    aiReasoningLog?: string | null;
 }
 
 function fmt(n: number): string {
@@ -660,7 +661,7 @@ const zoneLabels: Record<string, { label: string; colorStyle: React.CSSPropertie
 };
 
 // ── Main Drawer ───────────────────────────────────────────────────────────────
-export function WeekDrawer({ week, weekNumber, weekStart, companyId, scenarioItems = [], viewMode, buffer, macroMemory, onReschedule, onNavigateWeek, onClose }: Props & { buffer?: number }) {
+export function WeekDrawer({ week, weekNumber, weekStart, companyId, scenarioItems = [], viewMode, buffer, macroMemory, aiReasoningLog, onReschedule, onNavigateWeek, onClose }: Props & { buffer?: number }) {
     const [hoveredSection, setHoveredSection] = useState<string | null>(null);
     const [overrideState, setOverrideState] = useState<{ item: BreakdownItem; rect: DOMRect } | null>(null);
     const inflowGroups = groupBySection(week.breakdown.inflows);
@@ -821,6 +822,21 @@ export function WeekDrawer({ week, weekNumber, weekStart, companyId, scenarioIte
                         ))
                     )}
                 </div>
+                {/* AI Reasoning Log (Auditability) */}
+                {aiReasoningLog && (
+                    <div className="px-6 py-4 bg-slate-900 border-t border-slate-800">
+                        <div className="flex items-center gap-2 mb-1.5">
+                            <span className="flex h-1.5 w-1.5 shrink-0">
+                                <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-blue-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-blue-500"></span>
+                            </span>
+                            <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-300">AI Baseline Assessment</h4>
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed font-mono">
+                            {aiReasoningLog}
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
         {overrideState && overrideState.item.sourceId && (

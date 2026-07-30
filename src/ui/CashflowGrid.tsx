@@ -254,10 +254,12 @@ export function CashflowGrid({
                 startCash: fb.startCash,
                 balance: fb.endCashExpected,
                 projectedInflow: fb.projectedInflow,
+                projectedOutflow: fb.projectedOutflow,
+                breakdown: fb.breakdown,
             }));
         }
         // Client-side fallback (used if API doesn't return forecast yet)
-        const balances: { inflows: number; outflows: number; net: number; startCash: number; balance: number; projectedInflow: number }[] = [];
+        const balances: { inflows: number; outflows: number; net: number; startCash: number; balance: number; projectedInflow: number; projectedOutflow: number; breakdown?: any }[] = [];
         let running = openingCash;
         for (let w = 0; w < 13; w++) {
             const wn = w + 1;
@@ -271,7 +273,7 @@ export function CashflowGrid({
             const net = inflows - outflows;
             const startCash = running;
             running += net;
-            balances.push({ inflows, outflows, net, startCash, balance: running, projectedInflow: 0 });
+            balances.push({ inflows, outflows, net, startCash, balance: running, projectedInflow: 0, projectedOutflow: 0 });
         }
         return balances;
     }, [forecastBalances, byWeek, openingCash, weeklyRecurringOutflows, weeklyRecurringInflows]);
@@ -935,15 +937,34 @@ export function CashflowGrid({
                                                 </div>
                                                 {/* Projected inflow annotation — shown when baseline/manual entries add inflow
                                                     beyond the visible AR cards. Keeps the user informed without a Dashboard trip. */}
-                                                {(bal.projectedInflow ?? 0) > 500 && (
-                                                    <div className="flex justify-between text-[9px] pl-2" title="Projected inflow from historical bank patterns or manual adjustments — matches Dashboard">
-                                                        <span style={{ color: 'var(--text-faint)' }}>↳ {fmt(bal.projectedInflow)} projected</span>
-                                                    </div>
-                                                )}
+                                                {(bal.projectedInflow ?? 0) > 500 && (() => {
+                                                    const baselineInflowItem = bal.breakdown?.inflows?.find((i: any) => i.sourceType === "baseline");
+                                                    const inflowExplanation = baselineInflowItem?.label ?? "Projected inflow from historical bank patterns or manual adjustments — matches Dashboard";
+                                                    return (
+                                                        <div className="flex justify-between text-[9px] pl-2 relative group cursor-help">
+                                                            <span style={{ color: 'var(--text-faint)' }}>↳ {fmt(bal.projectedInflow)} projected</span>
+                                                            <div className="absolute left-0 bottom-full mb-1 w-48 p-2 rounded-md shadow-lg bg-slate-800 text-slate-100 text-[10px] leading-relaxed opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
+                                                                {inflowExplanation}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
                                                 <div className="flex justify-between text-[10px]">
                                                     <span style={{ color: 'var(--text-muted)' }}>Out</span>
                                                     <span style={{ color: '#e11d48' }}>−{fmt(bal.outflows)}</span>
                                                 </div>
+                                                {(bal.projectedOutflow ?? 0) > 500 && (() => {
+                                                    const baselineOutflowItem = bal.breakdown?.outflows?.find((i: any) => i.sourceType === "baseline");
+                                                    const outflowExplanation = baselineOutflowItem?.label ?? "Projected outflow from historical bank patterns or manual adjustments — matches Dashboard";
+                                                    return (
+                                                        <div className="flex justify-between text-[9px] pl-2 relative group cursor-help">
+                                                            <span style={{ color: 'var(--text-faint)' }}>↳ {fmt(bal.projectedOutflow)} projected</span>
+                                                            <div className="absolute left-0 bottom-full mb-1 w-48 p-2 rounded-md shadow-lg bg-slate-800 text-slate-100 text-[10px] leading-relaxed opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
+                                                                {outflowExplanation}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
 
                                                 <div className="flex justify-between text-[10px] font-semibold border-t pt-1 mt-1" style={{ borderColor: 'var(--border-subtle)' }}>
                                                     <span style={{ color: 'var(--text-muted)' }}>Net</span>

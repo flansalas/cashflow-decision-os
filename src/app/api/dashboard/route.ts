@@ -478,6 +478,10 @@ export async function GET(req: NextRequest) {
             cogsLagWeeks: cogsCorrelation.cogsLagWeeks,
             isARHeavy,
             oneTimeOutflows,
+            aiInflowFactors: cachedBaseline?.aiInflowFactorsJson ? JSON.parse(cachedBaseline.aiInflowFactorsJson) : undefined,
+            aiOutflowFactors: cachedBaseline?.aiOutflowFactorsJson ? JSON.parse(cachedBaseline.aiOutflowFactorsJson) : undefined,
+            aiInflowExplanations: cachedBaseline?.aiInflowExplanationsJson ? JSON.parse(cachedBaseline.aiInflowExplanationsJson) : undefined,
+            aiOutflowExplanations: cachedBaseline?.aiOutflowExplanationsJson ? JSON.parse(cachedBaseline.aiOutflowExplanationsJson) : undefined,
             cashFlowEntries: [
                 ...cashFlowEntries.map((e: any) => ({
                     categoryId: e.categoryId,
@@ -816,6 +820,7 @@ export async function GET(req: NextRequest) {
                 note: baseline.note,
                 variableOutflowWeekly: baseline.variableOutflowWeekly,
                 variableInflowWeekly: baseline.variableInflowWeekly,
+                aiReasoningLog: cachedBaseline?.aiReasoningLogJson ?? null,
             },
             organicForecast,
             forecast,

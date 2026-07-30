@@ -777,6 +777,15 @@ model BaselineSnapshot {
   conservativeInflowWeekly  Float    @default(0)
   conservativeOutflowWeekly Float    @default(0)
   weeklyBucketsJson         String   @default("[]")
+  
+  // AI Baseline Accuracy & Articulation Layer
+  aiInflowFactorsJson       String?  // Array of 13 floats (overrides)
+  aiOutflowFactorsJson      String?  // Array of 13 floats (overrides)
+  aiInflowExplanationsJson  String?  // Array of 13 strings
+  aiOutflowExplanationsJson String?  // Array of 13 strings
+  aiReasoningLogJson        String?  // Audit log of historical memory cited by AI
+  aiGeneratedAt             DateTime?
+
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 
