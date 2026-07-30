@@ -1,9 +1,9 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import OpenAI from "openai";
 import prisma from "@/db/prisma";
 import { BaselineVarianceLedger, Company } from "@prisma/client";
 import { endOfWeek, startOfWeek, subWeeks } from "date-fns";
 
-const ai = new GoogleGenAI({}); // Assumes GEMINI_API_KEY is in process.env
+const openai = new OpenAI(); // Assumes OPENAI_API_KEY is in process.env
 
 export interface AIBaselineResult {
     inflowFactors: number[];
@@ -19,14 +19,14 @@ export async function computeAIBaseline(
     baselineOutflowWeekly: number
 ): Promise<AIBaselineResult | null> {
     try {
-        if (!process.env.GEMINI_API_KEY) {
-            console.warn("GEMINI_API_KEY not set. Skipping AI baseline accuracy layer.");
+        if (!process.env.OPENAI_API_KEY) {
+            console.warn("OPENAI_API_KEY not set. Skipping AI baseline accuracy layer.");
             return {
                 inflowFactors: new Array(13).fill(1.0),
                 outflowFactors: new Array(13).fill(1.0),
-                inflowExplanations: new Array(13).fill("AI Error: GEMINI_API_KEY is not set in environment variables."),
-                outflowExplanations: new Array(13).fill("AI Error: GEMINI_API_KEY is not set in environment variables."),
-                reasoningLog: "AI Generation Failed: GEMINI_API_KEY is not set in environment variables."
+                inflowExplanations: new Array(13).fill("AI Error: OPENAI_API_KEY is not set in environment variables."),
+                outflowExplanations: new Array(13).fill("AI Error: OPENAI_API_KEY is not set in environment variables."),
+                reasoningLog: "AI Generation Failed: OPENAI_API_KEY is not set in environment variables."
             };
         }
 
@@ -116,40 +116,35 @@ ${arRelianceInfo}
 Respond strictly in the requested JSON format.
         `;
 
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: {
-                temperature: 0.1, // Keep it highly deterministic
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        inflowFactors: { type: Type.ARRAY, items: { type: Type.NUMBER }, description: "13 floats, default 1.0" },
-                        outflowFactors: { type: Type.ARRAY, items: { type: Type.NUMBER }, description: "13 floats, default 1.0" },
-                        inflowExplanations: { type: Type.ARRAY, items: { type: Type.STRING }, description: "13 strings" },
-                        outflowExplanations: { type: Type.ARRAY, items: { type: Type.STRING }, description: "13 strings" },
-                        reasoningLog: { type: Type.STRING, description: "Detailed audit log" }
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.1,
+            response_format: {
+                type: "json_schema",
+                json_schema: {
+                    name: "baseline_result",
+                    schema: {
+                        type: "object",
+                        properties: {
+                            inflowFactors: { type: "array", items: { type: "number" } },
+                            outflowFactors: { type: "array", items: { type: "number" } },
+                            inflowExplanations: { type: "array", items: { type: "string" } },
+                            outflowExplanations: { type: "array", items: { type: "string" } },
+                            reasoningLog: { type: "string" }
+                        },
+                        required: ["inflowFactors", "outflowFactors", "inflowExplanations", "outflowExplanations", "reasoningLog"],
+                        additionalProperties: false
                     },
-                    required: ["inflowFactors", "outflowFactors", "inflowExplanations", "outflowExplanations", "reasoningLog"]
+                    strict: true
                 }
             }
         });
 
-        if (!response.text) return null;
-        let cleanText = response.text;
-        if (cleanText.startsWith('```json')) {
-            cleanText = cleanText.substring(7);
-        }
-        if (cleanText.startsWith('```')) {
-            cleanText = cleanText.substring(3);
-        }
-        if (cleanText.endsWith('```')) {
-            cleanText = cleanText.substring(0, cleanText.length - 3);
-        }
-        cleanText = cleanText.trim();
+        const rawText = response.choices[0].message.content;
+        if (!rawText) return null;
         
-        const parsed = JSON.parse(cleanText) as AIBaselineResult;
+        const parsed = JSON.parse(rawText) as AIBaselineResult;
         
         // Safety bounds
         if (parsed.inflowFactors?.length !== 13) parsed.inflowFactors = new Array(13).fill(1.0);
