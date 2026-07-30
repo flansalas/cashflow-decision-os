@@ -62,7 +62,6 @@ interface GridData {
     }>;
     weeklyRecurringOutflows: RecurringWeek[];
     weeklyRecurringInflows: RecurringWeek[];
-    // Canonical forecast from the same engine as the Dashboard
     forecast?: {
         weeks: Array<{
             weekNumber: number;
@@ -71,6 +70,8 @@ interface GridData {
             inflowsExpected: number;
             outflowsExpected: number;
             projectedInflow: number; // baseline + manual entries beyond visible AR cards
+            projectedOutflow: number;
+            breakdown?: any;
         }>;
     };
 }
