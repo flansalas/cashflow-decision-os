@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { prisma } from "../lib/prisma";
+import prisma from "@/db/prisma";
 import { BaselineVarianceLedger, Company } from "@prisma/client";
 import { endOfWeek, startOfWeek, subWeeks } from "date-fns";
 

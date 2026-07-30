@@ -18,10 +18,12 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^7.0.11",
+    "@google/genai": "^2.14.0",
     "@prisma/adapter-better-sqlite3": "^7.4.1",
     "@prisma/adapter-pg": "^7.6.0",
     "@prisma/client": "^7.4.1",
     "better-sqlite3": "^12.6.2",
+    "date-fns": "^4.4.0",
     "dotenv": "^17.3.1",
     "lucide-react": "^0.577.0",
     "next": "16.1.6",
