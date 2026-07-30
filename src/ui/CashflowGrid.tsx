@@ -43,6 +43,7 @@ interface Props {
         inflowsExpected: number;
         outflowsExpected: number;
         projectedInflow: number; // baseline + manual entries beyond visible AR cards
+        projectedOutflow: number;
         breakdown?: any;
     }>;
     forecastStateJson?: any;
