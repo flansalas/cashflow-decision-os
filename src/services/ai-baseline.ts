@@ -101,15 +101,15 @@ Here is the company's "Variance Ledger" (memory) from the last 8 weeks:
 ${arRelianceInfo}
 
 ### INSTRUCTIONS ###
-1. **Accuracy Adjustments (Factors):** If the mathematical coverage gap-fill is contextually wrong, output a multiplier factor to override it. 
-   - If the company relies heavily on AR (invoices), un-invoiced baseline in the near-term weeks is likely "ghost revenue" and should be suppressed (factor 0.0 to 0.5).
-   - If coverage is 0 but historical memory shows they always get paid end of month, you might suppress weeks 1-3 and boost week 4.
+1. **Accuracy Adjustments (Factors):** If the mathematical coverage gap-fill is contextually wrong, output a multiplier factor to override it (e.g. 0.0 to 1.5).
+   - NEAR-TERM (Weeks 1-3): If the company relies heavily on AR (invoices) and AR coverage is very low for the upcoming 1-3 weeks, it is highly likely that baseline revenue for those weeks is "ghost revenue" because it's too late to invoice and get paid. Suppress it (factor 0.0 to 0.5).
+   - LONG-TERM (Weeks 4-13): It is COMPLETELY NORMAL for there to be zero AR coverage in distant weeks because they haven't sent the invoices yet. DO NOT suppress the baseline for distant weeks just because AR is missing. Keep the factor near 1.0 so the baseline acts as a reliable long-term forecast.
    - If the math is fine, return 1.0.
    - Return exactly 13 numbers for inflows and 13 for outflows.
 
 2. **Articulation (Explanations):** Write a concise, professional tooltip explanation for each week's baseline number. DO NOT be overly simplistic. Reference the AR/AP pipeline coverage AND your historical reasoning.
-   - Example (AI Suppressed): "Projected inflow suppressed by AI; historical memory indicates 95% AR reliance, and current AR covers only 12% of baseline."
-   - Example (Math Kept): "Projected inflow — AR covers 45% of historical baseline."
+   - Example (Near-Term Suppressed): "AI suppressed projected inflow: historical memory indicates 90% AR reliance, and current AR is completely empty for next week."
+   - Example (Long-Term Kept): "AI maintained historical baseline average of $X to project long-term expected volume."
 
 3. **Auditability (Reasoning Log):** Provide a dense, 2-3 sentence internal log explaining exactly which historical memory data points you used to justify any adjustments.
 
