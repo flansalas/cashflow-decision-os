@@ -2,6 +2,7 @@
 // Assembles all data for the Survival Dashboard
 
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import prisma from "@/db/prisma";
 import { computeForecast, type ForecastInput, type ForecastInvoice, type ForecastBill, type ForecastRecurring } from "@/services/forecast";
 import { detectAnomalies, computeConfidence, computeDataQualityGate, type QAInput } from "@/services/qa";
@@ -238,7 +239,6 @@ export async function GET(req: NextRequest) {
 
             // Fire-and-forget: update cache in background
             import("@/services/baseline-snapshot").then(({ buildAndCacheBaseline }) => {
-                const { waitUntil } = require("@vercel/functions");
                 waitUntil(buildAndCacheBaseline(cid).catch(err => console.error("Async baseline cache failed:", err)));
             });
         }

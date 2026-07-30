@@ -56,38 +56,42 @@ export async function buildAndCacheBaseline(companyId: string) {
         rentDayOfMonth: assumptions.rentDayOfMonth,
     });
 
-    // Compute AI accuracy adjustment and articulation layer
     const aiBaseline = await computeAIBaseline(
         companyId,
         baseline.variableInflowWeekly,
-        baseline.variableOutflowWeekly
+        baseline.variableOutflowWeekly,
+        (assumptions as any).paymentCurveJson || '{"current":0,"1-14":1,"15-30":2,"31-60":3,"61+":4}',
+        (assumptions as any).typicalDelayWeeks || 2
     );
+
+    const updatePayload: any = {
+        asOfDate,
+        hasSufficientHistory: baseline.hasSufficientHistory,
+        baselineConfidenceTier: baseline.baselineConfidenceTier,
+        inflowCadence: (baseline as any).inflowCadence?.toString() || "1",
+        outflowCadence: (baseline as any).outflowCadence?.toString() || "1",
+        variableInflowWeekly: baseline.variableInflowWeekly,
+        variableOutflowWeekly: baseline.variableOutflowWeekly,
+        variableInflowBand: baseline.variableInflowBand,
+        variableOutflowBand: baseline.variableOutflowBand,
+        conservativeInflowWeekly: baseline.conservativeInflowWeekly,
+        conservativeOutflowWeekly: baseline.conservativeOutflowWeekly,
+        weeklyBucketsJson: JSON.stringify(baseline.weeklyBuckets),
+    };
+
+    if (aiBaseline) {
+        updatePayload.aiInflowFactorsJson = JSON.stringify(aiBaseline.inflowFactors);
+        updatePayload.aiOutflowFactorsJson = JSON.stringify(aiBaseline.outflowFactors);
+        updatePayload.aiInflowExplanationsJson = JSON.stringify(aiBaseline.inflowExplanations);
+        updatePayload.aiOutflowExplanationsJson = JSON.stringify(aiBaseline.outflowExplanations);
+        updatePayload.aiReasoningLogJson = aiBaseline.reasoningLog;
+        updatePayload.aiGeneratedAt = new Date();
+    }
 
     // Save BaselineSnapshot
     await prisma.baselineSnapshot.upsert({
         where: { companyId },
-        update: {
-            asOfDate,
-            hasSufficientHistory: baseline.hasSufficientHistory,
-            baselineConfidenceTier: baseline.baselineConfidenceTier,
-            inflowCadence: (baseline as any).inflowCadence?.toString() || "1",
-            outflowCadence: (baseline as any).outflowCadence?.toString() || "1",
-            variableInflowWeekly: baseline.variableInflowWeekly,
-            variableOutflowWeekly: baseline.variableOutflowWeekly,
-            variableInflowBand: baseline.variableInflowBand,
-            variableOutflowBand: baseline.variableOutflowBand,
-            conservativeInflowWeekly: baseline.conservativeInflowWeekly,
-            conservativeOutflowWeekly: baseline.conservativeOutflowWeekly,
-            weeklyBucketsJson: JSON.stringify(baseline.weeklyBuckets),
-            
-            // AI Fields
-            aiInflowFactorsJson: aiBaseline ? JSON.stringify(aiBaseline.inflowFactors) : null,
-            aiOutflowFactorsJson: aiBaseline ? JSON.stringify(aiBaseline.outflowFactors) : null,
-            aiInflowExplanationsJson: aiBaseline ? JSON.stringify(aiBaseline.inflowExplanations) : null,
-            aiOutflowExplanationsJson: aiBaseline ? JSON.stringify(aiBaseline.outflowExplanations) : null,
-            aiReasoningLogJson: aiBaseline ? aiBaseline.reasoningLog : null,
-            aiGeneratedAt: aiBaseline ? new Date() : null,
-        },
+        update: updatePayload,
         create: {
             companyId,
             asOfDate,

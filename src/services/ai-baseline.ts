@@ -16,7 +16,9 @@ export interface AIBaselineResult {
 export async function computeAIBaseline(
     companyId: string, 
     baselineInflowWeekly: number,
-    baselineOutflowWeekly: number
+    baselineOutflowWeekly: number,
+    paymentCurveJson: string,
+    typicalDelayWeeks: number
 ): Promise<AIBaselineResult | null> {
     try {
         if (!process.env.OPENAI_API_KEY) {
@@ -76,10 +78,12 @@ export async function computeAIBaseline(
             take: 8
         });
 
-        // Compute AR reliance
-        const arRelianceInfo = varianceLedger.map(v => {
+        // Compute AR reliance (Deterministic mock based on variance ledger rows)
+        const arRelianceInfo = varianceLedger.map((v, i) => {
             const actualTotalInflow = v.actualInflow ?? 0;
-            const invoicedInflow = actualTotalInflow * (Math.random() * 0.2 + 0.8); // Mocking AR reliance for now until we add real fields
+            // Deterministic mock using the index to create variation between 0.75 and 0.95
+            const relianceFactor = 0.75 + ((i % 5) * 0.05); 
+            const invoicedInflow = actualTotalInflow * relianceFactor;
             return `Week ${v.weekStart.toISOString().split('T')[0]}: Total Variable Inflow $${actualTotalInflow}, Estimated AR Portion $${invoicedInflow.toFixed(2)}`;
         }).join("\n");
 
@@ -100,10 +104,14 @@ Outflow Coverage (AP): ${JSON.stringify(weeklyOutflowCoverage)}
 Here is the company's "Variance Ledger" (memory) from the last 8 weeks:
 ${arRelianceInfo}
 
+Company Payment Terms Context:
+- Standard Payment Curve: ${paymentCurveJson}
+- Average Collection Delay: ${typicalDelayWeeks} weeks
+
 ### INSTRUCTIONS ###
 1. **Accuracy Adjustments (Factors):** If the mathematical coverage gap-fill is contextually wrong, output a multiplier factor to override it (e.g. 0.0 to 1.5).
-   - NEAR-TERM (Weeks 1-3): If the company relies heavily on AR (invoices) and AR coverage is very low for the upcoming 1-3 weeks, it is highly likely that baseline revenue for those weeks is "ghost revenue" because it's too late to invoice and get paid. Suppress it (factor 0.0 to 0.5).
-   - LONG-TERM (Weeks 4-13): It is COMPLETELY NORMAL for there to be zero AR coverage in distant weeks because they haven't sent the invoices yet. DO NOT suppress the baseline for distant weeks just because AR is missing. Keep the factor near 1.0 so the baseline acts as a reliable long-term forecast.
+   - NEAR-TERM (Weeks 1 to ${typicalDelayWeeks}): If the company relies heavily on AR and AR coverage is very low for these upcoming weeks, it is highly likely that baseline revenue for those weeks is "ghost revenue" because it's too late to invoice and get paid due to their average ${typicalDelayWeeks}-week delay. Suppress it (factor 0.0 to 0.5).
+   - LONG-TERM (Weeks ${typicalDelayWeeks + 1} to 13): It is COMPLETELY NORMAL for there to be zero AR coverage in distant weeks because they haven't sent the invoices yet. DO NOT suppress the baseline for distant weeks just because AR is missing. Keep the factor near 1.0 so the baseline acts as a reliable long-term forecast.
    - If the math is fine, return 1.0.
    - Return exactly 13 numbers for inflows and 13 for outflows.
 
@@ -146,20 +154,23 @@ Respond strictly in the requested JSON format.
         
         const parsed = JSON.parse(rawText) as AIBaselineResult;
         
+        const ensureLength = <T,>(arr: T[], length: number, fillValue: T): T[] => {
+            if (!arr || !Array.isArray(arr)) return new Array(length).fill(fillValue);
+            if (arr.length > length) return arr.slice(0, length);
+            if (arr.length < length) return [...arr, ...new Array(length - arr.length).fill(fillValue)];
+            return arr;
+        };
+
         // Safety bounds
-        if (parsed.inflowFactors?.length !== 13) parsed.inflowFactors = new Array(13).fill(1.0);
-        if (parsed.outflowFactors?.length !== 13) parsed.outflowFactors = new Array(13).fill(1.0);
+        parsed.inflowFactors = ensureLength(parsed.inflowFactors, 13, 1.0);
+        parsed.outflowFactors = ensureLength(parsed.outflowFactors, 13, 1.0);
+        parsed.inflowExplanations = ensureLength(parsed.inflowExplanations, 13, "No explanation provided.");
+        parsed.outflowExplanations = ensureLength(parsed.outflowExplanations, 13, "No explanation provided.");
         
         return parsed;
 
     } catch (e: any) {
         console.error("AI Baseline Generation Failed:", e);
-        return {
-            inflowFactors: new Array(13).fill(1.0),
-            outflowFactors: new Array(13).fill(1.0),
-            inflowExplanations: new Array(13).fill("AI Error: " + (e.message || String(e))),
-            outflowExplanations: new Array(13).fill("AI Error: " + (e.message || String(e))),
-            reasoningLog: "AI Generation Failed: " + (e.message || String(e))
-        };
+        return null;
     }
 }
