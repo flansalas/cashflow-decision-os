@@ -187,9 +187,10 @@ export async function POST(req: NextRequest) {
         // Then rebuild fresh from all available bank history.
         prisma.baselineSnapshot.deleteMany({ where: { companyId } }).catch(() => {});
         import("@/services/baseline-snapshot").then(({ buildAndCacheBaseline }) => {
-            buildAndCacheBaseline(companyId).catch(err => {
-                console.error("Background Baseline Snapshot Worker failed:", err);
-            });
+            const { waitUntil } = require("@vercel/functions");
+            waitUntil(buildAndCacheBaseline(companyId).catch(err => {
+                console.error("Async baseline cache failed after upload:", err);
+            }));
         });
 
         return NextResponse.json({

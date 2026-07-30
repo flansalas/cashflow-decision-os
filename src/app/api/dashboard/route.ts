@@ -238,7 +238,8 @@ export async function GET(req: NextRequest) {
 
             // Fire-and-forget: update cache in background
             import("@/services/baseline-snapshot").then(({ buildAndCacheBaseline }) => {
-                buildAndCacheBaseline(cid).catch(err => console.error("Async baseline cache failed:", err));
+                const { waitUntil } = require("@vercel/functions");
+                waitUntil(buildAndCacheBaseline(cid).catch(err => console.error("Async baseline cache failed:", err)));
             });
         }
 

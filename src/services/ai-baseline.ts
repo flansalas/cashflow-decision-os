@@ -131,11 +131,23 @@ Respond strictly in the requested JSON format.
         });
 
         if (!response.text) return null;
-        const parsed = JSON.parse(response.text) as AIBaselineResult;
+        let cleanText = response.text;
+        if (cleanText.startsWith('```json')) {
+            cleanText = cleanText.substring(7);
+        }
+        if (cleanText.startsWith('```')) {
+            cleanText = cleanText.substring(3);
+        }
+        if (cleanText.endsWith('```')) {
+            cleanText = cleanText.substring(0, cleanText.length - 3);
+        }
+        cleanText = cleanText.trim();
+        
+        const parsed = JSON.parse(cleanText) as AIBaselineResult;
         
         // Safety bounds
-        if (parsed.inflowFactors.length !== 13) parsed.inflowFactors = new Array(13).fill(1.0);
-        if (parsed.outflowFactors.length !== 13) parsed.outflowFactors = new Array(13).fill(1.0);
+        if (parsed.inflowFactors?.length !== 13) parsed.inflowFactors = new Array(13).fill(1.0);
+        if (parsed.outflowFactors?.length !== 13) parsed.outflowFactors = new Array(13).fill(1.0);
         
         return parsed;
 
