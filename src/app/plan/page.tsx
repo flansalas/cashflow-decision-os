@@ -147,6 +147,7 @@ interface DashboardData {
         variableOutflowWeekly: number;
         variableInflowWeekly: number;
         methodNote?: string;
+        aiReasoningLog?: string | null;
     };
     confidence: { score: number; label: string; reasons: string[] };
     anomalies: Array<{ id: string; type: string; severity: string; message: string }>;
