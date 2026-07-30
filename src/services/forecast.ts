@@ -109,6 +109,7 @@ export interface ForecastInput {
     cashFlowEntries?: Array<{ categoryId: string; categoryName: string; direction: "inflow" | "outflow"; label: string; amount: number; targetDate: Date; sourceId?: string }>;
     
     // AI Baseline Features
+    aiReasoningLog?: string;
     aiInflowFactors?: number[];       // AI-driven overrides/multipliers for each week (0-12)
     aiOutflowFactors?: number[];      // AI-driven overrides/multipliers for each week (0-12)
     aiInflowExplanations?: string[];  // Explanations for tooltip
