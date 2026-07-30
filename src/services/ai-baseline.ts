@@ -32,11 +32,11 @@ export async function computeAIBaseline(
         const endDate = endOfWeek(subWeeks(currentMonday, -12)); // 13 weeks out
 
         const invoices = await prisma.receivableInvoice.findMany({
-            where: { companyId, expectedPaymentDate: { gte: currentMonday, lte: endDate } }
+            where: { companyId, dueDate: { gte: currentMonday, lte: endDate } }
         });
         
         const bills = await prisma.payableBill.findMany({
-            where: { companyId, expectedPaymentDate: { gte: currentMonday, lte: endDate } }
+            where: { companyId, dueDate: { gte: currentMonday, lte: endDate } }
         });
 
         const weeklyInflowCoverage = new Array(13).fill(0);
@@ -47,12 +47,12 @@ export async function computeAIBaseline(
             const wEnd = endOfWeek(wStart);
             
             const invSum = invoices
-                .filter(i => i.expectedPaymentDate! >= wStart && i.expectedPaymentDate! <= wEnd)
-                .reduce((s, i) => s + i.amount, 0);
+                .filter(i => i.dueDate && i.dueDate >= wStart && i.dueDate <= wEnd)
+                .reduce((s, i) => s + i.amountOpen, 0);
                 
             const billSum = bills
-                .filter(b => b.expectedPaymentDate! >= wStart && b.expectedPaymentDate! <= wEnd)
-                .reduce((s, b) => s + b.amount, 0);
+                .filter(b => b.dueDate && b.dueDate >= wStart && b.dueDate <= wEnd)
+                .reduce((s, b) => s + b.amountOpen, 0);
 
             weeklyInflowCoverage[w] = baselineInflowWeekly > 0 ? Math.min(1.0, invSum / baselineInflowWeekly) : 0;
             weeklyOutflowCoverage[w] = baselineOutflowWeekly > 0 ? Math.min(1.0, billSum / baselineOutflowWeekly) : 0;
