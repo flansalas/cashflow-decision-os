@@ -38,10 +38,28 @@ export async function buildAndCacheBaseline(companyId: string) {
         .filter(tx => tx.direction === "inflow" && tx.txDate >= ninetyDaysAgo)
         .reduce((sum, tx) => sum + tx.amount, 0);
 
-    // 3. Calculate DSO and Delay Weeks
+    // 3. Calculate DSO and Inflow Delay Weeks
     const dso = (totalOpenAR / Math.max(1, ninetyDayInflows)) * 90;
-    const dynamicDelayWeeks = Math.min(12, Math.max(1, Math.round(dso / 7)));
-    console.log(`[DSO] ${companyId}: Open AR = $${totalOpenAR}, 90d Inflows = $${ninetyDayInflows}, DSO = ${dso.toFixed(1)} days -> ${dynamicDelayWeeks} weeks delay`);
+    const inflowDelayWeeks = Math.min(12, Math.max(1, Math.round(dso / 7)));
+
+    // --- Dynamic DPO Calculation ---
+    // 1. Get total open AP
+    const openBills = await prisma.payableBill.findMany({
+        where: { companyId, status: "open" },
+        select: { amountOpen: true }
+    });
+    const totalOpenAP = openBills.reduce((sum, bill) => sum + bill.amountOpen, 0);
+
+    // 2. Get 90-day cash outflows
+    const ninetyDayOutflows = bankTxs
+        .filter(tx => tx.direction === "outflow" && tx.txDate >= ninetyDaysAgo)
+        .reduce((sum, tx) => sum + tx.amount, 0);
+
+    // 3. Calculate DPO and Outflow Delay Weeks
+    const dpo = (totalOpenAP / Math.max(1, ninetyDayOutflows)) * 90;
+    const outflowDelayWeeks = Math.min(12, Math.max(1, Math.round(dpo / 7)));
+
+    console.log(`[DSO/DPO] ${companyId}: DSO = ${dso.toFixed(1)} days (${inflowDelayWeeks}w), DPO = ${dpo.toFixed(1)} days (${outflowDelayWeeks}w)`);
     // -------------------------------
 
     const assumptions = assumptionsRaw ?? {
@@ -83,7 +101,8 @@ export async function buildAndCacheBaseline(companyId: string) {
         baseline.variableInflowWeekly,
         baseline.variableOutflowWeekly,
         (assumptions as any).paymentCurveJson || '{"current":0,"1-14":1,"15-30":2,"31-60":3,"61+":4}',
-        dynamicDelayWeeks
+        inflowDelayWeeks,
+        outflowDelayWeeks
     );
 
     const updatePayload: any = {

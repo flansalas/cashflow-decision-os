@@ -18,7 +18,8 @@ export async function computeAIBaseline(
     baselineInflowWeekly: number,
     baselineOutflowWeekly: number,
     paymentCurveJson: string,
-    typicalDelayWeeks: number
+    inflowDelayWeeks: number,
+    outflowDelayWeeks: number
 ): Promise<AIBaselineResult | null> {
     try {
         if (!process.env.OPENAI_API_KEY) {
@@ -106,12 +107,15 @@ ${arRelianceInfo}
 
 Company Payment Terms Context:
 - Standard Payment Curve: ${paymentCurveJson}
-- Average Collection Delay: ${typicalDelayWeeks} weeks
+- Average Inflow Collection Delay (DSO): ${inflowDelayWeeks} weeks
+- Average Outflow Payment Delay (DPO): ${outflowDelayWeeks} weeks
 
 ### INSTRUCTIONS ###
 1. **Accuracy Adjustments (Factors):** If the mathematical coverage gap-fill is contextually wrong, output a multiplier factor to override it (e.g. 0.0 to 1.5).
-   - NEAR-TERM (Weeks 1 to ${typicalDelayWeeks}): If the company relies heavily on AR and AR coverage is very low for these upcoming weeks, it is highly likely that baseline revenue for those weeks is "ghost revenue" because it's too late to invoice and get paid due to their average ${typicalDelayWeeks}-week delay. Suppress it (factor 0.0 to 0.5).
-   - LONG-TERM (Weeks ${typicalDelayWeeks + 1} to 13): It is COMPLETELY NORMAL for there to be zero AR coverage in distant weeks because they haven't sent the invoices yet. DO NOT suppress the baseline for distant weeks just because AR is missing. Keep the factor near 1.0 so the baseline acts as a reliable long-term forecast.
+   - INFLOW NEAR-TERM (Weeks 1 to ${inflowDelayWeeks}): If AR coverage is very low for these upcoming weeks, it is highly likely that baseline revenue for those weeks is "ghost revenue" because it's too late to invoice and get paid due to their average ${inflowDelayWeeks}-week delay. Suppress it (factor 0.0 to 0.5).
+   - INFLOW LONG-TERM (Weeks ${inflowDelayWeeks + 1} to 13): It is COMPLETELY NORMAL for there to be zero AR coverage in distant weeks. DO NOT suppress the baseline for distant weeks just because AR is missing. Keep the factor near 1.0.
+   - OUTFLOW NEAR-TERM (Weeks 1 to ${outflowDelayWeeks}): If AP coverage is low, it is likely "ghost expenses" because they typically log bills ${outflowDelayWeeks} weeks in advance. Suppress it (factor 0.0 to 0.5).
+   - OUTFLOW LONG-TERM (Weeks ${outflowDelayWeeks + 1} to 13): It is COMPLETELY NORMAL for there to be zero AP coverage in distant weeks. DO NOT suppress the baseline. Keep the factor near 1.0.
    - If the math is fine, return 1.0.
    - Return exactly 13 numbers for inflows and 13 for outflows.
 
