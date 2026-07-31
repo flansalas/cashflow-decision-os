@@ -79,14 +79,22 @@ export async function computeAIBaseline(
             take: 8
         });
 
-        // Compute AR reliance (Deterministic mock based on variance ledger rows)
-        const arRelianceInfo = varianceLedger.map((v, i) => {
+        // Compute AR and AP reliance (Deterministic mock based on variance ledger rows)
+        const varianceMemoryInfo = varianceLedger.map((v, i) => {
+            // AR (Inflow)
             const actualTotalInflow = v.actualInflow ?? 0;
-            // Deterministic mock using the index to create variation between 0.75 and 0.95
-            const relianceFactor = 0.75 + ((i % 5) * 0.05); 
-            const invoicedInflow = actualTotalInflow * relianceFactor;
-            return `Week ${v.weekStart.toISOString().split('T')[0]}: Total Variable Inflow $${actualTotalInflow}, Estimated AR Portion $${invoicedInflow.toFixed(2)}`;
-        }).join("\n");
+            const arRelianceFactor = 0.75 + ((i % 5) * 0.05); 
+            const invoicedInflow = actualTotalInflow * arRelianceFactor;
+            
+            // AP (Outflow)
+            const actualTotalOutflow = v.actualOutflow ?? 0;
+            const apRelianceFactor = 0.80 + ((i % 3) * 0.05);
+            const billedOutflow = actualTotalOutflow * apRelianceFactor;
+
+            return `Week ${v.weekStart.toISOString().split('T')[0]}: 
+- INFLOW: Total $${actualTotalInflow.toFixed(2)}, Estimated AR Portion $${invoicedInflow.toFixed(2)}
+- OUTFLOW: Total $${actualTotalOutflow.toFixed(2)}, Estimated AP Portion $${billedOutflow.toFixed(2)}`;
+        }).join("\n\n");
 
         const prompt = `
 You are a quantitative AI agent acting as an expert financial controller for a cash flow forecasting application.
@@ -103,7 +111,7 @@ Inflow Coverage (AR): ${JSON.stringify(weeklyInflowCoverage)}
 Outflow Coverage (AP): ${JSON.stringify(weeklyOutflowCoverage)}
 
 Here is the company's "Variance Ledger" (memory) from the last 8 weeks:
-${arRelianceInfo}
+${varianceMemoryInfo}
 
 Company Payment Terms Context:
 - Standard Payment Curve: ${paymentCurveJson}
