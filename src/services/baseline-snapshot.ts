@@ -22,6 +22,28 @@ export async function buildAndCacheBaseline(companyId: string) {
         where: { companyId },
     });
 
+    // --- Dynamic DSO Calculation ---
+    // 1. Get total open AR
+    const openInvoices = await prisma.receivableInvoice.findMany({
+        where: { companyId, status: "open" },
+        select: { amountOpen: true }
+    });
+    const totalOpenAR = openInvoices.reduce((sum, inv) => sum + inv.amountOpen, 0);
+
+    // 2. Get 90-day cash inflows
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    
+    const ninetyDayInflows = bankTxs
+        .filter(tx => tx.direction === "inflow" && tx.txDate >= ninetyDaysAgo)
+        .reduce((sum, tx) => sum + tx.amount, 0);
+
+    // 3. Calculate DSO and Delay Weeks
+    const dso = (totalOpenAR / Math.max(1, ninetyDayInflows)) * 90;
+    const dynamicDelayWeeks = Math.min(12, Math.max(1, Math.round(dso / 7)));
+    console.log(`[DSO] ${companyId}: Open AR = $${totalOpenAR}, 90d Inflows = $${ninetyDayInflows}, DSO = ${dso.toFixed(1)} days -> ${dynamicDelayWeeks} weeks delay`);
+    // -------------------------------
+
     const assumptions = assumptionsRaw ?? {
         payrollAllInAmount: null,
         payrollNextDate: null,
@@ -61,7 +83,7 @@ export async function buildAndCacheBaseline(companyId: string) {
         baseline.variableInflowWeekly,
         baseline.variableOutflowWeekly,
         (assumptions as any).paymentCurveJson || '{"current":0,"1-14":1,"15-30":2,"31-60":3,"61+":4}',
-        (assumptions as any).typicalDelayWeeks || 2
+        dynamicDelayWeeks
     );
 
     const updatePayload: any = {
