@@ -69,9 +69,9 @@ export function UpdateBalanceDialog({
     const [arapUploaded, setArapUploaded] = useState(false);
     // Controls whether BankUploadStep is revealed in the bank step
     const [showBankUploadWidget, setShowBankUploadWidget] = useState(false);
-    // API-backed bank row presence for the closing week — used for preview verification
     const [bankDataDetected, setBankDataDetected] = useState<boolean | null>(null);
     const [bankDataRowCount, setBankDataRowCount] = useState<number | null>(null);
+    const [bankCoverageVerified, setBankCoverageVerified] = useState<boolean | null>(null);
     const [bankStatusLoading, setBankStatusLoading] = useState(false);
 
     // Triage state
@@ -287,7 +287,7 @@ export function UpdateBalanceDialog({
             </div>
             
             <div className="flex-1 overflow-y-auto px-8 py-6 custom-scrollbar bg-slate-50/50">
-                <ARAPUploadStep companyId={companyId} onDone={() => { setArapUploaded(true); setStep("bank"); }} doneButtonText="Continue to Bank Transactions" />
+                <ARAPUploadStep companyId={companyId} onDone={(skipped) => { setArapUploaded(!skipped); setStep("bank"); }} doneButtonText="Continue to Bank Transactions" />
             </div>
             
             <div className="px-8 py-4 border-t border-slate-100/60 bg-white flex justify-end">
@@ -525,14 +525,17 @@ export function UpdateBalanceDialog({
                                 const data = await res.json();
                                 setBankDataDetected(data.hasData);
                                 setBankDataRowCount(data.rowCount);
+                                setBankCoverageVerified(data.isVerified);
                             } else {
                                 setBankDataDetected(false);
                                 setBankDataRowCount(0);
+                                setBankCoverageVerified(false);
                             }
                         } catch {
                             // Non-blocking: if check fails, conservatively treat as not detected
                             setBankDataDetected(false);
                             setBankDataRowCount(0);
+                            setBankCoverageVerified(false);
                         } finally {
                             setBankStatusLoading(false);
                             setStep("preview");
@@ -559,7 +562,7 @@ export function UpdateBalanceDialog({
         const variance = priorWeekData?.endCashExpected != null
             ? (parsedBalance + adjTotal) - priorWeekData.endCashExpected
             : null;
-        const isVerified = bankDataDetected === true;
+        const isVerified = bankCoverageVerified === true;
 
         return shell(
             <div className="flex flex-col max-h-[85vh]">
@@ -595,9 +598,9 @@ export function UpdateBalanceDialog({
                                 </div>
                                 <div className="flex justify-between text-xs">
                                     <span style={{ color: "var(--text-muted)" }}>Bank Transactions</span>
-                                    <span className={bankDataDetected ? "text-emerald-600 font-semibold" : "text-amber-600 font-semibold"}>
+                                    <span className={bankDataDetected ? (isVerified ? "text-emerald-600 font-semibold" : "text-amber-600 font-semibold") : "text-amber-600 font-semibold"}>
                                         {bankDataDetected
-                                            ? `✓ Detected${bankDataRowCount != null ? ` (${bankDataRowCount} rows)` : ""}`
+                                            ? `Detected${bankDataRowCount != null ? ` (${bankDataRowCount} rows)` : ""} — ${isVerified ? 'Verified' : 'Unverified'}`
                                             : "⚠ Not Detected for Closing Week"}
                                     </span>
                                 </div>
@@ -634,12 +637,12 @@ export function UpdateBalanceDialog({
                             : <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />}
                         <div>
                             <p className={`text-sm font-bold ${isVerified ? "text-emerald-700" : "text-amber-700"}`}>
-                                {isVerified ? "Verified with bank transactions" : "Unverified — bank transactions missing"}
+                                {isVerified ? "Verified with bank transactions" : "Unverified — missing certified complete bank coverage"}
                             </p>
                             <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                                 {isVerified
-                                    ? "Actual bank activity is available, so the system can compare this week’s forecast with what actually happened."
-                                    : "Actual bank activity is unavailable, so the system cannot reliably measure this week’s forecast accuracy."}
+                                    ? "Actual bank activity is completely covered and certified, so the system can compare this week’s forecast with what actually happened."
+                                    : "Actual bank activity is missing or lacks certified completeness, so the system cannot reliably measure this week’s forecast accuracy."}
                             </p>
                         </div>
                     </div>
@@ -650,7 +653,7 @@ export function UpdateBalanceDialog({
                             <div className="flex items-start gap-2">
                                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                                 <p className="text-xs font-semibold text-amber-700 mt-2 p-2 bg-amber-100 rounded-md border border-amber-200">
-                                    Warning: Actual bank activity was not uploaded. You can still close the week, but its forecast accuracy cannot be verified.
+                                    Warning: Your bank data for the week lacks certified completeness. You can still close the week, but its forecast accuracy will be marked inconclusive and excluded from promotion metrics.
                                 </p>
                             </div>
                             <button
@@ -688,7 +691,7 @@ export function UpdateBalanceDialog({
                             ? "Rolling Forecast…"
                             : isVerified
                                 ? "✓ Advance Week (Verified) →"
-                                : "Continue Without Bank Data →"}
+                                : "Advance Week (Unverified) →"}
                     </button>
 
                     <button onClick={onCancel}

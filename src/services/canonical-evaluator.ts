@@ -1,5 +1,7 @@
 import prisma from "@/db/prisma";
 
+import { verifyBankCoverage } from "@/services/bank-coverage";
+
 export async function evaluateMaturedCheckpoints(companyId?: string) {
     const now = new Date();
     
@@ -29,11 +31,6 @@ export async function evaluateMaturedCheckpoints(companyId?: string) {
 
         if (!Array.isArray(m1PreAi) || !Array.isArray(m4PreAi)) continue; // Missing baseline history
 
-        // Fetch accounts for the company to evaluate completeness
-        const companyAccounts = await prisma.bankAccount.findMany({
-            where: { companyId: cp.companyId }
-        });
-
         for (let horizon = 1; horizon <= 13; horizon++) {
             const hStart = new Date(cp.weekStart);
             hStart.setDate(hStart.getDate() + horizon * 7);
@@ -43,38 +40,10 @@ export async function evaluateMaturedCheckpoints(companyId?: string) {
             if (hEnd > now) continue; // Horizon hasn't matured yet
 
             // Assess completeness: Does every active account have coverage >= hEnd?
-            let isComplete = true;
-            if (companyAccounts.length > 0) {
-                for (const acc of companyAccounts) {
-                    // Check manifest for this account covering up to hEnd
-                    const manifestAccount = await prisma.bankImportManifestAccount.findFirst({
-                        where: {
-                            bankAccountId: acc.id,
-                            coveredEndDate: { gte: hEnd },
-                            importSuccess: true
-                        }
-                    });
-                    
-                    const freshness = await prisma.accountFreshnessStatus.findFirst({
-                        where: {
-                            checkpointId: bsh.id,
-                            accountId: acc.id,
-                            coverageStatus: "complete",
-                            latestTransactionDate: { gte: hEnd }
-                        }
-                    });
-
-                    if (!manifestAccount && !freshness) {
-                        isComplete = false;
-                        break;
-                    }
-                }
-            } else {
-                isComplete = false;
-            }
-
-            const accountCompleteness = isComplete ? "complete" : "unverified";
-            const evaluationValidity = isComplete ? "valid" : "inconclusive";
+            const coverageDetails = await verifyBankCoverage(cp.companyId, hStart, hEnd);
+            
+            const accountCompleteness = coverageDetails.isVerified ? "complete" : "unverified";
+            const evaluationValidity = coverageDetails.isVerified ? "valid" : "inconclusive";
 
             // Fetch Bank Transactions for this horizon
             const txs = await prisma.bankTransaction.findMany({

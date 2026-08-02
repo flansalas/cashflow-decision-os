@@ -13,6 +13,7 @@ import { syncVarianceLedger } from "@/services/variance-sync";
 import * as crypto from "crypto";
 import { generateShadowEvaluation } from "@/services/shadow-evaluation";
 import { snapshotAccountFreshness } from "@/services/attribution-checkpoint";
+import { verifyBankCoverage } from "@/services/bank-coverage";
 
 /**
  * Rolls a date forward by the given cadence until it is >= the asOfDate.
@@ -319,20 +320,31 @@ export async function POST(req: NextRequest) {
             const hasValidOutflows = typeof priorWeekForecast.outflowsExpected === "number" && isFinite(priorWeekForecast.outflowsExpected);
 
             if (hasValidWeekStart && hasValidWeekEnd && hasValidEndCash && hasValidInflows && hasValidOutflows) {
+                const weekStart = new Date(priorWeekForecast.weekStart);
+                const weekEnd = new Date(priorWeekForecast.weekEnd);
+
+                const coverageDetails = await verifyBankCoverage(companyId, weekStart, weekEnd);
+                const isBankCoverageVerified = coverageDetails.isVerified;
+                const bankCoverageEvidenceJson = JSON.stringify(coverageDetails);
+
+                const sourceName = (isBankCoverageVerified && isSaturday) ? "client_observed_v1" : "client_observed_unverified";
+
                 // Must succeed inside the transaction
                 checkpoint = await tx.forecastCheckpoint.create({
                     data: {
                         companyId,
                         cashSnapshotId: snapshot.id, // coreResult isn't resolved yet
-                        snapshotSource: (bankDataMissing || !isSaturday) ? "client_observed_unverified" : "client_observed_v1",
+                        snapshotSource: sourceName,
                         forecastVersionHash: priorWeekForecast.forecastVersionHash || null,
                         generatedAt: priorWeekForecast.generatedAt ? new Date(priorWeekForecast.generatedAt) : null,
-                        weekStart: new Date(priorWeekForecast.weekStart),
-                        weekEnd: new Date(priorWeekForecast.weekEnd),
+                        weekStart,
+                        weekEnd,
                         endCashExpected: priorWeekForecast.endCashExpected,
                         inflowsExpected: priorWeekForecast.inflowsExpected,
                         outflowsExpected: priorWeekForecast.outflowsExpected,
                         breakdownJson: finalBreakdownJson,
+                        isBankCoverageVerified,
+                        bankCoverageEvidenceJson,
                     }
                 });
 

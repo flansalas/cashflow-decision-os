@@ -18,7 +18,7 @@ import {
 
 interface Props {
     companyId: string;
-    onDone: () => void; // called after import or skip
+    onDone: (skipped?: boolean) => void; // called after import or skip
     doneButtonText?: string;
 }
 
@@ -437,7 +437,7 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
 
                     <div className="flex gap-3 pt-1">
                         <button
-                            onClick={onDone}
+                            onClick={() => onDone(true)}
                             className="px-4 py-2.5 rounded-xl text-sm transition-colors border"
                             style={{ background: "var(--bg-raised)", color: "var(--text-secondary)", borderColor: "var(--border-default)" }}
                         >
@@ -614,7 +614,7 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
                     </div>
 
                     <button
-                        onClick={onDone}
+                        onClick={() => onDone(false)}
                         className="w-full py-3 text-white font-semibold rounded-xl transition-all text-sm shadow-lg shadow-emerald-100"
                         style={{ background: "var(--color-positive)" }}
                     >

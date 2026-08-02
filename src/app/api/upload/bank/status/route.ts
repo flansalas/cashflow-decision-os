@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
+import { verifyBankCoverage } from "@/services/bank-coverage";
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -27,9 +28,19 @@ export async function GET(req: NextRequest) {
             },
         });
 
+        let isVerified = false;
+        let coverageDetails = null;
+
+        if (weekStart && weekEnd) {
+            coverageDetails = await verifyBankCoverage(companyId, new Date(weekStart), new Date(weekEnd));
+            isVerified = coverageDetails.isVerified;
+        }
+
         return NextResponse.json({
             hasData: rowCount > 0,
             rowCount,
+            isVerified,
+            coverageDetails,
             weekStart: weekStart ?? null,
             weekEnd: weekEnd ?? null,
         });

@@ -172,7 +172,7 @@ describe("Internal Transfer API Integration", () => {
         const history = await prisma.internalTransferHistory.findFirst({ where: { pairId } });
         expect(history?.isActive).toBe(false);
         expect(history?.unpairedByUserId).toBe(userId);
-        expect(history?.supersededAt).not.toBeNull();
+        expect(history?.unpairedAt).not.toBeNull();
 
         const triggers = await prisma.evaluationJobTrigger.findMany({ where: { source: "transfer_unpaired" } });
         expect(triggers.length).toBe(1);

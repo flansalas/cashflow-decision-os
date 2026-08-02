@@ -167,6 +167,7 @@ model BankAccount {
   id                        String                      @id @default(uuid())
   companyId                 String
   name                      String?
+  isActive                  Boolean                     @default(true)
   createdAt                 DateTime                    @default(now())
   company                   Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   BankImportManifestAccount BankImportManifestAccount[]
@@ -417,6 +418,8 @@ model ForecastCheckpoint {
   inflowsExpected               Float
   outflowsExpected              Float
   breakdownJson                 String?
+  isBankCoverageVerified        Boolean                         @default(false)
+  bankCoverageEvidenceJson      String?
   createdAt                     DateTime                        @default(now())
   ActualCashAttribution         ActualCashAttribution[]
   BaselineSnapshotHistory       BaselineSnapshotHistory?
