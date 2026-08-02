@@ -753,12 +753,16 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         let projLabel = "";
         
         if (input.hasBankBaseline && input.baselineInflowWeekly > 0) {
-            // Stage 1: Deterministic Pipeline Coverage
             // How much of the historical baseline is already represented in the pipeline this week?
             const pipelineCoverage = Math.min(1.0, scheduledInflowSum / input.baselineInflowWeekly);
             
             // The remaining un-invoiced gap
             let baselineInflowWeekly = input.baselineInflowWeekly * inflowMultiplier * (1 - pipelineCoverage);
+            
+            // For metadata tracking:
+            const stage1Raw = input.baselineInflowWeekly * inflowMultiplier;
+            const explicitDeduction = stage1Raw * pipelineCoverage;
+            const stage2PreAi = baselineInflowWeekly;
             
             // Stage 2: AI Accuracy Override
             const aiFactor = input.aiInflowFactors?.[w] ?? 1.0;
@@ -791,6 +795,12 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                     sourceType: "baseline",
                     confidence: projConfidence,
                     section: "Baseline Inflow",
+                    metadata: {
+                        stage1Raw: stage1Raw,
+                        explicitDeduction: explicitDeduction,
+                        stage2PreAi: stage2PreAi,
+                        aiFactor: aiFactor
+                    }
                 });
             }
         }
@@ -908,12 +918,16 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         let projOutLabel = "";
 
         if (input.hasBankBaseline && input.variableOutflowWeekly > 0) {
-            // Stage 1: Deterministic Pipeline Coverage
             // How much of the historical variable outflow baseline is already represented in AP Bills this week?
             const pipelineCoverageOut = Math.min(1.0, scheduledVariableOutflowSum / input.variableOutflowWeekly);
             
             // The remaining un-billed gap
             let baselineVarOutWeekly = input.variableOutflowWeekly * outflowMultiplier * (1 - pipelineCoverageOut);
+            
+            // For metadata tracking:
+            const stage1RawOut = input.variableOutflowWeekly * outflowMultiplier;
+            const explicitDeductionOut = stage1RawOut * pipelineCoverageOut;
+            const stage2PreAiOut = baselineVarOutWeekly;
             
             // Stage 2: AI Accuracy Override
             const aiOutFactor = input.aiOutflowFactors?.[w] ?? 1.0;
@@ -928,7 +942,6 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 const tier = input.baselineConfidenceTier ?? "none";
                 projOutConfidence = tier === "high" ? "med" : "low";
                 
-                // Stage 3: AI Articulation
                 if (input.aiOutflowExplanations && input.aiOutflowExplanations[w]) {
                     projOutLabel = input.aiOutflowExplanations[w];
                 } else {
@@ -946,6 +959,12 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                     sourceType: "baseline" as OverrideTargetType,
                     confidence: projOutConfidence,
                     section: "Baseline Outflow",
+                    metadata: {
+                        stage1Raw: stage1RawOut,
+                        explicitDeduction: explicitDeductionOut,
+                        stage2PreAi: stage2PreAiOut,
+                        aiFactor: aiOutFactor
+                    }
                 });
             }
         }

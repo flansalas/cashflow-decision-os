@@ -11,6 +11,7 @@ export interface BankTxForBaseline {
 
 import { normalizeDescription, categorize, isRecurringIdentityMatch } from "./detectPatterns";
 import { computeACF, detectDominantCadence } from "./acf";
+import { prepareBaselineTransactions } from "./baseline-shared";
 
 export interface RecurringPatternForBaseline {
     merchantKey: string;
@@ -75,128 +76,9 @@ export function computeBaseline(
         return placeholderBaseline("No bank transactions available");
     }
 
-    // Build set of recurring merchantKeys to exclude
-    // Using normalizeDescription for identity and allowing bounded checks
-    const excludedPatterns = patterns
-        .filter(p => p.isIncluded)
-        .map(p => {
-            const isVolatile = ["utilities", "fuel", "taxes", "card_payment", "payroll"].includes(p.category);
-            const tolerance = isVolatile ? 0.5 : 0.2;
-            return {
-                merchantKey: (p.merchantKey || p.displayName || ""),
-                displayName: p.displayName || "",
-                direction: p.direction,
-                typicalAmount: p.typicalAmount,
-                amountStdDev: p.amountStdDev,
-                cadence: p.cadence,
-                minAmount: p.minAmount || p.typicalAmount * (1 - tolerance),
-                maxAmount: p.maxAmount || p.typicalAmount * (1 + tolerance),
-                lastMatchedDate: null as Date | null
-            };
-        });
+    const { weekBuckets, dailyInflowSeries, dailyOutflowSeries } = prepareBaselineTransactions(txs, patterns, asOfDate, assumptions, WEEKS_TO_ANALYZE);
 
-    let lastPayrollMatchedDate: Date | null = null;
-
-    // Compute week boundaries: last WEEKS_TO_ANALYZE complete weeks before asOfDate
-    const weekBuckets: { inflow: number; outflow: number }[] = [];
-    const weekStart0 = mondayBefore(asOfDate, WEEKS_TO_ANALYZE);
-    const dailyInflowSeries = new Array(WEEKS_TO_ANALYZE * 7).fill(0);
-    const dailyOutflowSeries = new Array(WEEKS_TO_ANALYZE * 7).fill(0);
-
-    for (let i = 0; i < WEEKS_TO_ANALYZE; i++) {
-        const wStart = addWeeks(weekStart0, i);
-        const wEnd = addDays(wStart, 6);
-
-        let inflowSum = 0;
-        let outflowSum = 0;
-
-        for (const tx of txs) {
-            // Skip invalid dates to prevent them from matching all buckets
-            if (!tx.date || isNaN(tx.date.getTime())) continue;
-            if (tx.date < wStart || tx.date > wEnd) continue;
-            // Exclude known recurring patterns
-            const txDirection = tx.amount >= 0 ? "inflow" : "outflow";
-            const absAmount = Math.abs(tx.amount);
-            const txCategory = categorize(tx.merchantKey || "");
-
-            let matchesAssumption = false;
-            if (assumptions) {
-                if (
-                    assumptions.payrollAllInAmount &&
-                    assumptions.payrollNextDate &&
-                    txDirection === "outflow" &&
-                    absAmount >= assumptions.payrollAllInAmount * 0.5 &&
-                    absAmount <= assumptions.payrollAllInAmount * 1.5
-                ) {
-                    let canMatch = true;
-                    if (lastPayrollMatchedDate) {
-                        const daysSince = Math.abs(daysBetween(lastPayrollMatchedDate, tx.date));
-                        const cooldown = assumptions.payrollCadence === "weekly" ? 5 : assumptions.payrollCadence === "biweekly" ? 10 : 20;
-                        if (daysSince < cooldown) canMatch = false;
-                    }
-                    
-                    if (canMatch) {
-                        const daysDiff = Math.abs(daysBetween(tx.date, assumptions.payrollNextDate));
-                        const cadenceDays = assumptions.payrollCadence === "weekly" ? 7 : assumptions.payrollCadence === "biweekly" ? 14 : 30;
-                        const remainder = daysDiff % cadenceDays;
-                        const toleranceDays = cadenceDays === 7 ? 1 : 3;
-                        if (remainder <= toleranceDays || remainder >= cadenceDays - toleranceDays) {
-                            matchesAssumption = true;
-                            lastPayrollMatchedDate = tx.date;
-                        }
-                    }
-                }
-
-                if (
-                    !matchesAssumption &&
-                    assumptions.rentMonthlyAmount &&
-                    assumptions.rentDayOfMonth &&
-                    txCategory === "rent" &&
-                    txDirection === "outflow"
-                ) {
-                    const txDay = tx.date.getDate();
-                    const rentDay = assumptions.rentDayOfMonth;
-                    const diff = Math.min(
-                        Math.abs(txDay - rentDay),
-                        Math.abs(txDay + 30 - rentDay),
-                        Math.abs(rentDay + 30 - txDay)
-                    );
-                    if (diff <= 3) {
-                        matchesAssumption = true;
-                    }
-                }
-            }
-
-            if (matchesAssumption) continue;
-
-            // Strict Identity Match: Uses shared identity match logic
-            // preventing generic words or wildly wrong amounts from masking actual baseline variation.
-            const matchedPattern = excludedPatterns.find(p => {
-                return isRecurringIdentityMatch(
-                    { description: tx.merchantKey, direction: txDirection, amount: absAmount, txDate: tx.date },
-                    p,
-                    p.lastMatchedDate,
-                    p.cadence
-                );
-            });
-
-            if (matchedPattern) {
-                matchedPattern.lastMatchedDate = tx.date;
-                continue;
-            }
-
-            const dayIndex = daysBetween(weekStart0, tx.date);
-            if (tx.amount > 0) {
-                inflowSum += tx.amount;
-                if (dayIndex >= 0 && dayIndex < dailyInflowSeries.length) dailyInflowSeries[dayIndex] += tx.amount;
-            } else {
-                outflowSum += Math.abs(tx.amount);
-                if (dayIndex >= 0 && dayIndex < dailyOutflowSeries.length) dailyOutflowSeries[dayIndex] += Math.abs(tx.amount);
-            }
-        }
-
-        weekBuckets.push({ inflow: inflowSum, outflow: outflowSum });
-    }
+    const excludedPatterns = patterns.filter(p => !p.isIncluded);
 
     // Find weeks with at least some activity
     const activeWeeks = weekBuckets.filter(b => b.inflow > 0 || b.outflow > 0);
@@ -220,8 +102,8 @@ export function computeBaseline(
             let recurringOutflowTotal = 0;
             for (const p of excludedPatterns) {
                 const occurrences = Math.max(1, Math.round(weeksSpan));
-                if (p.direction === "inflow") recurringInflowTotal += p.minAmount * occurrences;
-                else recurringOutflowTotal += p.minAmount * occurrences;
+                if (p.direction === "inflow") recurringInflowTotal += (p.minAmount ?? p.typicalAmount) * occurrences;
+                else recurringOutflowTotal += (p.minAmount ?? p.typicalAmount) * occurrences;
             }
 
             const variableInflow = Math.max(0, totalInflow - recurringInflowTotal);
@@ -391,30 +273,6 @@ function placeholderBaseline(reason: string): BaselineResult {
     };
 }
 
-function mondayBefore(d: Date, weeksAgo: number): Date {
-    const dt = new Date(d);
-    const day = dt.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    dt.setDate(dt.getDate() + diff - weeksAgo * 7);
-    dt.setHours(0, 0, 0, 0);
-    return dt;
-}
-
-function addWeeks(d: Date, n: number): Date {
-    const dt = new Date(d);
-    dt.setDate(dt.getDate() + n * 7);
-    return dt;
-}
-
-function addDays(d: Date, n: number): Date {
-    const dt = new Date(d);
-    dt.setDate(dt.getDate() + n);
-    return dt;
-}
-
-function daysBetween(a: Date, b: Date): number {
-    return Math.round((b.getTime() - a.getTime()) / 86400000);
-}
 
 function mean(values: number[]): number {
     if (values.length === 0) return 0;

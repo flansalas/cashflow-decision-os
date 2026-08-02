@@ -1,0 +1,170 @@
+[
+  {
+    "id": "75719da1-f256-4029-b465-9faf558cf561",
+    "checksum": "a97a62d453d85af045342db7a7923639cc44340e9b1df115c26d2a9857db032c",
+    "started_at": "2026-05-13T18:48:57.314Z",
+    "applied_steps_count": 0,
+    "migration_name": "0_init_postgres"
+  },
+  {
+    "id": "782112c5-e37b-4bfc-a727-9e439b08970a",
+    "checksum": "8794580d31030fa555d009c05b526cb88521d69fc680bed73684b6a2674a47be",
+    "started_at": "2026-07-09T01:33:41.855Z",
+    "applied_steps_count": 0,
+    "migration_name": "20260709011700_add_execution_plan_fields"
+  },
+  {
+    "id": "3809bbae-f76f-4a23-9a40-7e7930bb677f",
+    "checksum": "5054f8d331f8dc2d3c706b3eb6627f9be17999c58bccc935f10377d5d56c56fb",
+    "started_at": "2026-07-09T01:53:09.338Z",
+    "applied_steps_count": 1,
+    "migration_name": "20260709015309_add_review_fields_to_execution_plan"
+  },
+  {
+    "id": "f04b2926-1f9e-4b34-9cfa-9aff5b3bf40f",
+    "checksum": "44c597c668fd93323f520d65f5c0c28edd79abe61bdabeae5571f02b3dfbfc84",
+    "started_at": "2026-07-09T11:52:18.378Z",
+    "applied_steps_count": 0,
+    "migration_name": "20260709_memory_hardening"
+  },
+  {
+    "id": "9b01cef9-24a6-4b45-8788-f36a6c36dd44",
+    "checksum": "96113163b396d4eea76df1a8fcc57bfb711e585072acbf982b56a015158ce209",
+    "started_at": "2026-07-09T11:52:24.146Z",
+    "applied_steps_count": 1,
+    "migration_name": "20260709115041_add_changelog_userid"
+  },
+  {
+    "id": "94c806dc-add7-4c6b-be48-60c9a7b4a090",
+    "checksum": "8ea384d041585ecf331e44f29607fef37ff11a849b8ca1db25f8f2f4e2fb19df",
+    "started_at": "2026-07-09T16:04:33.352Z",
+    "applied_steps_count": 1,
+    "migration_name": "20260709131745_slice_7a_import_staging"
+  },
+  {
+    "id": "a51c16d2-e311-4861-8002-a23e04cd2931",
+    "checksum": "5999636e1ad9d51e7daf2c4efe4ef1ffe8e142528937a7f740b519e3d7759c80",
+    "started_at": "2026-07-09T16:04:33.879Z",
+    "applied_steps_count": 1,
+    "migration_name": "20260709132811_slice_7b_conflict_classification"
+  },
+  {
+    "id": "df0c65df-39af-4d9c-9dc0-8be33d6f59b1",
+    "checksum": "c355227562ac59d283b54db992c4e596ff2df631c62421639b57f5f48b5bafa8",
+    "started_at": "2026-07-09T16:04:34.113Z",
+    "applied_steps_count": 1,
+    "migration_name": "20260709134238_slice_7c_review_decisions"
+  },
+  {
+    "id": "9657f3fa-fa34-4422-847c-cdbd75e5d6bb",
+    "checksum": "a23bb858e90a0cc84139b6008fd9732133659967ae4c2fa6ce906dd6e47a89e3",
+    "started_at": "2026-07-09T16:04:34.425Z",
+    "applied_steps_count": 1,
+    "migration_name": "20260709134736_slice_7c_linkage"
+  },
+  {
+    "id": "704b8011-1bf8-4eee-a7e0-002da0917a38",
+    "checksum": "7e0d0a9524e82aaa733595c1d704f95c85eea0ccbf2183330ac9ecbf672fb0f1",
+    "started_at": "2026-07-09T16:04:34.659Z",
+    "applied_steps_count": 1,
+    "migration_name": "20260709135140_slice_7d_atomic_apply"
+  },
+  {
+    "id": "bc400ea4-b98c-46be-a607-cafa09fddabc",
+    "checksum": "e2f22025ba9b8a264e63678fd703b5d8cd24311ba4b2cb5faa773bab0fd021f6",
+    "started_at": "2026-07-09T16:04:35.217Z",
+    "applied_steps_count": 1,
+    "migration_name": "20260709135901_slice_7d_enrichment_error"
+  },
+  {
+    "id": "a1182c49-13ae-4e2f-b66b-5972a1577c07",
+    "checksum": "a73835df25a054d43c2a458bc8e6df0cdf201709b06b4239d82730cc458df4c4",
+    "started_at": "2026-07-09T16:04:35.550Z",
+    "applied_steps_count": 1,
+    "migration_name": "20260709140638_slice_7e_rollback"
+  },
+  {
+    "id": "3f6a1d37-22bc-49d8-b50e-705bb59422d3",
+    "checksum": "06e2b36e785510b7281d440a8decb98496eb200f9c9d1aa82406b9764e07d41c",
+    "started_at": "2026-07-12T14:05:18.665Z",
+    "applied_steps_count": 1,
+    "migration_name": "20260712135004_persist_committed_actions"
+  },
+  {
+    "id": "94ae0f8b-b098-429a-880b-82676f2f997c",
+    "checksum": "2be4c5119728acfd0e6bf6309bcbcb3f3f1102191156941c4a42a1800f051730",
+    "started_at": "2026-07-12T14:38:36.569Z",
+    "applied_steps_count": 1,
+    "migration_name": "20260712143000_add_actual_amount_impact"
+  },
+  {
+    "id": "5b5534f1-a345-4ee4-963c-150240124c9f",
+    "checksum": "0486e6a147653cfd28548241dc61f193b764bc40274d723b397a36915d06c5fd",
+    "started_at": "2026-07-12T15:03:54.558Z",
+    "applied_steps_count": 1,
+    "migration_name": "20260712144800_add_learning_proposal"
+  },
+  {
+    "id": "73aed464-d15e-46e7-9de1-fc665dac4bc5",
+    "checksum": "28892f5fa99e0f34e7855d4258b7cf6bb652903b081f47207a88c8ca39e0f86c",
+    "started_at": "2026-07-25T00:47:03.843Z",
+    "applied_steps_count": 0,
+    "migration_name": "20260724183000_init_forecast_snapshots"
+  },
+  {
+    "id": "6ea770de-fa6a-4135-8241-094498147187",
+    "checksum": "19876a1dec7671334ba0877efaeb090885861f94cd8ca5ee4b721d8f49677cf9",
+    "started_at": "2026-07-25T11:20:16.348Z",
+    "applied_steps_count": 0,
+    "migration_name": "20260725000000_slice_4_cogs_classification_fix"
+  },
+  {
+    "id": "81ab5629-4c9e-4cb4-9598-ee94872e38e9",
+    "checksum": "4b91e073b76dcc12e42165fdb14e732d0d85fcb025da89dfdde3b113b6bd01be",
+    "started_at": "2026-07-25T11:40:14.686Z",
+    "applied_steps_count": 0,
+    "migration_name": "20260701200739_add_execution_plan"
+  },
+  {
+    "id": "0f02b152-419f-40a7-994a-306ec3bc26f8",
+    "checksum": "4b91e073b76dcc12e42165fdb14e732d0d85fcb025da89dfdde3b113b6bd01be",
+    "started_at": "2026-07-25T11:40:22.579Z",
+    "applied_steps_count": 0,
+    "migration_name": "20260701200739_add_execution_plan"
+  },
+  {
+    "id": "8e360cd0-9593-4114-b870-1d79dc2252d7",
+    "checksum": "0f47530f37fa6112a49d6c5f8c9b767529c8ccbd4da0e56a3026d7c46260041e",
+    "started_at": "2026-07-25T11:40:29.466Z",
+    "applied_steps_count": 0,
+    "migration_name": "20260723190000_slice_2_actual_cash_attribution"
+  },
+  {
+    "id": "c6f6dfc2-b371-4575-8ea9-eebb462d9f56",
+    "checksum": "5774948247f691f0b11050a0f568a5652e4f72a81b5a704b823beed7cd65fae8",
+    "started_at": "2026-07-25T11:40:31.751Z",
+    "applied_steps_count": 0,
+    "migration_name": "20260724190000_slice_3_forecast_evaluation"
+  },
+  {
+    "id": "49ced9a2-c9e3-4ee7-9492-d4394eb63508",
+    "checksum": "3216afdacd5fb0c9c68a3b3d41808da73efa4c3d684b70aa646c10577684533b",
+    "started_at": "2026-07-25T11:40:37.519Z",
+    "applied_steps_count": 1,
+    "migration_name": "20260725113632_slice_4_timing_evidence"
+  },
+  {
+    "id": "69036b19-c862-49ba-8392-cb53d358a0cd",
+    "checksum": "e075797bff4db0848ade03e3e940d6fd404afb8e5b88ec4827a1aee9d2c9c659",
+    "started_at": "2026-08-02T03:39:15.539Z",
+    "applied_steps_count": 0,
+    "migration_name": "20260802000000_shadow_orchestration_corrections"
+  },
+  {
+    "id": "1e994060-9fc0-47b9-aaef-a3e73f96fc11",
+    "checksum": "12c03d6e3e6541c0f23591553d0b362e0ecbd00670d0eb9e8ae5bf1d971aa45f",
+    "started_at": "2026-08-02T04:15:08.495Z",
+    "applied_steps_count": 0,
+    "migration_name": "20260802000000_shadow_operational_corrections"
+  }
+]

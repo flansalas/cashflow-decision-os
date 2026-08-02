@@ -52,10 +52,10 @@ export default function SourcesPage() {
                     {companyId ? (
                         <div>
                             {activeTab === "arap" && (
-                                <ARAPUploadStep companyId={companyId} onDone={() => { alert("Upload complete!"); }} />
+                                <ARAPUploadStep companyId={companyId} onDone={() => { window.location.href = "/plan"; }} />
                             )}
                             {activeTab === "bank" && (
-                                <BankUploadStep companyId={companyId} onDone={() => { alert("Bank upload complete!"); }} />
+                                <BankUploadStep companyId={companyId} onDone={() => { window.location.href = "/plan"; }} />
                             )}
                         </div>
                     ) : (

@@ -1,0 +1,33 @@
+Fetching full migration logs...
+[
+  {
+    "id": "782112c5-e37b-4bfc-a727-9e439b08970a",
+    "checksum": "8794580d31030fa555d009c05b526cb88521d69fc680bed73684b6a2674a47be",
+    "started_at": "2026-07-09T01:33:41.855Z",
+    "finished_at": "2026-07-09T01:33:41.855Z",
+    "applied_steps_count": 0,
+    "rolled_back_at": null,
+    "migration_name": "20260709011700_add_execution_plan_fields",
+    "logs": ""
+  },
+  {
+    "id": "81ab5629-4c9e-4cb4-9598-ee94872e38e9",
+    "checksum": "4b91e073b76dcc12e42165fdb14e732d0d85fcb025da89dfdde3b113b6bd01be",
+    "started_at": "2026-07-25T11:40:14.686Z",
+    "finished_at": null,
+    "applied_steps_count": 0,
+    "rolled_back_at": "2026-07-25T11:40:22.512Z",
+    "migration_name": "20260701200739_add_execution_plan",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260701200739_add_execution_plan\n\nDatabase error code: 42P07\n\nDatabase error:\nERROR: relation \"BaselineVarianceLedger\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42P07), message: \"relation \\\"BaselineVarianceLedger\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"heap.c\"), line: Some(1174), routine: Some(\"heap_create_with_catalog\") }\n\n   0: sql_schema_connector::apply_migration::apply_script\n           with migration_name=\"20260701200739_add_execution_plan\"\n             at schema-engine/connectors/sql-schema-connector/src/apply_migration.rs:113\n   1: schema_commands::commands::apply_migrations::Applying migration\n           with migration_name=\"20260701200739_add_execution_plan\"\n             at schema-engine/commands/src/commands/apply_migrations.rs:95\n   2: schema_core::state::ApplyMigrations\n             at schema-engine/core/src/state.rs:248"
+  },
+  {
+    "id": "0f02b152-419f-40a7-994a-306ec3bc26f8",
+    "checksum": "4b91e073b76dcc12e42165fdb14e732d0d85fcb025da89dfdde3b113b6bd01be",
+    "started_at": "2026-07-25T11:40:22.579Z",
+    "finished_at": "2026-07-25T11:40:22.579Z",
+    "applied_steps_count": 0,
+    "rolled_back_at": null,
+    "migration_name": "20260701200739_add_execution_plan",
+    "logs": ""
+  }
+]

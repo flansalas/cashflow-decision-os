@@ -375,6 +375,9 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [result, setResult] = useState<ImportResult>({});
 
+    const [accounts, setAccounts] = useState<{id: string, name: string}[]>([]);
+    const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+
     // Pattern detection state
     const [reviewPatterns, setReviewPatterns] = useState<ReviewPattern[]>([]);
     const [patternSaving, setPatternSaving] = useState(false);
@@ -386,10 +389,19 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
         if (!companyId) return;
         const load = async () => {
             const res = await fetch(`/api/upload/mapping?companyId=${companyId}&kind=bank`);
-            if (!res.ok) return;
-            const data = await res.json();
-            if (data.found && Object.keys(data.mappingJson).length > 0) {
-                setBankFile(s => ({ ...s, mapping: data.mappingJson, savedMappingLoaded: true }));
+            if (res.ok) {
+                const data = await res.json();
+                if (data.found && Object.keys(data.mappingJson).length > 0) {
+                    setBankFile(s => ({ ...s, mapping: data.mappingJson, savedMappingLoaded: true }));
+                }
+            }
+            const accRes = await fetch(`/api/company/accounts?companyId=${companyId}`);
+            if (accRes.ok) {
+                const accData = await accRes.json();
+                if (accData.accounts && accData.accounts.length > 0) {
+                    setAccounts(accData.accounts);
+                    setSelectedAccountId(accData.accounts[0].id);
+                }
             }
         };
         load();
@@ -470,10 +482,14 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
 
         try {
             if (bankRows.length > 0) {
+                const msgBuffer = new TextEncoder().encode(JSON.stringify(bankRows));
+                const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+                const fileHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+                
                 const r = await fetch("/api/upload/bank", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ companyId, rows: bankRows, mappingJson: bankFile.mapping }),
+                    body: JSON.stringify({ companyId, rows: bankRows, mappingJson: bankFile.mapping, fileHash, accountId: selectedAccountId }),
                 });
                 const d = await r.json();
                 if (!r.ok) throw new Error(d.error ?? "Bank import failed");
@@ -706,6 +722,23 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
                         />
                     )}
 
+                    {bankRows.length > 0 && accounts.length > 0 && (
+                        <div className="mt-4 flex items-center">
+                            <label className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Bank Account:</label>
+                            <select 
+                                value={selectedAccountId ?? ""} 
+                                onChange={e => setSelectedAccountId(e.target.value)}
+                                className="ml-3 border rounded px-3 py-1.5 text-sm"
+                                style={{ background: "var(--bg-input)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                            >
+                                <option value="">-- Select an account --</option>
+                                {accounts.map(a => (
+                                    <option key={a.id} value={a.id}>{a.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     {bankRows.length === 0 && (
                         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-700">
                             <AlertTriangle className="w-4 h-4" /> No valid rows after mapping. Check your column assignments.
@@ -723,7 +756,7 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
                             <Pencil className="w-3.5 h-3.5 mr-1.5 inline-block" /> Edit Mapping
                         </button>
                         <button
-                            disabled={submitting || bankRows.length === 0}
+                            disabled={submitting || bankRows.length === 0 || !selectedAccountId}
                             onClick={handleImport}
                             className="flex-1 py-2.5 text-white font-semibold rounded-xl transition-all disabled:opacity-40 text-sm shadow-lg shadow-emerald-100"
                             style={{ background: "var(--color-positive)" }}

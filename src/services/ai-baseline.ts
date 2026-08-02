@@ -3,14 +3,23 @@ import prisma from "@/db/prisma";
 import { BaselineVarianceLedger, Company } from "@prisma/client";
 import { endOfWeek, startOfWeek, subWeeks } from "date-fns";
 
-const openai = new OpenAI(); // Assumes OPENAI_API_KEY is in process.env
-
+let openai: OpenAI | null = null;
+try {
+    openai = new OpenAI(); // Assumes OPENAI_API_KEY is in process.env
+} catch (e) {
+    console.warn("OPENAI_API_KEY not set. AI functions will fail gracefully.");
+}
 export interface AIBaselineResult {
     inflowFactors: number[];
     outflowFactors: number[];
     inflowExplanations: string[];
     outflowExplanations: string[];
     reasoningLog: string;
+    weeklyInflowCoverage: number[];
+    weeklyOutflowCoverage: number[];
+    rawAiResponse: string;
+    promptVersionHash: string;
+    modelIdentifier: string;
 }
 
 export async function computeAIBaseline(
@@ -29,7 +38,12 @@ export async function computeAIBaseline(
                 outflowFactors: new Array(13).fill(1.0),
                 inflowExplanations: new Array(13).fill("AI Error: OPENAI_API_KEY is not set in environment variables."),
                 outflowExplanations: new Array(13).fill("AI Error: OPENAI_API_KEY is not set in environment variables."),
-                reasoningLog: "AI Generation Failed: OPENAI_API_KEY is not set in environment variables."
+                reasoningLog: "AI Generation Failed: OPENAI_API_KEY is not set in environment variables.",
+                weeklyInflowCoverage: new Array(13).fill(0),
+                weeklyOutflowCoverage: new Array(13).fill(0),
+                rawAiResponse: "{}",
+                promptVersionHash: "v1.0.0-missing-key",
+                modelIdentifier: "none"
             };
         }
 
@@ -136,7 +150,7 @@ Company Payment Terms Context:
 Respond strictly in the requested JSON format.
         `;
 
-        const response = await openai.chat.completions.create({
+        const response = await openai!.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [{ role: "user", content: prompt }],
             temperature: 0.1,
@@ -165,6 +179,13 @@ Respond strictly in the requested JSON format.
         if (!rawText) return null;
         
         const parsed = JSON.parse(rawText) as AIBaselineResult;
+        
+        parsed.weeklyInflowCoverage = weeklyInflowCoverage;
+        parsed.weeklyOutflowCoverage = weeklyOutflowCoverage;
+        parsed.rawAiResponse = rawText;
+        parsed.promptVersionHash = "v1.0.0"; // Placeholder versioning since prompt is inline
+        parsed.modelIdentifier = "gpt-4o-mini";
+        
         
         const ensureLength = <T,>(arr: T[], length: number, fillValue: T): T[] => {
             if (!arr || !Array.isArray(arr)) return new Array(length).fill(fillValue);

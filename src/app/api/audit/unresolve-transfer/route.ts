@@ -11,15 +11,19 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { pairId, companyId } = body;
+        const { pairId } = body;
 
-        const company = await prisma.company.findUnique({ where: { id: companyId } });
+        let company;
+        if (orgId) {
+            company = await prisma.company.findUnique({
+                where: { clerkOrgId: orgId }
+            });
+        }
+        
         if (!company) {
-            return NextResponse.json({ error: "Company not found" }, { status: 404 });
+            return NextResponse.json({ error: "Company not found for authenticated session" }, { status: 404 });
         }
-        if (orgId && company.clerkOrgId && orgId !== company.clerkOrgId) {
-            return NextResponse.json({ error: "Unauthorized for company" }, { status: 403 });
-        }
+        const companyId = company.id;
 
         const result = await prisma.$transaction(async (tx) => {
             // Find active history

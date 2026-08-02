@@ -11,18 +11,19 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { txId1, txId2, companyId } = body;
+        const { txId1, txId2 } = body;
 
-        // Verify company access
-        const company = await prisma.company.findUnique({
-            where: { id: companyId }
-        });
+        let company;
+        if (orgId) {
+            company = await prisma.company.findUnique({
+                where: { clerkOrgId: orgId }
+            });
+        }
+        
         if (!company) {
-            return NextResponse.json({ error: "Company not found" }, { status: 404 });
+            return NextResponse.json({ error: "Company not found for authenticated session" }, { status: 404 });
         }
-        if (orgId && company.clerkOrgId && orgId !== company.clerkOrgId) {
-            return NextResponse.json({ error: "Unauthorized for company" }, { status: 403 });
-        }
+        const companyId = company.id;
         if (txId1 === txId2) {
             return NextResponse.json({ error: "Cannot pair a transaction with itself" }, { status: 400 });
         }

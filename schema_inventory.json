@@ -1,0 +1,70 @@
+Inventoring active tables...
+[
+  {
+    "table_name": "ActualCashAttribution"
+  },
+  {
+    "table_name": "BaselineVarianceLedger"
+  },
+  {
+    "table_name": "ExecutionPlan"
+  },
+  {
+    "table_name": "ForecastEvaluationObservation"
+  }
+]
+Inventoring columns for ExecutionPlan...
+[
+  {
+    "column_name": "id",
+    "data_type": "text"
+  },
+  {
+    "column_name": "companyId",
+    "data_type": "text"
+  },
+  {
+    "column_name": "weekStart",
+    "data_type": "timestamp without time zone"
+  },
+  {
+    "column_name": "status",
+    "data_type": "text"
+  },
+  {
+    "column_name": "version",
+    "data_type": "integer"
+  },
+  {
+    "column_name": "createdAt",
+    "data_type": "timestamp without time zone"
+  },
+  {
+    "column_name": "supersededAt",
+    "data_type": "timestamp without time zone"
+  },
+  {
+    "column_name": "supersededByPlanId",
+    "data_type": "text"
+  },
+  {
+    "column_name": "approvedBy",
+    "data_type": "text"
+  },
+  {
+    "column_name": "forecastStateJson",
+    "data_type": "text"
+  },
+  {
+    "column_name": "revisionReason",
+    "data_type": "text"
+  },
+  {
+    "column_name": "actualEndingCash",
+    "data_type": "double precision"
+  },
+  {
+    "column_name": "reviewedAt",
+    "data_type": "timestamp without time zone"
+  }
+]

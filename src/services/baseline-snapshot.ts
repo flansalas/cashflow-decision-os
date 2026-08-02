@@ -126,6 +126,14 @@ export async function buildAndCacheBaseline(companyId: string) {
         updatePayload.aiInflowExplanationsJson = JSON.stringify(aiBaseline.inflowExplanations);
         updatePayload.aiOutflowExplanationsJson = JSON.stringify(aiBaseline.outflowExplanations);
         updatePayload.aiReasoningLogJson = aiBaseline.reasoningLog;
+        
+        updatePayload.weeklyInflowCoverageJson = JSON.stringify(aiBaseline.weeklyInflowCoverage);
+        updatePayload.weeklyOutflowCoverageJson = JSON.stringify(aiBaseline.weeklyOutflowCoverage);
+        updatePayload.evidenceStateJson = JSON.stringify(new Array(13).fill("UNKNOWN_INFLOW")); // Placeholder as requested: "do not alter production baseline factor logic"
+        updatePayload.rawAiResponseJson = aiBaseline.rawAiResponse;
+        updatePayload.promptVersionHash = aiBaseline.promptVersionHash;
+        updatePayload.modelIdentifier = aiBaseline.modelIdentifier;
+        
         updatePayload.aiGeneratedAt = new Date();
     }
 
@@ -154,6 +162,14 @@ export async function buildAndCacheBaseline(companyId: string) {
             aiInflowExplanationsJson: aiBaseline ? JSON.stringify(aiBaseline.inflowExplanations) : null,
             aiOutflowExplanationsJson: aiBaseline ? JSON.stringify(aiBaseline.outflowExplanations) : null,
             aiReasoningLogJson: aiBaseline ? aiBaseline.reasoningLog : null,
+            
+            weeklyInflowCoverageJson: aiBaseline ? JSON.stringify(aiBaseline.weeklyInflowCoverage) : null,
+            weeklyOutflowCoverageJson: aiBaseline ? JSON.stringify(aiBaseline.weeklyOutflowCoverage) : null,
+            evidenceStateJson: aiBaseline ? JSON.stringify(new Array(13).fill("UNKNOWN_INFLOW")) : null,
+            rawAiResponseJson: aiBaseline ? aiBaseline.rawAiResponse : null,
+            promptVersionHash: aiBaseline ? aiBaseline.promptVersionHash : null,
+            modelIdentifier: aiBaseline ? aiBaseline.modelIdentifier : null,
+            
             aiGeneratedAt: aiBaseline ? new Date() : null,
         }
     });

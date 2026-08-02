@@ -1,0 +1,864 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Company {
+  id                            String                          @id @default(uuid())
+  name                          String
+  clerkOrgId                    String?                         @unique
+  isDemo                        Boolean                         @default(false)
+  onboardingCompleted           Boolean                         @default(false)
+  onboardingStep                Int                             @default(0)
+  createdAt                     DateTime                        @default(now())
+  updatedAt                     DateTime                        @updatedAt
+  actionItems                   ActionItem[]
+  actualCashAttributions        ActualCashAttribution[]
+  assumptions                   Assumption[]
+  bankAccounts                  BankAccount[]
+  BankImportManifest            BankImportManifest[]
+  bankTransactions              BankTransaction[]
+  baselineSnapshot              BaselineSnapshot?
+  BaselineSnapshotHistory       BaselineSnapshotHistory[]
+  baselineVarianceLedgers       BaselineVarianceLedger[]
+  cashAdjustments               CashAdjustment[]
+  cashFlowCategories            CashFlowCategory[]
+  cashFlowEntries               CashFlowEntry[]
+  cashSnapshots                 CashSnapshot[]
+  changeLogs                    ChangeLog[]
+  notes                         CompanyNote[]
+  customerPaymentObservations   CustomerPaymentObservation[]
+  customerProfiles              CustomerProfile[]
+  EvaluationJob                 EvaluationJob[]
+  EvaluationJobTrigger          EvaluationJobTrigger[]
+  executionPlans                ExecutionPlan[]
+  forecastCheckpoints           ForecastCheckpoint[]
+  ForecastEvaluationObservation ForecastEvaluationObservation[]
+  forecastEvaluationRuns        ForecastEvaluationRun[]
+  forecastWeeks                 ForecastWeek[]
+  importApplications            ImportApplication[]
+  importApplyChanges            ImportApplyChange[]
+  importBatches                 ImportBatch[]
+  learningProposals             LearningProposal[]
+  mappingProfiles               MappingProfile[]
+  overrides                     Override[]
+  payableBills                  PayableBill[]
+  receivableInvoices            ReceivableInvoice[]
+  recurringPatterns             RecurringPattern[]
+  scenarioItems                 ScenarioItem[]
+  stagedImportRows              StagedImportRow[]
+  vendorPaymentObservations     VendorPaymentObservation[]
+  vendorProfiles                VendorProfile[]
+}
+
+model CompanyNote {
+  id        String   @id @default(uuid())
+  companyId String
+  noteText  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model CashSnapshot {
+  id                 String              @id @default(uuid())
+  companyId          String
+  asOfDate           DateTime
+  bankBalance        Float
+  createdAt          DateTime            @default(now())
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  forecastCheckpoint ForecastCheckpoint?
+}
+
+model CashAdjustment {
+  id            String   @id @default(uuid())
+  companyId     String
+  type          String
+  amount        Float
+  effectiveDate DateTime
+  note          String?
+  createdAt     DateTime @default(now())
+  description   String?
+  origin        String   @default("system")
+  status        String   @default("active")
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model CustomerProfile {
+  id                String   @id @default(uuid())
+  companyId         String
+  customerName      String
+  typicalDelayWeeks Int?
+  riskTag           String   @default("low")
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model VendorProfile {
+  id                  String   @id @default(uuid())
+  companyId           String
+  vendorName          String
+  criticality         String   @default("normal")
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  defaultExpenseClass String   @default("unknown")
+  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model ReceivableInvoice {
+  id           String    @id @default(uuid())
+  companyId    String
+  customerName String
+  invoiceNo    String
+  invoiceDate  DateTime?
+  dueDate      DateTime?
+  amountOpen   Float
+  daysPastDue  Int?
+  status       String    @default("open")
+  metaJson     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model PayableBill {
+  id           String    @id @default(uuid())
+  companyId    String
+  vendorName   String
+  billNo       String
+  billDate     DateTime?
+  dueDate      DateTime?
+  amountOpen   Float
+  daysPastDue  Int?
+  status       String    @default("open")
+  metaJson     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  expenseClass String    @default("unknown")
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model Assumption {
+  id                     String    @id @default(uuid())
+  companyId              String
+  bufferMin              Float     @default(10000)
+  fixedWeeklyOutflow     Float     @default(0)
+  payrollCadence         String    @default("biweekly")
+  payrollAllInAmount     Float?
+  payrollNextDate        DateTime?
+  rentMonthlyAmount      Float?
+  rentDayOfMonth         Int?
+  paymentCurveJson       String    @default("{\"current\":0,\"1-14\":1,\"15-30\":2,\"31-60\":3,\"61+\":4}")
+  highRiskAgingDays      Int       @default(61)
+  projectionSafetyMargin Float     @default(1.0)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  company                Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model BankAccount {
+  id                        String                      @id @default(uuid())
+  companyId                 String
+  name                      String?
+  createdAt                 DateTime                    @default(now())
+  company                   Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  BankImportManifestAccount BankImportManifestAccount[]
+  transactions              BankTransaction[]
+}
+
+model BankTransaction {
+  id                     String                  @id @default(uuid())
+  companyId              String
+  accountId              String?
+  txDate                 DateTime
+  amount                 Float
+  description            String
+  direction              String
+  txHash                 String?
+  createdAt              DateTime                @default(now())
+  internalTransferPairId String?
+  internalTransferStatus String                  @default("unresolved")
+  attributions           ActualCashAttribution[]
+  account                BankAccount?            @relation(fields: [accountId], references: [id])
+  company                Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, txHash])
+}
+
+model ActualCashAttribution {
+  id                                      String                                   @id @default(uuid())
+  companyId                               String
+  bankTransactionId                       String
+  targetWeekStart                         DateTime
+  direction                               String
+  componentCategory                       String
+  sourceType                              String
+  sourceId                                String?
+  amountAttributed                        Float
+  confidenceTier                          String
+  isUserVerified                          Boolean                                  @default(false)
+  isReclassified                          Boolean                                  @default(false)
+  attributionRunId                        String
+  version                                 Int                                      @default(1)
+  isActive                                Boolean                                  @default(true)
+  createdAt                               DateTime                                 @default(now())
+  updatedAt                               DateTime                                 @updatedAt
+  attributionMethod                       String                                   @default("unknown")
+  checkpointId                            String?
+  maturedForecastWeek                     DateTime?
+  bankTransaction                         BankTransaction                          @relation(fields: [bankTransactionId], references: [id], onDelete: Cascade)
+  ForecastCheckpoint                      ForecastCheckpoint?                      @relation(fields: [checkpointId], references: [id], onDelete: Cascade)
+  company                                 Company                                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  forecastComponentEvaluationAttributions ForecastComponentEvaluationAttribution[]
+
+  @@index([companyId, targetWeekStart])
+  @@index([attributionRunId])
+  @@index([bankTransactionId, isActive])
+  @@index([checkpointId])
+}
+
+model RecurringPattern {
+  id               String    @id @default(uuid())
+  companyId        String
+  direction        String
+  merchantKey      String
+  displayName      String
+  typicalAmount    Float
+  amountStdDev     Float     @default(0)
+  cadence          String
+  nextExpectedDate DateTime?
+  confidence       String    @default("med")
+  category         String    @default("other")
+  isIncluded       Boolean   @default(true)
+  isCritical       Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  description      String?
+  origin           String    @default("system")
+  status           String    @default("active")
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, merchantKey])
+}
+
+model MappingProfile {
+  id          String   @id @default(uuid())
+  companyId   String
+  kind        String
+  mappingJson String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, kind])
+}
+
+model Override {
+  id            String    @id @default(uuid())
+  companyId     String
+  type          String
+  targetType    String
+  targetId      String?
+  amount        Float?
+  effectiveDate DateTime?
+  metaJson      String?
+  status        String    @default("active")
+  createdAt     DateTime  @default(now())
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model ChangeLog {
+  id                        String   @id @default(uuid())
+  companyId                 String
+  timestamp                 DateTime @default(now())
+  source                    String
+  action                    String
+  inputText                 String?
+  diffJson                  String
+  forecastVersionHashAfter  String
+  forecastVersionHashBefore String?
+  userId                    String?
+  company                   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model ForecastWeek {
+  id                  String   @id @default(uuid())
+  companyId           String
+  weekStart           DateTime
+  weekEnd             DateTime
+  startCash           Float
+  inflowsExpected     Float
+  outflowsExpected    Float
+  endCashExpected     Float
+  inflowsBest         Float
+  outflowsBest        Float
+  endCashBest         Float
+  inflowsWorst        Float
+  outflowsWorst       Float
+  endCashWorst        Float
+  zone                String
+  confidenceScore     Int      @default(100)
+  breakdownJson       String?
+  computedAt          DateTime @default(now())
+  forecastVersionHash String
+  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, weekStart, forecastVersionHash])
+}
+
+model ActionItem {
+  id                  String         @id @default(uuid())
+  companyId           String
+  type                String
+  priority            String
+  title               String
+  description         String
+  amountImpact        Float
+  impactCertainty     String
+  constraintWeekStart DateTime?
+  targetType          String
+  targetId            String?
+  reasoningJson       String
+  createdAt           DateTime       @default(now())
+  actualAmountImpact  Float?
+  completedAt         DateTime?
+  completionNote      String?
+  dueDate             DateTime?
+  executionPlanId     String?
+  ownerName           String?
+  status              String         @default("planned")
+  company             Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  executionPlan       ExecutionPlan? @relation(fields: [executionPlanId], references: [id])
+
+  @@index([executionPlanId])
+  @@index([companyId, status])
+}
+
+model ScenarioItem {
+  id         String   @id @default(uuid())
+  companyId  String
+  label      String
+  direction  String
+  weekNumber Int
+  amount     Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model CashFlowCategory {
+  id        String          @id @default(uuid())
+  companyId String
+  name      String
+  direction String
+  sortOrder Int             @default(0)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  entries   CashFlowEntry[]
+
+  @@unique([companyId, name, direction])
+}
+
+model CashFlowEntry {
+  id         String           @id @default(uuid())
+  companyId  String
+  categoryId String
+  label      String
+  amount     Float
+  targetDate DateTime         @default(now())
+  note       String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  category   CashFlowCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  company    Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model ForecastCheckpoint {
+  id                            String                          @id @default(uuid())
+  companyId                     String
+  cashSnapshotId                String                          @unique
+  snapshotSource                String                          @default("client_observed_v1")
+  forecastVersionHash           String?
+  generatedAt                   DateTime?
+  weekStart                     DateTime
+  weekEnd                       DateTime
+  endCashExpected               Float
+  inflowsExpected               Float
+  outflowsExpected              Float
+  breakdownJson                 String?
+  createdAt                     DateTime                        @default(now())
+  ActualCashAttribution         ActualCashAttribution[]
+  BaselineSnapshotHistory       BaselineSnapshotHistory?
+  cashSnapshot                  CashSnapshot                    @relation(fields: [cashSnapshotId], references: [id], onDelete: Cascade)
+  company                       Company                         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  componentSnapshots            ForecastComponentSnapshot[]
+  ForecastEvaluationObservation ForecastEvaluationObservation[]
+  forecastEvaluationRuns        ForecastEvaluationRun[]
+}
+
+model BaselineVarianceLedger {
+  id               String   @id @default(uuid())
+  companyId        String
+  weekStart        DateTime
+  projectedOutflow Float
+  actualOutflow    Float
+  variancePct      Float
+  projectedInflow  Float?
+  actualInflow     Float?
+  variancePctIn    Float?
+  createdAt        DateTime @default(now())
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, weekStart])
+}
+
+model ExecutionPlan {
+  id                 String       @id @default(uuid())
+  companyId          String
+  weekStart          DateTime
+  status             String       @default("approved")
+  version            Int          @default(1)
+  createdAt          DateTime     @default(now())
+  supersededAt       DateTime?
+  supersededByPlanId String?
+  actualEndingCash   Float?
+  approvedBy         String?
+  forecastStateJson  String?
+  reviewedAt         DateTime?
+  revisionReason     String?
+  actionItems        ActionItem[]
+  company            Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, weekStart])
+}
+
+model CustomerPaymentObservation {
+  id                  String    @id @default(uuid())
+  companyId           String
+  customerName        String
+  invoiceId           String?
+  invoiceNo           String?
+  dueDate             DateTime?
+  expectedPaymentDate DateTime?
+  actualPaymentDate   DateTime
+  daysEarlyOrLate     Int
+  amount              Float
+  paymentSource       String
+  observedAt          DateTime  @default(now())
+  company             Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, invoiceId, actualPaymentDate])
+  @@index([companyId, customerName])
+}
+
+model VendorPaymentObservation {
+  id                 String    @id @default(uuid())
+  companyId          String
+  vendorName         String
+  billId             String?
+  billNo             String?
+  dueDate            DateTime?
+  plannedPaymentDate DateTime?
+  actualPaymentDate  DateTime
+  daysEarlyOrLate    Int
+  amount             Float
+  paymentSource      String
+  observedAt         DateTime  @default(now())
+  company            Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, billId, actualPaymentDate])
+  @@index([companyId, vendorName])
+}
+
+model ImportBatch {
+  id               String             @id @default(uuid())
+  companyId        String
+  importType       String
+  filename         String
+  uploadedBy       String?
+  uploadedAt       DateTime           @default(now())
+  rowCount         Int
+  acceptedCount    Int                @default(0)
+  rejectedCount    Int                @default(0)
+  duplicateCount   Int                @default(0)
+  status           String             @default("success")
+  sourceDateStart  DateTime?
+  sourceDateEnd    DateTime?
+  fileHash         String?
+  mappingProfileId String?
+  errorSummary     String?
+  application      ImportApplication?
+  company          Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  stagedRows       StagedImportRow[]
+
+  @@index([companyId, importType])
+}
+
+model StagedImportRow {
+  id                   String      @id @default(uuid())
+  companyId            String
+  importBatchId        String
+  importType           String
+  sourceRowNumber      Int
+  rawDataJson          String
+  normalizedDataJson   String
+  validationStatus     String
+  validationErrorsJson String?
+  conflictType         String
+  matchedRecordId      String?
+  fieldDifferencesJson String?
+  proposedAction       String
+  userDecision         String?
+  linkedRecordId       String?
+  reviewedBy           String?
+  reviewedAt           DateTime?
+  reviewNote           String?
+  rollbackStatus       String?
+  rollbackError        String?
+  applyStatus          String?
+  appliedRecordId      String?
+  appliedAt            DateTime?
+  applyError           String?
+  createdAt            DateTime    @default(now())
+  company              Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  batch                ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, importBatchId])
+}
+
+model ImportApplication {
+  id                         String              @id @default(cuid())
+  companyId                  String
+  importBatchId              String              @unique
+  importType                 String
+  appliedBy                  String?
+  appliedAt                  DateTime            @default(now())
+  status                     String              @default("applied")
+  rolledBackAt               DateTime?
+  rolledBackBy               String?
+  forecastHashBeforeRollback String?
+  forecastHashAfterRollback  String?
+  rollbackEnrichmentError    String?
+  insertedCount              Int                 @default(0)
+  updatedCount               Int                 @default(0)
+  skippedCount               Int                 @default(0)
+  failedCount                Int                 @default(0)
+  forecastHashBefore         String?
+  forecastHashAfter          String?
+  enrichmentError            String?
+  changeLogId                String?
+  company                    Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  batch                      ImportBatch         @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+  changes                    ImportApplyChange[]
+}
+
+model ImportApplyChange {
+  id                  String            @id @default(uuid())
+  companyId           String
+  importApplicationId String
+  stagedRowId         String
+  entityType          String
+  entityId            String
+  operation           String
+  beforeJson          String?
+  afterJson           String
+  changedFieldsJson   String
+  createdAt           DateTime          @default(now())
+  company             Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  application         ImportApplication @relation(fields: [importApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, importApplicationId])
+}
+
+model LearningProposal {
+  id                 String    @id @default(uuid())
+  companyId          String
+  type               String
+  proposedChangeJson String
+  rationale          String
+  evidenceActionIds  String
+  status             String    @default("pending")
+  createdAt          DateTime  @default(now())
+  reviewedAt         DateTime?
+  reviewedBy         String?
+  company            Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, status])
+}
+
+model BaselineSnapshot {
+  id                        String    @id @default(uuid())
+  companyId                 String    @unique
+  asOfDate                  DateTime
+  hasSufficientHistory      Boolean
+  baselineConfidenceTier    String
+  inflowCadence             String
+  outflowCadence            String
+  variableInflowWeekly      Float
+  variableOutflowWeekly     Float
+  variableInflowBand        Float
+  variableOutflowBand       Float
+  conservativeInflowWeekly  Float     @default(0)
+  conservativeOutflowWeekly Float     @default(0)
+  weeklyBucketsJson         String    @default("[]")
+  aiInflowFactorsJson       String?
+  aiOutflowFactorsJson      String?
+  aiInflowExplanationsJson  String?
+  aiOutflowExplanationsJson String?
+  aiReasoningLogJson        String?
+  aiGeneratedAt             DateTime?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+  evidenceStateJson         String?
+  modelIdentifier           String?
+  promptVersionHash         String?
+  rawAiResponseJson         String?
+  weeklyInflowCoverageJson  String?
+  weeklyOutflowCoverageJson String?
+  company                   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model ForecastComponentSnapshot {
+  id                           String                        @id @default(uuid())
+  forecastCheckpointId         String
+  targetWeekStart              DateTime
+  direction                    String
+  componentCategory            String
+  sourceType                   String
+  sourceId                     String?
+  sourceAmountAtForecast       Float?
+  sourceDateAtForecast         DateTime?
+  sourceStatusAtForecast       String?
+  overrideId                   String?
+  projectedAmount              Float
+  confidenceTier               String
+  sourceStateJson              String?
+  sourceStateHash              String
+  isUserOverridden             Boolean                       @default(false)
+  createdAt                    DateTime                      @default(now())
+  forecastComponentEvaluations ForecastComponentEvaluation[]
+  checkpoint                   ForecastCheckpoint            @relation(fields: [forecastCheckpointId], references: [id], onDelete: Cascade)
+
+  @@index([forecastCheckpointId])
+}
+
+model ForecastEvaluationRun {
+  id                     String                        @id @default(uuid())
+  companyId              String
+  weekStart              DateTime
+  checkpointId           String
+  evaluatedAt            DateTime                      @default(now())
+  evaluationLogicVersion Int                           @default(1)
+  version                Int                           @default(1)
+  isActive               Boolean                       @default(true)
+  expectedInflows        Float
+  actualInflows          Float
+  inflowVariance         Float
+  expectedOutflows       Float
+  actualOutflows         Float
+  outflowVariance        Float
+  expectedNetCash        Float
+  actualNetCash          Float
+  netVariance            Float
+  aggregateMetricsJson   String?
+  components             ForecastComponentEvaluation[]
+  checkpoint             ForecastCheckpoint            @relation(fields: [checkpointId], references: [id])
+  company                Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, weekStart, isActive])
+  @@index([checkpointId])
+}
+
+model ForecastComponentEvaluation {
+  id              String                                   @id @default(uuid())
+  evaluationRunId String
+  snapshotId      String?
+  expectedAmount  Float
+  actualAmount    Float
+  varianceAmount  Float
+  status          String
+  sourceType      String
+  sourceId        String?
+  confidenceTier  String
+  actualDate      DateTime?
+  daysShifted     Int?
+  shiftDirection  String?
+  createdAt       DateTime                                 @default(now())
+  evaluationRun   ForecastEvaluationRun                    @relation(fields: [evaluationRunId], references: [id], onDelete: Cascade)
+  snapshot        ForecastComponentSnapshot?               @relation(fields: [snapshotId], references: [id])
+  attributions    ForecastComponentEvaluationAttribution[]
+
+  @@index([evaluationRunId])
+  @@index([snapshotId])
+}
+
+model ForecastComponentEvaluationAttribution {
+  evidenceRole            String                      @default("current_week_actual")
+  id                      String                      @id @default(uuid())
+  componentEvaluationId   String
+  actualCashAttributionId String
+  amountApplied           Float
+  createdAt               DateTime                    @default(now())
+  actualCashAttribution   ActualCashAttribution       @relation(fields: [actualCashAttributionId], references: [id])
+  componentEvaluation     ForecastComponentEvaluation @relation(fields: [componentEvaluationId], references: [id], onDelete: Cascade)
+
+  @@index([componentEvaluationId])
+  @@index([actualCashAttributionId])
+}
+
+model AccountFreshnessStatus {
+  id                      String                  @id
+  checkpointId            String
+  accountId               String
+  sourceType              String
+  latestTransactionDate   DateTime?
+  ingestionTimestamp      DateTime?
+  coverageStatus          String
+  manualSourceManifest    String?
+  completenessEvidence    String?
+  BaselineSnapshotHistory BaselineSnapshotHistory @relation(fields: [checkpointId], references: [id], onDelete: Cascade)
+
+  @@unique([checkpointId, accountId])
+}
+
+model BankImportManifest {
+  id                        String                      @id
+  companyId                 String
+  userCertified             Boolean                     @default(false)
+  createdAt                 DateTime                    @default(now())
+  Company                   Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  BankImportManifestAccount BankImportManifestAccount[]
+}
+
+model BankImportManifestAccount {
+  id                 String             @id
+  manifestId         String
+  bankAccountId      String
+  rawSourceAccountId String?
+  coveredStartDate   DateTime?
+  coveredEndDate     DateTime?
+  userCertifiedAt    DateTime?
+  importSuccess      Boolean            @default(false)
+  rejectedRowCount   Int                @default(0)
+  BankAccount        BankAccount        @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  BankImportManifest BankImportManifest @relation(fields: [manifestId], references: [id], onDelete: Cascade)
+}
+
+model BaselineSnapshotHistory {
+  id                         String                   @id
+  forecastCheckpointId       String                   @unique
+  companyId                  String
+  generatedAt                DateTime                 @default(now())
+  asOfDate                   DateTime
+  variableInflowWeekly       Float
+  variableOutflowWeekly      Float
+  m1EstimatorVersion         String?
+  m4EstimatorVersion         String?
+  preprocessingVersion       String?
+  forecastAssemblyVersion    String?
+  attributionVersion         String?
+  promptVersionHash          String?
+  modelIdentifier            String?
+  appCommitHash              String?
+  explicitInflowJson         Json?
+  explicitOutflowJson        Json?
+  coverageDiagnosticsJson    Json?
+  evidenceStateJson          Json?
+  m1RawBaselineJson          Json?
+  m1ExplicitDeductionJson    Json?
+  m1PreAiResidualJson        Json?
+  m1AiFactorJson             Json?
+  m1PostAiResidualJson       Json?
+  m1FinalProductionTotalJson Json?
+  m4RawBaselineJson          Json?
+  m4ExplicitDeductionJson    Json?
+  m4PreAiResidualJson        Json?
+  fallbackStatus             String                   @default("none")
+  dataQualityStatus          String                   @default("valid")
+  rawAiResponseJson          String?
+  reasoningLog               String?
+  createdAt                  DateTime                 @default(now())
+  AccountFreshnessStatus     AccountFreshnessStatus[]
+  Company                    Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ForecastCheckpoint         ForecastCheckpoint       @relation(fields: [forecastCheckpointId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+model ForecastEvaluationObservation {
+  id                       String             @id
+  forecastCheckpointId     String
+  companyId                String
+  maturedWeekStart         DateTime
+  horizonWeeks             Int
+  direction                String
+  model                    String
+  stage                    String
+  predictionAmount         Float
+  canonicalActual          Float
+  absoluteError            Float
+  signedError              Float
+  dangerousSide            Boolean
+  sensitivityActual        Float?
+  sensitivityAbsoluteError Float?
+  sensitivitySignedError   Float?
+  sensitivityDangerousSide Boolean?
+  attributionAmbiguity     String
+  accountCompleteness      String
+  evaluationValidity       String
+  createdAt                DateTime           @default(now())
+  isLatest                 Boolean            @default(true)
+  supersededAt             DateTime?
+  version                  Int                @default(1)
+  Company                  Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ForecastCheckpoint       ForecastCheckpoint @relation(fields: [forecastCheckpointId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, forecastCheckpointId, maturedWeekStart, horizonWeeks, model, direction, stage, version])
+  @@index([companyId, forecastCheckpointId, maturedWeekStart, horizonWeeks, model, direction, stage, isLatest], map: "idx_latest_observation")
+  @@index([companyId, model])
+  @@index([forecastCheckpointId])
+}
+
+model EvaluationJob {
+  id                   String                 @id @default(uuid())
+  companyId            String
+  status               String                 @default("pending")
+  claimedBy            String?
+  claimExpiresAt       DateTime?
+  attemptCount         Int                    @default(0)
+  createdAt            DateTime               @default(now())
+  startedAt            DateTime?
+  completedAt          DateTime?
+  failedAt             DateTime?
+  failureDetails       String?
+  retryAfter           DateTime?
+  Company              Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  EvaluationJobTrigger EvaluationJobTrigger[]
+
+  @@index([companyId, status])
+  @@index([status, claimExpiresAt])
+}
+
+model EvaluationJobTrigger {
+  id              String        @id @default(uuid())
+  evaluationJobId String
+  companyId       String
+  source          String
+  sourceId        String?
+  createdAt       DateTime      @default(now())
+  Company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  EvaluationJob   EvaluationJob @relation(fields: [evaluationJobId], references: [id], onDelete: Cascade)
+
+  @@index([evaluationJobId])
+}
+
+model TestMigrationVerify {
+  id String @id @default(uuid())
+}

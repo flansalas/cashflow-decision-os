@@ -11,6 +11,8 @@ import prisma from "@/db/prisma";
 import { resolveForecastHashAfter } from "@/services/forecast-hash";
 import { syncVarianceLedger } from "@/services/variance-sync";
 import * as crypto from "crypto";
+import { generateShadowEvaluation } from "@/services/shadow-evaluation";
+import { snapshotAccountFreshness } from "@/services/attribution-checkpoint";
 
 /**
  * Rolls a date forward by the given cadence until it is >= the asOfDate.
@@ -335,6 +337,17 @@ export async function POST(req: NextRequest) {
                 });
 
                 // Slice 1: Snapshot generation
+                // Run shadow evaluation to persist M1 & M4 arrays to BaselineSnapshotHistory
+                // And persist Account Freshness
+                if (checkpoint?.id) {
+                    try {
+                        await generateShadowEvaluation(checkpoint.id, companyId, tx);
+                        await snapshotAccountFreshness(checkpoint.id, companyId, tx);
+                    } catch (e) {
+                        console.error("[Shadow Orchestrator/Attribution] Failed to evaluate shadow logic or freshness:", e);
+                    }
+                }
+
                 if (finalBreakdownJson) {
                     const parsedBreakdown = JSON.parse(finalBreakdownJson);
                     // The UI passes the breakdown for the exact week being checked in
@@ -409,6 +422,38 @@ export async function POST(req: NextRequest) {
                         }
                     }
                 }
+                
+                // Slice 1.5: Immutable Baseline History
+                const baselineSnapshot = await tx.baselineSnapshot.findUnique({
+                    where: { companyId }
+                });
+                
+                if (baselineSnapshot) {
+                    await tx.baselineSnapshotHistory.create({
+                        data: {
+                            id: crypto.randomUUID(),
+                            forecastCheckpointId: checkpoint!.id,
+                            companyId: companyId,
+                            asOfDate: snapshotDate,
+                            
+                            variableInflowWeekly: baselineSnapshot.variableInflowWeekly,
+                            variableOutflowWeekly: baselineSnapshot.variableOutflowWeekly,
+                            
+                            explicitInflowJson: baselineSnapshot.weeklyInflowCoverageJson || "[]",
+                            explicitOutflowJson: baselineSnapshot.weeklyOutflowCoverageJson || "[]",
+                            evidenceStateJson: baselineSnapshot.evidenceStateJson || "[]",
+                            
+                            promptVersionHash: baselineSnapshot.promptVersionHash || "unknown",
+                            modelIdentifier: baselineSnapshot.modelIdentifier || "unknown",
+                            
+                            rawAiResponseJson: baselineSnapshot.rawAiResponseJson || "{}",
+                            reasoningLog: baselineSnapshot.aiReasoningLogJson || "",
+                            
+                            fallbackStatus: "none",
+                            dataQualityStatus: baselineSnapshot.baselineConfidenceTier === "none" || baselineSnapshot.baselineConfidenceTier === "low" ? "low_confidence" : "valid",
+                        }
+                    });
+                }
 
             } else {
                 throw new Error("Missing or invalid required forecast fields for checkpoint preservation.");
@@ -423,6 +468,14 @@ export async function POST(req: NextRequest) {
             await syncVarianceLedger(companyId);
         } catch (syncErr) {
             console.error("Failed to trigger variance sync in cash-checkin:", syncErr);
+        }
+
+        // Trigger canonical evaluation for any newly matured horizons
+        try {
+            const { evaluateMaturedCheckpoints } = await import("@/services/canonical-evaluator");
+            await evaluateMaturedCheckpoints(companyId);
+        } catch (evalErr) {
+            console.error("Failed to evaluate matured horizons in cash-checkin:", evalErr);
         }
 
         let checkpoint = coreResult.checkpoint;
