@@ -20,19 +20,8 @@ export async function resolveTenant(req?: NextRequest): Promise<string | null> {
         const auth_result = await auth();
         userId = auth_result.userId ?? null;
         orgId = auth_result.orgId ?? null;
-
-        // If authenticated but no active organization is selected in Clerk,
-        // fallback to their first organization membership to ensure they
-        // don't drop into unauthenticated demo mode.
-        if (userId && !orgId) {
-            const client = await clerkClient();
-            const memberships = await client.users.getOrganizationMembershipList({ userId });
-            if (memberships.data.length > 0) {
-                orgId = memberships.data[0].organization.id;
-            }
-        }
     } catch {
-        // auth() can throw outside of a valid Next.js headers context — fall through to URL param
+        // auth() can throw outside of a valid Next.js headers context
     }
 
     // ── 1. Active Clerk org — strict lookup only ──────────────────────────────
@@ -42,18 +31,12 @@ export async function resolveTenant(req?: NextRequest): Promise<string | null> {
             select: { id: true }
         });
 
-        if (company) {
-            return company.id;
-        }
+        // orgId present but no mapping → return null rather than leak another tenant's data
+        return company?.id ?? null;
     }
 
-    // ── 3. Fallback: honour explicit URL param if present ──────────────
-    if (req) {
-        const paramId = req.nextUrl.searchParams.get("companyId");
-        if (paramId) return paramId;
-    }
-
-    // ── 4. No session, no param → null. Never fall back to "most recent company" ─
+    // ── 2. No active org → null ─────────────────────────
+    // URL fallback and unauthenticated legacy modes are explicitly disabled.
     return null;
 }
 
