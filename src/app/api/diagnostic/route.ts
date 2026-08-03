@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 export async function GET() {
-    const { userId, orgId } = auth();
+    const { userId, orgId } = await auth();
 
     const dbUrl = process.env.DATABASE_URL || "";
     let dbHost = "unknown";
