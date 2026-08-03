@@ -336,10 +336,7 @@ function PlanContent() {
         if (!isAuthLoaded || !isOrgLoaded) return;
 
         if (isSignedIn) {
-            if (organization) {
-                fetchDashboard(null); // Org is active — backend uses Clerk orgId
-            }
-            // Signed in but org not active yet — AppSidebar setActive will re-trigger this effect
+            fetchDashboard(null); // Org is active or resolved server-side via Clerk orgId
         } else {
             // Unauthenticated / ghost layer
             fetchDashboard(companyId !== null ? companyId : null);
