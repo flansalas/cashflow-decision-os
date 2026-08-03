@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { useOrganization, useAuth } from "@clerk/nextjs";
+import { useOrganization, useAuth, RedirectToSignIn } from "@clerk/nextjs";
 import { HeaderTruthBar } from "@/ui/HeaderTruthBar";
 import { ForecastChart } from "@/ui/ForecastChart";
 import { ForecastRunwayView } from "@/ui/ForecastRunwayView";
@@ -209,8 +209,7 @@ interface DashboardData {
 
 function PlanContent() {
     const searchParams = useSearchParams();
-    const urlCompanyId = searchParams.get("companyId");
-    const [companyId, setCompanyId] = useState<string | null>(null);
+
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -248,32 +247,11 @@ function PlanContent() {
     
     // The effective companyId to pass to sub-components (resolved eagerly for the wizard guard)
     // If we have an active Organization, we NEVER pass the stale URL param or local state.
-    const effectiveCompanyId = organization 
-        ? data?.company.id ?? null 
-        : (companyId ?? urlCompanyId ?? (typeof window !== "undefined" ? localStorage.getItem("cfdo_company_id") : null));
+    const effectiveCompanyId = data?.company.id ?? null;
 
-    // Resolve companyId: URL param > localStorage > default (demo)
-    useEffect(() => {
-        if (organization) return; // Ignore if clerk is active
-        if (urlCompanyId) {
-            localStorage.setItem("cfdo_company_id", urlCompanyId);
-            setCompanyId(urlCompanyId);
-        } else {
-            const saved = localStorage.getItem("cfdo_company_id");
-            setCompanyId(saved ?? null);
-        }
-    }, [urlCompanyId, organization]);
-
-    // When Clerk active org changes, we used to unset the local companyId,
-    // but in preview environments we need to be able to pass a synthetic companyId.
-    // We will just let the backend decide how to resolve the tenant.
-    useEffect(() => {
-        // No-op for preview environments, relying on backend resolveTenant
-    }, [organization?.id]);
-
-    const fetchDashboard = (cid?: string | null) => {
-        const id = cid ?? companyId;
-        const url = id ? `/api/dashboard?companyId=${id}` : "/api/dashboard";
+    const fetchDashboard = () => {
+        const url = "/api/dashboard";
+        const id = null;
         lastFetchTimeRef.current = Date.now();
         fetch(url, { cache: "no-store" })
             .then(r => r.json())
@@ -327,14 +305,11 @@ function PlanContent() {
         // Guard: Wait for Clerk to be fully loaded before any fetch
         if (!isAuthLoaded || !isOrgLoaded) return;
 
-        if (isSignedIn) {
-            fetchDashboard(companyId !== null ? companyId : null);
-        } else {
-            // Unauthenticated / ghost layer
-            fetchDashboard(companyId !== null ? companyId : null);
+        if (isSignedIn && organization) {
+            fetchDashboard();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isAuthLoaded, isOrgLoaded, isSignedIn, companyId, organization?.id]);
+    }, [isAuthLoaded, isOrgLoaded, isSignedIn, organization?.id]);
 
     // Setup Wizard Listener
     useEffect(() => {
@@ -361,7 +336,7 @@ function PlanContent() {
                 const staleAt = Number(localStorage.getItem('cfdo_forecast_stale') ?? '0');
                 if (staleAt > lastFetchTimeRef.current) {
                     localStorage.removeItem('cfdo_forecast_stale');
-                    fetchDashboard(effectiveCompanyId);
+                    fetchDashboard();
                 }
             } catch { /* localStorage not available */ }
         };
@@ -370,6 +345,32 @@ function PlanContent() {
     // effectiveCompanyId may change — re-bind listener when it does
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [effectiveCompanyId]);
+
+    if (!isAuthLoaded || !isOrgLoaded) {
+        return (
+            <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
+                <div className="text-center space-y-4">
+                    <div className="animate-spin w-10 h-10 border-[3px] border-indigo-500 border-t-transparent rounded-full mx-auto" />
+                    <p style={{ color: 'var(--text-muted)' }} className="text-sm tracking-wide">Authenticating…</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!isSignedIn) {
+        return <RedirectToSignIn />;
+    }
+
+    if (!organization) {
+        return (
+            <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
+                <div className="border rounded-xl p-8 max-w-md text-center" style={{ background: '#fff', borderColor: 'var(--border-subtle)' }}>
+                    <p className="text-base font-medium mb-3">Please select an organization</p>
+                    <p className="text-sm text-gray-500">You must select an active organization to view this dashboard.</p>
+                </div>
+            </div>
+        );
+    }
 
     if (loading) {
         return (
@@ -432,7 +433,7 @@ function PlanContent() {
                         adjustments={data.cash.adjustments}
                         onUpdateBalanceClick={() => setShowUpdateBalance(true)}
                         onBalanceUpdated={() => {
-                            fetchDashboard(effectiveCompanyId);
+                            fetchDashboard();
                         }}
                         expectedRunOutWeek={data.forecast.expectedRunOutWeek}
                         worstCaseRunOutWeek={data.forecast.worstCaseRunOutWeek}
@@ -447,7 +448,7 @@ function PlanContent() {
                         executionPlan={data.executionPlan}
                         postApprovalChanges={data.postApprovalChanges}
                         forecastStateJson={data.forecast}
-                        onPlanApproved={() => fetchDashboard(effectiveCompanyId)}
+                        onPlanApproved={() => fetchDashboard()}
                         onPrintPlan={() => setShowExecutionPlan(true)}
                         freshness={data.freshness}
                     />
@@ -718,7 +719,7 @@ function PlanContent() {
                     lastUpdated={data.lastUpdated}
                     onSaved={() => {
                         setShowUpdateBalance(false);
-                        fetchDashboard(effectiveCompanyId);
+                        fetchDashboard();
                     }}
                     onCancel={() => setShowUpdateBalance(false)}
                 />
@@ -736,7 +737,7 @@ function PlanContent() {
                     onClose={() => setPlannedPanelWeek(null)}
                     onSaved={() => {
                         setPlannedPanelWeek(null);
-                        fetchDashboard(effectiveCompanyId);
+                        fetchDashboard();
                     }}
                     onEditPattern={(item) => {
                         setEditingItem(item);
@@ -758,7 +759,7 @@ function PlanContent() {
                 onSaved={() => {
                     setShowEditDrawer(false);
                     setEditingItem(null);
-                    fetchDashboard(effectiveCompanyId);
+                    fetchDashboard();
                     if (plannedPanelWeek) setPlannedPanelWeek(null); // Optional: close panel to reflect changes
                 }}
             />
