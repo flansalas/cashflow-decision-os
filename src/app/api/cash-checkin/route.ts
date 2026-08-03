@@ -57,13 +57,14 @@ export async function POST(req: NextRequest) {
             outflowsExpected: number;
             breakdownJson?: string;
         };
+        bankDataMissing?: boolean;
     };
 
     const tenantId = await resolveTenant(req);
     if (!tenantId) return NextResponse.json({ error: "Missing or invalid company" }, { status: 401 });
     const companyId = tenantId;
 
-    const { executionPlanId, bankBalance, asOfDate, adjustments = [], priorWeekForecast } = body;
+    const { executionPlanId, bankBalance, asOfDate, adjustments = [], priorWeekForecast, bankDataMissing = false } = body;
 
     if (!companyId) {
         return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
@@ -79,7 +80,6 @@ export async function POST(req: NextRequest) {
         warningMsg = "Rolling the week requires your bank balance as of Saturday night. Using today's balance will skew your variance analysis.";
     }
 
-    let bankDataMissing = false;
     let finalBreakdownJson = priorWeekForecast?.breakdownJson || null;
 
     try {

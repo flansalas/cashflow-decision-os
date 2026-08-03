@@ -25,28 +25,35 @@ const companyId = "bb32d2cf-b0a6-4e1d-bcfa-d2004a711bfb"; // test company
 
 describe("Bank Upload Integration (Isolated)", () => {
     let accountId = "";
+    let testCompanyId = "";
 
     beforeAll(async () => {
+        testCompanyId = require("crypto").randomUUID();
+        await prisma.company.create({
+            data: { id: testCompanyId, name: "Upload Integration Test Company", isDemo: true }
+        });
+
         // Create an account for testing
         const acc = await prisma.bankAccount.create({
-            data: { id: require("crypto").randomUUID(), companyId, name: "Integration Test Account" }
+            data: { id: require("crypto").randomUUID(), companyId: testCompanyId, name: "Integration Test Account" }
         });
         accountId = acc.id;
         
         // Clean up before tests
-        await prisma.bankTransaction.deleteMany({ where: { companyId } });
-        await prisma.bankImportManifest.deleteMany({ where: { companyId } });
-        await prisma.evaluationJob.deleteMany({ where: { companyId } });
-        await prisma.importBatch.deleteMany({ where: { companyId } });
+        await prisma.bankTransaction.deleteMany({ where: { companyId: testCompanyId } });
+        await prisma.bankImportManifest.deleteMany({ where: { companyId: testCompanyId } });
+        await prisma.evaluationJob.deleteMany({ where: { companyId: testCompanyId } });
+        await prisma.importBatch.deleteMany({ where: { companyId: testCompanyId } });
     });
 
     afterAll(async () => {
         // Clean up after tests
-        await prisma.bankTransaction.deleteMany({ where: { companyId } });
-        await prisma.bankImportManifest.deleteMany({ where: { companyId } });
-        await prisma.evaluationJob.deleteMany({ where: { companyId } });
-        await prisma.importBatch.deleteMany({ where: { companyId } });
+        await prisma.bankTransaction.deleteMany({ where: { companyId: testCompanyId } });
+        await prisma.bankImportManifest.deleteMany({ where: { companyId: testCompanyId } });
+        await prisma.evaluationJob.deleteMany({ where: { companyId: testCompanyId } });
+        await prisma.importBatch.deleteMany({ where: { companyId: testCompanyId } });
         await prisma.bankAccount.delete({ where: { id: accountId } });
+        await prisma.company.delete({ where: { id: testCompanyId } });
         await prisma.$disconnect();
     });
 
@@ -60,7 +67,7 @@ describe("Bank Upload Integration (Isolated)", () => {
 
     it("fails and leaves zero rows if account mapping is missing", async () => {
         const req = mockRequest({
-            companyId,
+            companyId: testCompanyId,
             fileHash: "hash-missing-mapping",
             rows: [
                 { date: "2026-08-01", description: "Test 1", amount: -10 }
@@ -74,17 +81,17 @@ describe("Bank Upload Integration (Isolated)", () => {
         const data = await res.json();
         expect(data.error).toBe("Target bank account mapping is required");
 
-        const txs = await prisma.bankTransaction.count({ where: { companyId } });
+        const txs = await prisma.bankTransaction.count({ where: { companyId: testCompanyId } });
         expect(txs).toBe(0);
         
-        const jobs = await prisma.evaluationJob.count({ where: { companyId } });
+        const jobs = await prisma.evaluationJob.count({ where: { companyId: testCompanyId } });
         expect(jobs).toBe(0);
     });
 
     it("atomically creates manifest, transactions, and evaluation job triggers on success", async () => {
         const fileHash = "hash-success-12345";
         const req = mockRequest({
-            companyId,
+            companyId: testCompanyId,
             accountId,
             fileHash,
             rows: [
@@ -103,22 +110,22 @@ describe("Bank Upload Integration (Isolated)", () => {
         expect(data.ok).toBe(true);
 
         // Verify exactly 4 transactions created
-        const txs = await prisma.bankTransaction.findMany({ where: { companyId } });
+        const txs = await prisma.bankTransaction.findMany({ where: { companyId: testCompanyId } });
         expect(txs.length).toBe(4);
         expect(txs[0].accountId).toBe(accountId);
 
         // Verify exactly 1 manifest created
-        const manifests = await prisma.bankImportManifest.findMany({ where: { companyId } });
+        const manifests = await prisma.bankImportManifest.findMany({ where: { companyId: testCompanyId } });
         expect(manifests.length).toBe(1);
         expect(manifests[0].userCertified).toBe(false); // Unverified completeness
 
         // Verify exactly 1 evaluation job created (or coalesced)
-        const jobs = await prisma.evaluationJob.findMany({ where: { companyId } });
+        const jobs = await prisma.evaluationJob.findMany({ where: { companyId: testCompanyId } });
         expect(jobs.length).toBe(1);
         expect(["pending", "running"]).toContain(jobs[0].status);
 
         // Verify trigger points to manifest
-        const triggers = await prisma.evaluationJobTrigger.findMany({ where: { companyId } });
+        const triggers = await prisma.evaluationJobTrigger.findMany({ where: { companyId: testCompanyId } });
         expect(triggers.length).toBe(1);
         expect(triggers[0].source).toBe("bank_upload");
         expect(triggers[0].sourceId).toBe(manifests[0].id);
@@ -126,7 +133,7 @@ describe("Bank Upload Integration (Isolated)", () => {
 
         // Test idempotency: retry with same hash should conflict
         const reqRetry = mockRequest({
-            companyId,
+            companyId: testCompanyId,
             accountId,
             fileHash,
             rows: [
@@ -141,7 +148,7 @@ describe("Bank Upload Integration (Isolated)", () => {
         expect(retryData.error).toContain("Duplicate import file");
 
         // Verify no extra transactions created
-        const txsAfter = await prisma.bankTransaction.count({ where: { companyId } });
+        const txsAfter = await prisma.bankTransaction.count({ where: { companyId: testCompanyId } });
         expect(txsAfter).toBe(4);
     });
     it("rolls back all rows if triggerEvaluation fails", async () => {

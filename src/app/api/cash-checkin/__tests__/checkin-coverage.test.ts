@@ -9,9 +9,7 @@ vi.mock("@vercel/functions", () => ({
 
 // Mock tenant resolver to use test company
 vi.mock("@/lib/tenant", () => ({
-    resolveTenant: vi.fn(() => ({
-        tenantCompanyId: "test-company-checkin"
-    }))
+    resolveTenant: vi.fn(() => "test-company-checkin")
 }));
 
 describe("Cash Check-in Coverage & Rollback", () => {
@@ -68,9 +66,16 @@ describe("Cash Check-in Coverage & Rollback", () => {
 
     it("verifies skip flow creates unverified checkpoint and preserves skip reason", async () => {
         const req = mockRequest({
-            parsedBalance: 1200,
+            bankBalance: 1200,
             adjustments: [],
-            bankDataMissing: true // explicit skip
+            bankDataMissing: true, // explicit skip
+            priorWeekForecast: {
+                weekStart: "2026-08-01T00:00:00Z",
+                weekEnd: "2026-08-07T23:59:59Z",
+                endCashExpected: 1000,
+                inflowsExpected: 500,
+                outflowsExpected: 200
+            }
         });
 
         const res = await POST(req);
@@ -78,10 +83,10 @@ describe("Cash Check-in Coverage & Rollback", () => {
 
         const data = await res.json();
         expect(data.ok).toBe(true);
-        expect(data.checkpointId).toBeDefined();
+        expect(data.checkpoint?.id).toBeDefined();
 
         const cp = await prisma.forecastCheckpoint.findUnique({
-            where: { id: data.checkpointId }
+            where: { id: data.checkpoint.id }
         });
 
         expect(cp).not.toBeNull();
