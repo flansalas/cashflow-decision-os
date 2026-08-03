@@ -637,12 +637,12 @@ export function UpdateBalanceDialog({
                             : <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />}
                         <div>
                             <p className={`text-sm font-bold ${isVerified ? "text-emerald-700" : "text-amber-700"}`}>
-                                {isVerified ? "Verified with bank transactions" : "Unverified — missing certified complete bank coverage"}
+                                {isVerified ? "Verified with bank transactions" : (bankDataDetected ? "Bank transactions detected, but account coverage is unverified" : "Unverified — missing certified complete bank coverage")}
                             </p>
                             <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                                 {isVerified
                                     ? "Actual bank activity is completely covered and certified, so the system can compare this week’s forecast with what actually happened."
-                                    : "Actual bank activity is missing or lacks certified completeness, so the system cannot reliably measure this week’s forecast accuracy."}
+                                    : (bankDataDetected ? "Transactions are present, but account coverage lacks certified completeness, so the system cannot reliably measure this week’s forecast accuracy." : "Actual bank activity is missing, so the system cannot reliably measure this week’s forecast accuracy.")}
                             </p>
                         </div>
                     </div>
