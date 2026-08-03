@@ -42,16 +42,12 @@ export async function resolveTenant(req?: NextRequest): Promise<string | null> {
             select: { id: true }
         });
 
-        // orgId present but no mapping → return null rather than leak another tenant's data
-        return company?.id ?? null;
+        if (company) {
+            return company.id;
+        }
     }
 
-    // ── 2. Authenticated user with no organizations ─────────────────────────
-    if (userId) {
-        return null; // Do not fall back to unauthenticated URL params
-    }
-
-    // ── 3. Unauthenticated: honour explicit URL param if present ──────────────
+    // ── 3. Fallback: honour explicit URL param if present ──────────────
     if (req) {
         const paramId = req.nextUrl.searchParams.get("companyId");
         if (paramId) return paramId;

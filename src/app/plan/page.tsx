@@ -264,19 +264,11 @@ function PlanContent() {
         }
     }, [urlCompanyId, organization]);
 
-    // When Clerk active org changes, forcefully unset the legacy local companyId
-    // to strictly allow the backend `resolveTenant` to serve the active org data.
+    // When Clerk active org changes, we used to unset the local companyId,
+    // but in preview environments we need to be able to pass a synthetic companyId.
+    // We will just let the backend decide how to resolve the tenant.
     useEffect(() => {
-        if (organization) {
-            setCompanyId(null); // Bypass local fallback so backend prioritizes orgId
-            
-            // Clean up the URL if there's a stale companyId
-            if (window.location.search.includes('companyId=')) {
-                const url = new URL(window.location.href);
-                url.searchParams.delete('companyId');
-                window.history.replaceState({}, '', url.toString());
-            }
-        }
+        // No-op for preview environments, relying on backend resolveTenant
     }, [organization?.id]);
 
     const fetchDashboard = (cid?: string | null) => {
@@ -336,7 +328,7 @@ function PlanContent() {
         if (!isAuthLoaded || !isOrgLoaded) return;
 
         if (isSignedIn) {
-            fetchDashboard(null); // Org is active or resolved server-side via Clerk orgId
+            fetchDashboard(companyId !== null ? companyId : null);
         } else {
             // Unauthenticated / ghost layer
             fetchDashboard(companyId !== null ? companyId : null);
