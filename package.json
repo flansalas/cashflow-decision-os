@@ -12,6 +12,7 @@
     "db:seed": "npx prisma db seed",
     "db:reset": "npx prisma migrate reset --force",
     "db:studio": "npx prisma studio",
+    "seed:preview": "npx tsx src/scripts/seed-preview.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

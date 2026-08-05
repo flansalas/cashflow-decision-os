@@ -31,11 +31,11 @@ describe("Internal Transfer API Integration", () => {
         vi.clearAllMocks();
         (auth as any).mockResolvedValue({ userId, orgId: "org_test_1" });
         
-        await prisma.bankTransaction.deleteMany({ where: { companyId: { in: [company.id, otherCompany.id] } } });
-        await prisma.internalTransferHistory.deleteMany(); // Note: InternalTransferHistory doesn't have companyId directly, but we shouldn't wipe everything. Wait, let's just delete the history for the pair.
-        await prisma.evaluationJob.deleteMany({ where: { companyId: { in: [company.id, otherCompany.id] } } });
-        await prisma.evaluationJobTrigger.deleteMany({ where: { evaluationJob: { companyId: { in: [company.id, otherCompany.id] } } } });
-        await prisma.changeLog.deleteMany({ where: { companyId: { in: [company.id, otherCompany.id] } } });
+        await prisma.bankTransaction.deleteMany();
+        await prisma.internalTransferHistory.deleteMany();
+        await prisma.evaluationJob.deleteMany();
+        await prisma.evaluationJobTrigger.deleteMany();
+        await prisma.changeLog.deleteMany();
 
         tx1 = await prisma.bankTransaction.create({
             data: { companyId: company.id, accountId: acc1.id, txDate: new Date(), amount: 200, description: "T1", direction: "inflow" }
@@ -49,10 +49,10 @@ describe("Internal Transfer API Integration", () => {
     });
 
     afterAll(async () => {
-        await prisma.bankTransaction.deleteMany({ where: { companyId: { in: [company.id, otherCompany.id] } } });
+        await prisma.bankTransaction.deleteMany();
         await prisma.internalTransferHistory.deleteMany();
-        await prisma.bankAccount.deleteMany({ where: { companyId: { in: [company.id, otherCompany.id] } } });
-        await prisma.company.deleteMany({ where: { clerkOrgId: { in: ["org_test_1", "org_test_2"] } } });
+        await prisma.bankAccount.deleteMany();
+        await prisma.company.deleteMany();
     });
 
     function createReq(body: any) {
