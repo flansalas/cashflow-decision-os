@@ -352,12 +352,7 @@ export async function POST(req: NextRequest) {
                 // Run shadow evaluation to persist M1 & M4 arrays to BaselineSnapshotHistory
                 // And persist Account Freshness
                 if (checkpoint?.id) {
-                    try {
-                        await generateShadowEvaluation(checkpoint.id, companyId, tx);
-                        await snapshotAccountFreshness(checkpoint.id, companyId, tx);
-                    } catch (e) {
-                        console.error("[Shadow Orchestrator/Attribution] Failed to evaluate shadow logic or freshness:", e);
-                    }
+                    // Shadow evaluation and freshness moved to after BaselineSnapshotHistory creation
                 }
 
                 if (finalBreakdownJson) {
@@ -441,7 +436,7 @@ export async function POST(req: NextRequest) {
                 });
                 
                 if (baselineSnapshot) {
-                    await tx.baselineSnapshotHistory.create({
+                    const baselineSnapshotHistory = await tx.baselineSnapshotHistory.create({
                         data: {
                             id: crypto.randomUUID(),
                             forecastCheckpointId: checkpoint!.id,
@@ -465,6 +460,13 @@ export async function POST(req: NextRequest) {
                             dataQualityStatus: baselineSnapshot.baselineConfidenceTier === "none" || baselineSnapshot.baselineConfidenceTier === "low" ? "low_confidence" : "valid",
                         }
                     });
+                    
+                    try {
+                        await generateShadowEvaluation(checkpoint!.id, companyId, tx);
+                        await snapshotAccountFreshness(baselineSnapshotHistory.id, companyId, tx);
+                    } catch (e) {
+                        console.error("[Attribution/Shadow] Failed to generate shadow evaluation or snapshot account freshness:", e);
+                    }
                 }
 
             } else {
