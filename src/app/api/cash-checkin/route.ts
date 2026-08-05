@@ -73,11 +73,19 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "bankBalance must be a number" }, { status: 400 });
     }
 
-    const snapshotDate = asOfDate ? new Date(asOfDate) : new Date();
-    const isSaturday = snapshotDate.getUTCDay() === 6;
+    const userAsOfDate = asOfDate ? new Date(asOfDate) : new Date();
+    const isSaturday = userAsOfDate.getUTCDay() === 6;
     let warningMsg: string | null = null;
     if (!isSaturday) {
         warningMsg = "Rolling the week requires your bank balance as of Saturday night. Using today's balance will skew your variance analysis.";
+    }
+
+    let snapshotDate = userAsOfDate;
+    if (priorWeekForecast && priorWeekForecast.weekStart) {
+        const currentWeekStart = new Date(priorWeekForecast.weekStart);
+        const nextWeekStart = new Date(currentWeekStart);
+        nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+        snapshotDate = nextWeekStart;
     }
 
     let finalBreakdownJson = priorWeekForecast?.breakdownJson || null;
