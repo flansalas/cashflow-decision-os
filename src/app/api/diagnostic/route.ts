@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { resolveTenant } from "@/lib/tenant";
+import prisma from "@/db/prisma";
 
 export async function GET() {
   const session = await auth();
@@ -17,12 +18,20 @@ export async function GET() {
   let companyName = null;
 
   try {
-    const tenant = await resolveTenant();
-    mappedCompanyId = tenant.companyId;
-    mappedClerkOrgId = tenant.clerkOrgId;
-    companyName = tenant.companyName;
+    const tenantId = await resolveTenant();
+    if (tenantId) {
+      mappedCompanyId = tenantId;
+      const company = await prisma.company.findUnique({
+        where: { id: tenantId }
+      });
+      if (company) {
+        mappedClerkOrgId = company.clerkOrgId;
+        companyName = company.name;
+      }
+    } else {
+       mappedCompanyId = "No match (null)";
+    }
   } catch (e: any) {
-    // resolveTenant throws if no matching company is found for the orgId
     mappedCompanyId = `Error: ${e.message}`;
   }
 
