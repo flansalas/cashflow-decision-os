@@ -5,7 +5,7 @@ import { computeAIBaseline } from "./ai-baseline";
 export async function buildAndCacheBaseline(companyId: string) {
     const bankTxs = await prisma.bankTransaction.findMany({
         where: { companyId },
-        select: { amount: true, txDate: true, description: true, direction: true },
+        select: { amount: true, txDate: true, description: true, direction: true, internalTransferStatus: true },
         orderBy: { txDate: "asc" }
     });
 
@@ -71,7 +71,13 @@ export async function buildAndCacheBaseline(companyId: string) {
     };
 
     const bankTxsForBaseline: BankTxForBaseline[] = bankTxs.map(tx => ({
-        amount: tx.amount,
+        // BankTransaction stores amount as a positive absolute value + direction field.
+        // BankTxForBaseline (baseline-shared.ts line 71) uses signed amounts:
+        //   amount >= 0  → inflow, amount < 0 → outflow
+        // We must re-apply the sign here so the baseline computes outflow correctly.
+        // Confirmed internal transfers (resolved) are excluded — they inflate both
+        // inflow and outflow totals and would double-count real operating cash.
+        amount: tx.internalTransferStatus === 'resolved' ? 0 : (tx.direction === 'outflow' ? -tx.amount : tx.amount),
         date: tx.txDate,
         merchantKey: tx.description ?? "",
     }));
@@ -95,6 +101,38 @@ export async function buildAndCacheBaseline(companyId: string) {
         rentMonthlyAmount: assumptions.rentMonthlyAmount,
         rentDayOfMonth: assumptions.rentDayOfMonth,
     });
+
+    const existingSnapshot = await prisma.baselineSnapshot.findUnique({
+        where: { companyId }
+    });
+
+    if (!baseline.hasSufficientHistory && existingSnapshot?.hasSufficientHistory) {
+        console.warn(`[DATA LOSS GUARD] Company ${companyId} lost sufficient history! Retaining previous snapshot and marking degraded.`);
+        
+        await prisma.changeLog.create({
+            data: {
+                companyId,
+                source: "baseline-snapshot",
+                action: "baseline_data_loss_detected",
+                diffJson: JSON.stringify({ 
+                    message: "Valid historical baseline was replaced by a zero placeholder due to missing bank transactions. Guard activated.",
+                    previousSufficientHistory: true,
+                    newSufficientHistory: false
+                }),
+                forecastVersionHashAfter: "degraded",
+                forecastVersionHashBefore: existingSnapshot.baselineConfidenceTier,
+            }
+        });
+
+        await prisma.baselineSnapshot.update({
+            where: { companyId },
+            data: {
+                baselineConfidenceTier: "degraded_data_loss",
+            }
+        });
+        
+        return;
+    }
 
     const aiBaseline = await computeAIBaseline(
         companyId,

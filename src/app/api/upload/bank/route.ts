@@ -70,26 +70,53 @@ export async function POST(req: NextRequest) {
 
         const existingTx = await prisma.bankTransaction.findMany({
             where: { companyId },
-            select: { id: true, txDate: true, description: true, amount: true }
+            select: { id: true, txDate: true, description: true, amount: true, txHash: true }
         });
-        const getBankFingerprint = (date: Date | string | null, desc: string, amt: number) => {
-            let dStr = "";
-            if (date) {
-                const dObj = new Date(date);
-                if (!isNaN(dObj.getTime())) {
-                    try {
-                        const yr = dObj.getFullYear();
-                        if (yr >= 1900 && yr <= 2100) {
-                            dStr = dObj.toISOString().slice(0, 10);
-                        }
-                    } catch { /* safe fallback */ }
+        /**
+         * Stable occurrence-aware txHash identity.
+         * - normalise: company + account + date + description + amount
+         * - disambiguate repeated identical rows within the same account via an
+         *   occurrence ordinal (0-indexed count of identical sigs seen so far)
+         *
+         * Properties:
+         *   1. Legitimate repeated rows in one source file → distinct hashes (occ0, occ1…)
+         *   2. Re-uploading the exact same file produces the same hashes → idempotent
+         *   3. Same row from different accounts → distinct (accountId is in the hash)
+         *   4. Row reordering of unique rows → same hash (no positional dependence)
+         *   5. Company + account ownership enforced by including both IDs
+         */
+        const computeStableTxHash = (
+            cid: string,
+            acctId: string,
+            date: string | null,
+            description: string,
+            amount: number,
+            ordinal: number
+        ): string => {
+            const normalizedDate = date ? (() => { const d = new Date(date); return isNaN(d.getTime()) ? 'null' : d.toISOString().slice(0, 10); })() : 'null';
+            const normalizedDesc = (description || '').toLowerCase().trim().replace(/\s+/g, ' ');
+            const normalizedAmount = amount.toFixed(2);
+            const base = `${cid}|||${acctId}|||${normalizedDate}|||${normalizedDesc}|||${normalizedAmount}`;
+            return `${base}|||occ${ordinal}`;
+        };
+        const existingFingerprints = new Set(existingTx.map(tx => tx.txHash).filter(Boolean));
+        // Existing ordinal counters: track how many times each sig already appears in DB
+        const existingOrdinalCounters: Record<string, number> = {};
+        for (const tx of existingTx) {
+            if (tx.txHash) {
+                // Reconstruct sig from stored hash to count ordinals already used
+                // Pattern: company|||account|||date|||desc|||amount|||occN
+                const parts = tx.txHash.split('|||occ');
+                if (parts.length === 2) {
+                    const sigWithoutOcc = parts[0];
+                    const prevCount = existingOrdinalCounters[sigWithoutOcc] ?? 0;
+                    existingOrdinalCounters[sigWithoutOcc] = prevCount + 1;
                 }
             }
-            const cleanDesc = (desc || "").toLowerCase().replace(/\s+/g, "");
-            return `${dStr}|||${cleanDesc}|||${amt}`;
-        };
-        const existingFingerprints = new Set(existingTx.map(tx => getBankFingerprint(tx.txDate, tx.description, tx.amount)));
+        }
         const batchFingerprints = new Set<string>();
+        // Per-batch ordinal counters starting from existing DB ordinals
+        const batchOrdinalCounters: Record<string, number> = { ...existingOrdinalCounters };
 
         const stagedRowsData = rows.map((row, index) => {
             const { _raw, ...normalizedObj } = row;
@@ -111,12 +138,18 @@ export async function POST(req: NextRequest) {
                 conflictType = "invalid";
                 proposedAction = "skip";
             } else {
-                const fingerprint = getBankFingerprint(row.date, row.description, row.amount);
+                const normalizedDate = row.date ? (() => { const d = new Date(row.date!); return isNaN(d.getTime()) ? 'null' : d.toISOString().slice(0, 10); })() : 'null';
+                const normalizedDesc = (row.description || '').toLowerCase().trim().replace(/\s+/g, ' ');
+                const normalizedAmount = (row.amount || 0).toFixed(2);
+                const sigBase = `${companyId}|||${accountId}|||${normalizedDate}|||${normalizedDesc}|||${normalizedAmount}`;
+                const ordinal = batchOrdinalCounters[sigBase] ?? 0;
+                batchOrdinalCounters[sigBase] = ordinal + 1;
+                const fingerprint = `${sigBase}|||occ${ordinal}`;
 
                 if (existingFingerprints.has(fingerprint) || batchFingerprints.has(fingerprint)) {
                     conflictType = "exact_duplicate";
                     proposedAction = "skip";
-                    const existing = existingTx.find(tx => getBankFingerprint(tx.txDate, tx.description, tx.amount) === fingerprint);
+                    const existing = existingTx.find(tx => tx.txHash === fingerprint);
                     if (existing) matchedRecordId = existing.id;
                 } else {
                     const parsedRowDate = row.date ? new Date(row.date) : null;
@@ -211,26 +244,46 @@ export async function POST(req: NextRequest) {
 
             // Auto-apply valid new bank transactions since there is no manual review UI for bank imports yet.
             const newTransactionsData = rows
-                .map((row, index) => ({ row, staged: stagedRowsData[index] }))
+                .map((row, index) => ({ row, staged: stagedRowsData[index], index }))
                 .filter(item => item.staged.proposedAction === "insert")
                 .map(item => {
                     const parsedD = item.row.date ? new Date(item.row.date) : new Date();
                     const txDate = isNaN(parsedD.getTime()) ? new Date() : parsedD;
+                    // Recompute stable txHash for this row (ordinals already computed in stagedRowsData pass)
+                    const normalizedDate = item.row.date ? (() => { const d = new Date(item.row.date!); return isNaN(d.getTime()) ? 'null' : d.toISOString().slice(0, 10); })() : 'null';
+                    const normalizedDesc = (item.row.description || '').toLowerCase().trim().replace(/\s+/g, ' ');
+                    const normalizedAmount = (item.row.amount || 0).toFixed(2);
+                    // Get the ordinal that was assigned during staging (ordinal = batchOrdinalCounters[sigBase] - 1 after increment)
+                    // We stored fingerprints in batchFingerprints; find the one matching this row
+                    // Simplest: recompute from scratch using a separate counter per insert pass
+                    const sigBase = `${companyId}|||${accountId}|||${normalizedDate}|||${normalizedDesc}|||${normalizedAmount}`;
+                    // The ordinal was batchOrdinalCounters[sigBase] - 1 at time of staging for this row.
+                    // Since we process rows in order, use a separate insert-time counter:
                     return {
                         companyId,
                         txDate,
                         description: item.row.description || "Bank Transaction",
                         amount: item.row.amount || 0,
                         direction: (item.row.amount || 0) >= 0 ? "inflow" : "outflow",
-                        // Default to unresolved, users must classify internal transfers explicitly later
                         internalTransferStatus: "unresolved",
-                        accountId: accountId
+                        accountId: accountId,
+                        // txHash assigned below after ordinal recompute
+                        _sigBase: sigBase,
                     };
                 });
 
-            if (newTransactionsData.length > 0) {
+            // Assign txHashes in order using a fresh counter (same logic as staging)
+            const insertOrdinalCounters: Record<string, number> = { ...existingOrdinalCounters };
+            const finalTransactionData = newTransactionsData.map((item: any) => {
+                const ordinal = insertOrdinalCounters[item._sigBase] ?? 0;
+                insertOrdinalCounters[item._sigBase] = ordinal + 1;
+                const { _sigBase, ...rest } = item;
+                return { ...rest, txHash: `${_sigBase}|||occ${ordinal}` };
+            });
+
+            if (finalTransactionData.length > 0) {
                 await tx.bankTransaction.createMany({
-                    data: newTransactionsData
+                    data: finalTransactionData
                 });
             }
 
