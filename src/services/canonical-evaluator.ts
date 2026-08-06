@@ -2,6 +2,7 @@ import prisma from "@/db/prisma";
 
 import { verifyBankCoverage } from "@/services/bank-coverage";
 import { calculateResidualActuals } from "@/services/attribution";
+import { parseResidualForecastSeries } from "@/services/evaluation-types";
 
 export async function evaluateMaturedCheckpoints(companyId?: string) {
     const now = new Date();
@@ -23,14 +24,13 @@ export async function evaluateMaturedCheckpoints(companyId?: string) {
         const bsh = cp.BaselineSnapshotHistory;
 
         // Parse M1 and M4 Evidence
-        let m1PreAi = null;
-        let m4PreAi = null;
-        try {
-            m1PreAi = typeof bsh.m1PreAiResidualJson === 'string' ? JSON.parse(bsh.m1PreAiResidualJson) : bsh.m1PreAiResidualJson;
-            m4PreAi = typeof bsh.m4PreAiResidualJson === 'string' ? JSON.parse(bsh.m4PreAiResidualJson) : bsh.m4PreAiResidualJson;
-        } catch (e) {}
+        const m1PreAi = parseResidualForecastSeries(bsh.m1PreAiResidualJson);
+        const m4PreAi = parseResidualForecastSeries(bsh.m4PreAiResidualJson);
+        const m1PostAi = parseResidualForecastSeries(bsh.m1PostAiResidualJson);
 
-        if (!Array.isArray(m1PreAi) || !Array.isArray(m4PreAi)) continue; // Missing baseline history
+        if (!m1PreAi || !m4PreAi || !m1PostAi) {
+            throw new Error(`Evaluation failed for Checkpoint ${cp.id}: missing or malformed prediction JSON`);
+        }
 
         for (let horizon = 1; horizon <= 13; horizon++) {
             const hStart = new Date(cp.weekStart);
@@ -62,7 +62,7 @@ export async function evaluateMaturedCheckpoints(companyId?: string) {
             const { residualInflow: canonicalActualInflow, residualOutflow: canonicalActualOutflow } = calculateResidualActuals(txs);
 
 
-            // Inflow - Stage 2 Pre AI
+            // Inflow - M1 Stage 2 Pre AI
             await saveObservation({
                 checkpointId: cp.id,
                 companyId: cp.companyId,
@@ -71,13 +71,13 @@ export async function evaluateMaturedCheckpoints(companyId?: string) {
                 direction: "inflow",
                 model: "m1",
                 stage: "stage2",
-                predictionAmount: 0, // M1 JSON currently stores outflows. We'd need inflow-specific JSON!
+                predictionAmount: m1PreAi.inflow[horizon - 1],
                 canonicalActual: canonicalActualInflow,
                 accountCompleteness,
                 evaluationValidity
             });
 
-            // Outflow - Stage 2 Pre AI
+            // Outflow - M1 Stage 2 Pre AI
             await saveObservation({
                 checkpointId: cp.id,
                 companyId: cp.companyId,
@@ -86,12 +86,28 @@ export async function evaluateMaturedCheckpoints(companyId?: string) {
                 direction: "outflow",
                 model: "m1",
                 stage: "stage2",
-                predictionAmount: m1PreAi[horizon - 1] || 0,
+                predictionAmount: m1PreAi.outflow[horizon - 1],
                 canonicalActual: canonicalActualOutflow,
                 accountCompleteness,
                 evaluationValidity
             });
+
+            // Inflow - M4 Stage 2 Pre AI
+            await saveObservation({
+                checkpointId: cp.id,
+                companyId: cp.companyId,
+                maturedWeekStart: hStart,
+                horizonWeeks: horizon,
+                direction: "inflow",
+                model: "m4",
+                stage: "stage2",
+                predictionAmount: m4PreAi.inflow[horizon - 1],
+                canonicalActual: canonicalActualInflow,
+                accountCompleteness,
+                evaluationValidity
+            });
             
+            // Outflow - M4 Stage 2 Pre AI
             await saveObservation({
                 checkpointId: cp.id,
                 companyId: cp.companyId,
@@ -100,7 +116,37 @@ export async function evaluateMaturedCheckpoints(companyId?: string) {
                 direction: "outflow",
                 model: "m4",
                 stage: "stage2",
-                predictionAmount: m4PreAi[horizon - 1] || 0,
+                predictionAmount: m4PreAi.outflow[horizon - 1],
+                canonicalActual: canonicalActualOutflow,
+                accountCompleteness,
+                evaluationValidity
+            });
+
+            // Inflow - M1 Stage 3 Post AI
+            await saveObservation({
+                checkpointId: cp.id,
+                companyId: cp.companyId,
+                maturedWeekStart: hStart,
+                horizonWeeks: horizon,
+                direction: "inflow",
+                model: "m1",
+                stage: "stage3",
+                predictionAmount: m1PostAi.inflow[horizon - 1],
+                canonicalActual: canonicalActualInflow,
+                accountCompleteness,
+                evaluationValidity
+            });
+
+            // Outflow - M1 Stage 3 Post AI
+            await saveObservation({
+                checkpointId: cp.id,
+                companyId: cp.companyId,
+                maturedWeekStart: hStart,
+                horizonWeeks: horizon,
+                direction: "outflow",
+                model: "m1",
+                stage: "stage3",
+                predictionAmount: m1PostAi.outflow[horizon - 1],
                 canonicalActual: canonicalActualOutflow,
                 accountCompleteness,
                 evaluationValidity

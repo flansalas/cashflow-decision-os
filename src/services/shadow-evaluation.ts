@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 import { computeM4Baseline } from "./baseline-m4";
 import { type BankTxForBaseline, type RecurringPatternForBaseline } from "./baseline";
 
+import { ResidualForecastSeries } from "./evaluation-types";
+
 export async function generateShadowEvaluation(checkpointId: string, companyId: string, tx: Prisma.TransactionClient = prisma) {
     const checkpoint = await tx.forecastCheckpoint.findUnique({
         where: { id: checkpointId },
@@ -58,6 +60,16 @@ export async function generateShadowEvaluation(checkpointId: string, companyId: 
         });
     }
 
+    const m1PreAiResidual: ResidualForecastSeries = {
+        inflow: m1PreAiResidualInflow,
+        outflow: m1PreAiResidualOutflow
+    };
+
+    const m1PostAiResidual: ResidualForecastSeries = {
+        inflow: m1PostAiResidualInflow,
+        outflow: m1PostAiResidualOutflow
+    };
+
     // 2. Fetch required inputs to re-run preprocessing and M4
     const [
         bankTxs,
@@ -98,6 +110,10 @@ export async function generateShadowEvaluation(checkpointId: string, companyId: 
     
     // Assemble inputs for M4 Forecast (we skip full AI orchestration for M4 shadow evaluation to save cycles, 
     // we only need the baseline performance pre-AI)
+    const m4PreAiResidual: ResidualForecastSeries = {
+        inflow: new Array(13).fill(m4Baseline.variableInflowWeekly),
+        outflow: new Array(13).fill(m4Baseline.variableOutflowWeekly)
+    };
 
     // 3. Save BaselineSnapshotHistory
     await tx.baselineSnapshotHistory.upsert({
@@ -105,14 +121,15 @@ export async function generateShadowEvaluation(checkpointId: string, companyId: 
         update: {
             m1RawBaselineJson: JSON.stringify({ inflow: m1RawBaselineInflow, outflow: m1RawBaselineOutflow }),
             m1ExplicitDeductionJson: JSON.stringify({ inflow: m1ExplicitDeductionInflow, outflow: m1ExplicitDeductionOutflow }),
-            m1PreAiResidualJson: JSON.stringify({ inflow: m1PreAiResidualInflow, outflow: m1PreAiResidualOutflow }),
+            m1PreAiResidualJson: JSON.stringify(m1PreAiResidual),
             m1AiFactorJson: JSON.stringify({ inflow: m1AiFactorInflow, outflow: m1AiFactorOutflow }),
-            m1PostAiResidualJson: JSON.stringify({ inflow: m1PostAiResidualInflow, outflow: m1PostAiResidualOutflow }),
+            m1PostAiResidualJson: JSON.stringify(m1PostAiResidual),
             
             m4RawBaselineJson: JSON.stringify({
                 inflow: new Array(13).fill(m4Baseline.variableInflowWeekly),
                 outflow: new Array(13).fill(m4Baseline.variableOutflowWeekly)
             }),
+            m4PreAiResidualJson: JSON.stringify(m4PreAiResidual)
         },
         create: {
             id: require("crypto").randomUUID(),
@@ -134,14 +151,15 @@ export async function generateShadowEvaluation(checkpointId: string, companyId: 
             
             m1RawBaselineJson: JSON.stringify({ inflow: m1RawBaselineInflow, outflow: m1RawBaselineOutflow }),
             m1ExplicitDeductionJson: JSON.stringify({ inflow: m1ExplicitDeductionInflow, outflow: m1ExplicitDeductionOutflow }),
-            m1PreAiResidualJson: JSON.stringify({ inflow: m1PreAiResidualInflow, outflow: m1PreAiResidualOutflow }),
+            m1PreAiResidualJson: JSON.stringify(m1PreAiResidual),
             m1AiFactorJson: JSON.stringify({ inflow: m1AiFactorInflow, outflow: m1AiFactorOutflow }),
-            m1PostAiResidualJson: JSON.stringify({ inflow: m1PostAiResidualInflow, outflow: m1PostAiResidualOutflow }),
+            m1PostAiResidualJson: JSON.stringify(m1PostAiResidual),
             
             m4RawBaselineJson: JSON.stringify({
                 inflow: new Array(13).fill(m4Baseline.variableInflowWeekly),
                 outflow: new Array(13).fill(m4Baseline.variableOutflowWeekly)
             }),
+            m4PreAiResidualJson: JSON.stringify(m4PreAiResidual)
         }
     });
 
