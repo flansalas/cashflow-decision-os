@@ -1,5 +1,6 @@
 import prisma from "@/db/prisma";
-import { normalizeDescription } from "./detectPatterns";
+import { verifyBankCoverage } from "@/services/bank-coverage";
+import { calculateResidualActuals } from "@/services/attribution";
 
 /**
  * Synchronizes the BaselineVarianceLedger by comparing actual variable bank transactions
@@ -50,15 +51,7 @@ export async function syncVarianceLedger(companyId: string) {
         weeksToProcess.push({ start, end });
     }
 
-    // 3. Get active recurring patterns to exclude from "variable" spend
-    const patterns = await prisma.recurringPattern.findMany({
-        where: { companyId, isIncluded: true }
-    });
-    
-    // Simple exclusion: just match the normalized key
-    const recurringKeys = new Set(
-        patterns.map(p => normalizeDescription(p.merchantKey || p.displayName || ""))
-    );
+    // (recurring exclusion handled via attributions now)
 
     // 4. Process each week
     for (const week of weeksToProcess) {
@@ -70,36 +63,28 @@ export async function syncVarianceLedger(companyId: string) {
             }
         });
 
-        // Get bank transactions for this week
+        // EVIDENCE GATE: Only process weeks with verified bank coverage
+        const coverageDetails = await verifyBankCoverage(companyId, week.start, week.end);
+        if (!coverageDetails.isVerified) {
+            console.log(`[variance-sync] Week ${week.start.toISOString()} lacks verified bank coverage. Skipping.`);
+            continue;
+        }
+
+        // Get bank transactions for this week, WITH attributions
         const txs = await prisma.bankTransaction.findMany({
             where: {
                 companyId,
                 txDate: { gte: week.start, lte: week.end }
-            }
+            },
+            include: { attributions: true }
         });
 
         // If no transactions, we don't know the actual variance. Skip.
         if (txs.length === 0) continue;
 
-        let actualOutflow = 0;
-        let actualInflow = 0;
-
-        for (const tx of txs) {
-            const desc = tx.description || "";
-            const normKey = normalizeDescription(desc);
-            
-            // Exclude recurring items
-            if (recurringKeys.has(normKey)) continue;
-
-            // Also rudimentary exclude payroll based on keywords if assumptions missed it
-            if (/payroll|adp|paychex|gusto/i.test(desc)) continue;
-
-            if (tx.amount < 0) {
-                actualOutflow += Math.abs(tx.amount);
-            } else {
-                actualInflow += tx.amount;
-            }
-        }
+        const residuals = calculateResidualActuals(txs);
+        const actualOutflow = residuals.residualOutflow;
+        const actualInflow = residuals.residualInflow;
 
         // 5. Calculate Variance
         // Variance Pct = (Actual - Projected) / Projected

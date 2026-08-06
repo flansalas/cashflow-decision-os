@@ -247,3 +247,62 @@ export async function runAttributionForWeek(
         newRecordsCreated: newAttributions.length
     };
 }
+
+export function calculateResidualActuals(
+    txs: Array<{
+        amount: number;
+        direction: string;
+        internalTransferStatus?: string | null;
+        attributions: Array<{
+            direction: string;
+            isActive: boolean;
+            isUserVerified: boolean;
+            confidenceTier: string;
+            amountAttributed: number;
+        }>;
+    }>
+) {
+    let totalInflow = 0;
+    let totalOutflow = 0;
+    let totalConfirmedInflowAttr = 0;
+    let totalConfirmedOutflowAttr = 0;
+
+    for (const tx of txs) {
+        // Exclude confirmed internal transfers
+        if (tx.internalTransferStatus === "confirmed") continue;
+
+        const amt = Math.abs(tx.amount);
+        let isTxInflow = tx.direction === "inflow" && tx.amount >= 0;
+        let isTxOutflow = tx.direction === "outflow" && tx.amount <= 0;
+        
+        if (!isTxInflow && !isTxOutflow) {
+            if (tx.amount >= 0) isTxInflow = true;
+            else isTxOutflow = true;
+        }
+
+        if (isTxInflow) {
+            totalInflow += amt;
+            for (const attr of tx.attributions) {
+                if (attr.direction === "inflow" && attr.isActive && (attr.isUserVerified || attr.confidenceTier === "deterministic")) {
+                    totalConfirmedInflowAttr += Math.abs(attr.amountAttributed);
+                }
+            }
+        } else if (isTxOutflow) {
+            totalOutflow += amt;
+            for (const attr of tx.attributions) {
+                if (attr.direction === "outflow" && attr.isActive && (attr.isUserVerified || attr.confidenceTier === "deterministic")) {
+                    totalConfirmedOutflowAttr += Math.abs(attr.amountAttributed);
+                }
+            }
+        }
+    }
+
+    // Bound attributions so they do not exceed the absolute transaction amount
+    totalConfirmedInflowAttr = Math.min(totalConfirmedInflowAttr, totalInflow);
+    totalConfirmedOutflowAttr = Math.min(totalConfirmedOutflowAttr, totalOutflow);
+
+    const residualInflow = totalInflow - totalConfirmedInflowAttr;
+    const residualOutflow = totalOutflow - totalConfirmedOutflowAttr;
+
+    return { residualInflow, residualOutflow };
+}

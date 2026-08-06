@@ -1,7 +1,7 @@
 import prisma from "@/db/prisma";
 
 import { verifyBankCoverage } from "@/services/bank-coverage";
-
+import { calculateResidualActuals } from "@/services/attribution";
 export async function evaluateMaturedCheckpoints(companyId?: string) {
     const now = new Date();
     
@@ -58,46 +58,9 @@ export async function evaluateMaturedCheckpoints(companyId?: string) {
 
             // Separate INFLOW and OUTFLOW
             // User requested: "positive inflow amounts and absolute outflow amounts. Never net inflows and outflows."
-            let totalInflow = 0;
-            let totalOutflow = 0;
-            let totalConfirmedInflowAttr = 0;
-            let totalConfirmedOutflowAttr = 0;
-
-            for (const tx of txs) {
-                // Exclude confirmed internal transfers
-                if (tx.internalTransferStatus === "confirmed") continue;
-
-                const amt = Math.abs(tx.amount);
-                let isTxInflow = tx.direction === "inflow" && tx.amount >= 0;
-                let isTxOutflow = tx.direction === "outflow" && tx.amount <= 0;
-                if (!isTxInflow && !isTxOutflow) {
-                    if (tx.amount >= 0) isTxInflow = true;
-                    else isTxOutflow = true;
-                }
-
-                if (isTxInflow) {
-                    totalInflow += amt;
-                    for (const attr of tx.attributions) {
-                        if (attr.direction === "inflow" && attr.confidenceTier === "high" && attr.isActive) {
-                            totalConfirmedInflowAttr += Math.abs(attr.amountAttributed);
-                        }
-                    }
-                } else if (isTxOutflow) {
-                    totalOutflow += amt;
-                    for (const attr of tx.attributions) {
-                        if (attr.direction === "outflow" && attr.confidenceTier === "high" && attr.isActive) {
-                            totalConfirmedOutflowAttr += Math.abs(attr.amountAttributed);
-                        }
-                    }
-                }
-            }
-
-            // Bound attributions so they do not exceed the absolute transaction amount
-            totalConfirmedInflowAttr = Math.min(totalConfirmedInflowAttr, totalInflow);
-            totalConfirmedOutflowAttr = Math.min(totalConfirmedOutflowAttr, totalOutflow);
-
-            const canonicalActualInflow = totalInflow - totalConfirmedInflowAttr;
-            const canonicalActualOutflow = totalOutflow - totalConfirmedOutflowAttr;
+            const residuals = calculateResidualActuals(txs);
+            const canonicalActualInflow = residuals.residualInflow;
+            const canonicalActualOutflow = residuals.residualOutflow;
 
             // Inflow - Stage 2 Pre AI
             await saveObservation({
