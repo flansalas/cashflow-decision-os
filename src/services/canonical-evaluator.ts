@@ -2,6 +2,7 @@ import prisma from "@/db/prisma";
 
 import { verifyBankCoverage } from "@/services/bank-coverage";
 import { calculateResidualActuals } from "@/services/attribution";
+
 export async function evaluateMaturedCheckpoints(companyId?: string) {
     const now = new Date();
     
@@ -58,9 +59,8 @@ export async function evaluateMaturedCheckpoints(companyId?: string) {
 
             // Separate INFLOW and OUTFLOW
             // User requested: "positive inflow amounts and absolute outflow amounts. Never net inflows and outflows."
-            const residuals = calculateResidualActuals(txs);
-            const canonicalActualInflow = residuals.residualInflow;
-            const canonicalActualOutflow = residuals.residualOutflow;
+            const { residualInflow: canonicalActualInflow, residualOutflow: canonicalActualOutflow } = calculateResidualActuals(txs);
+
 
             // Inflow - Stage 2 Pre AI
             await saveObservation({

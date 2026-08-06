@@ -1,6 +1,7 @@
 import prisma from "@/db/prisma";
 import { verifyBankCoverage } from "@/services/bank-coverage";
 import { calculateResidualActuals } from "@/services/attribution";
+import { normalizeDescription } from "./detectPatterns";
 
 /**
  * Synchronizes the BaselineVarianceLedger by comparing actual variable bank transactions
@@ -51,9 +52,10 @@ export async function syncVarianceLedger(companyId: string) {
         weeksToProcess.push({ start, end });
     }
 
-    // (recurring exclusion handled via attributions now)
+    // (Recurring patterns are no longer explicitly excluded here; calculateResidualActuals handles confirmed attributions)
 
     // 4. Process each week
+
     for (const week of weeksToProcess) {
         // Check if we already have a ledger entry for this week
         const existingEntry = await prisma.baselineVarianceLedger.findFirst({
@@ -63,14 +65,29 @@ export async function syncVarianceLedger(companyId: string) {
             }
         });
 
-        // EVIDENCE GATE: Only process weeks with verified bank coverage
+        // EVIDENCE GATE 1: Verify complete account coverage
         const coverageDetails = await verifyBankCoverage(companyId, week.start, week.end);
         if (!coverageDetails.isVerified) {
-            console.log(`[variance-sync] Week ${week.start.toISOString()} lacks verified bank coverage. Skipping.`);
+            console.log(`[variance-sync] Week ${week.start.toISOString()} lacks bank coverage verification. Skipping.`);
             continue;
         }
 
-        // Get bank transactions for this week, WITH attributions
+        // EVIDENCE GATE 2: Ensure a valid, non-inconclusive checkpoint exists for the closed week
+        const checkpoint = await prisma.forecastCheckpoint.findFirst({
+            where: {
+                companyId,
+                weekStart: { lte: week.start },
+                weekEnd: { gte: week.end },
+                isBankCoverageVerified: true
+            }
+        });
+
+        if (!checkpoint) {
+            console.log(`[variance-sync] Week ${week.start.toISOString()} lacks a verified checkpoint. Skipping.`);
+            continue;
+        }
+
+        // Get bank transactions for this week with attributions
         const txs = await prisma.bankTransaction.findMany({
             where: {
                 companyId,
@@ -82,9 +99,7 @@ export async function syncVarianceLedger(companyId: string) {
         // If no transactions, we don't know the actual variance. Skip.
         if (txs.length === 0) continue;
 
-        const residuals = calculateResidualActuals(txs);
-        const actualOutflow = residuals.residualOutflow;
-        const actualInflow = residuals.residualInflow;
+        const { residualInflow: actualInflow, residualOutflow: actualOutflow } = calculateResidualActuals(txs);
 
         // 5. Calculate Variance
         // Variance Pct = (Actual - Projected) / Projected
