@@ -130,11 +130,12 @@ export async function assembleForecastData(companyId: string) {
         const matchedAmount = Number(link.matchedAmount);
         if (matchedAmount <= 0) continue;
         
-        // Deterministic deduplication: largest ID yields to smallest ID.
-        // This avoids hardcoding a truth hierarchy (e.g., manual vs accounting)
-        // and respects timing from the "winning" record.
-        const yieldingId = link.sourceId > link.targetId ? link.sourceId : link.targetId;
-        deductions.set(yieldingId, (deductions.get(yieldingId) || 0) + matchedAmount);
+        if (link.deductFrom === "source") {
+            deductions.set(link.sourceId, (deductions.get(link.sourceId) || 0) + matchedAmount);
+        } else if (link.deductFrom === "target") {
+            deductions.set(link.targetId, (deductions.get(link.targetId) || 0) + matchedAmount);
+        }
+        // If deductFrom is null/undefined or something else, it is unresolved and does not change forecast.
     }
 
     const invoices: ForecastInvoice[] = invoicesRaw.map(inv => {
