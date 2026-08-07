@@ -10,12 +10,24 @@ export function computeVarianceMultipliers(ledger: BaselineVarianceLedger[]): Va
         return { inflow: 1.0, outflow: 1.0 };
     }
 
-    // 1. Filter out outliers (>2.5x variance)
+    // 1. Deduplicate timezone-shifted rows for the same calendar week
+    const uniqueLedger: BaselineVarianceLedger[] = [];
+    const seenWeeks = new Set<string>();
+    for (const row of ledger) {
+        // Normalize to YYYY-MM-DD
+        const weekStr = row.weekStart.toISOString().slice(0, 10);
+        if (!seenWeeks.has(weekStr)) {
+            seenWeeks.add(weekStr);
+            uniqueLedger.push(row);
+        }
+    }
+
+    // 2. Filter out outliers (>2.5x variance)
     // variancePct = (actual - expected) / expected
     // >2.5x means actual/expected > 2.5, which is variancePct > 1.5
     // also exclude massive drops if variancePct < -0.9? The prompt says ">2.5x outliers"
-    const validOutflow = ledger.filter(v => v.variancePct <= 1.5 && v.variancePct >= -1.0);
-    const validInflow = ledger.filter(v => v.variancePctIn !== null && v.variancePctIn <= 1.5 && v.variancePctIn >= -1.0);
+    const validOutflow = uniqueLedger.filter(v => v.variancePct <= 1.5 && v.variancePct >= -1.0);
+    const validInflow = uniqueLedger.filter(v => v.variancePctIn !== null && v.variancePctIn <= 1.5 && v.variancePctIn >= -1.0);
 
     const computeArithmetic = (items: { variancePct: number }[] | { variancePctIn: number }[], isInflow: boolean) => {
         if (items.length === 0) return 1.0;

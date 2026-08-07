@@ -457,7 +457,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         for (let w = 0; w < 13; w++) {
             const weekStart = addWeeks(currentMonday, w);
             const weekEnd = addDays(weekStart, 6);
-            if (isInWeek(oto.weekStart, weekStart, weekEnd) || (w === 0 && oto.weekStart < weekStart)) {
+            if (isInWeek(oto.weekStart, weekStart, weekEnd)) {
                 const originalPattern = input.recurring.find((r: ForecastRecurring) => r.id === oto.patternId);
                 const syntheticPattern: ForecastRecurring = {
                     ...originalPattern,
@@ -778,7 +778,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 projConfidence = tier === "high" ? "med" : "low";
                 
                 // Stage 3: AI Articulation
-                if (input.aiInflowExplanations && input.aiInflowExplanations[w]) {
+                if (input.aiInflowExplanations && input.aiInflowExplanations[w] && !input.aiInflowExplanations[w].startsWith("AI Error:")) {
                     projLabel = input.aiInflowExplanations[w];
                 } else {
                     const coveragePct = Math.round(pipelineCoverage * 100);
@@ -942,7 +942,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 const tier = input.baselineConfidenceTier ?? "none";
                 projOutConfidence = tier === "high" ? "med" : "low";
                 
-                if (input.aiOutflowExplanations && input.aiOutflowExplanations[w]) {
+                if (input.aiOutflowExplanations && input.aiOutflowExplanations[w] && !input.aiOutflowExplanations[w].startsWith("AI Error:")) {
                     projOutLabel = input.aiOutflowExplanations[w];
                 } else {
                     const coveragePct = Math.round(pipelineCoverageOut * 100);
