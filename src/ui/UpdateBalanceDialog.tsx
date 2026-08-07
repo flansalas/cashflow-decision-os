@@ -57,7 +57,7 @@ export function UpdateBalanceDialog({
     onCancel,
 }: Props) {
     const todayISO = new Date().toISOString().slice(0, 10);
-    const [step, setStep] = useState<"upload" | "bank" | "uncleared" | "balance" | "preview" | "actions" | "triage" | "summary">("upload");
+    const [step, setStep] = useState<"upload" | "bank" | "uncleared" | "balance" | "expected" | "preview" | "actions" | "triage" | "summary">("upload");
     const [balance, setBalance] = useState(currentBalance.toString());
     const [asOfDate, setAsOfDate] = useState(todayISO);
     const [saving, setSaving] = useState(false);
@@ -73,6 +73,15 @@ export function UpdateBalanceDialog({
     const [bankDataRowCount, setBankDataRowCount] = useState<number | null>(null);
     const [bankCoverageVerified, setBankCoverageVerified] = useState<boolean | null>(null);
     const [bankStatusLoading, setBankStatusLoading] = useState(false);
+
+    // Fast Expected Cash entry
+    const [fastEntryAmount, setFastEntryAmount] = useState("");
+    const [fastEntryLabel, setFastEntryLabel] = useState("");
+    const [fastEntryWeek, setFastEntryWeek] = useState(1);
+    const [fastEntryDirection, setFastEntryDirection] = useState<"inflow" | "outflow">("inflow");
+    const [fastEntrySaving, setFastEntrySaving] = useState(false);
+    const [fastEntryPendingMatch, setFastEntryPendingMatch] = useState<any>(null);
+    const [fastEntries, setFastEntries] = useState<any[]>([]);
 
     // Triage state
     const [triageItems, setTriageItems] = useState<TriageItem[]>([]);
@@ -538,7 +547,7 @@ export function UpdateBalanceDialog({
                             setBankCoverageVerified(false);
                         } finally {
                             setBankStatusLoading(false);
-                            setStep("preview");
+                            setStep("expected");
                         }
                     }}
                     disabled={!isValid || bankStatusLoading}
@@ -553,6 +562,199 @@ export function UpdateBalanceDialog({
             </div>
         </>
     );
+
+    // ── Expected Cash Step ──────────────────────────────────────────────────
+    if (step === "expected") {
+        const handleAddExpected = async () => {
+            const amt = parseFloat(fastEntryAmount.replace(/[$,\s]/g, ""));
+            if (isNaN(amt) || amt <= 0 || !fastEntryLabel.trim()) {
+                setError("Please enter a valid amount and label.");
+                return;
+            }
+            setFastEntrySaving(true);
+            setError(null);
+            try {
+                const res = await fetch("/api/cash-entries/fast", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        amount: amt,
+                        label: fastEntryLabel,
+                        weekNumber: fastEntryWeek,
+                        direction: fastEntryDirection
+                    })
+                });
+                if (!res.ok) throw new Error("Failed to add entry");
+                const data = await res.json();
+                setFastEntries(prev => [...prev, data.entry]);
+                if (data.pendingMatch) {
+                    setFastEntryPendingMatch(data.pendingMatch);
+                } else {
+                    setFastEntryAmount("");
+                    setFastEntryLabel("");
+                }
+            } catch (e: any) {
+                setError(e.message);
+            } finally {
+                setFastEntrySaving(false);
+            }
+        };
+
+        const handleConfirmMatch = async (useTimingFrom: "source" | "target") => {
+            if (!fastEntryPendingMatch?.linkId) return;
+            setFastEntrySaving(true);
+            try {
+                await fetch("/api/cash-entries/confirm-match", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        linkId: fastEntryPendingMatch.linkId,
+                        useTimingFrom
+                    })
+                });
+                setFastEntryPendingMatch(null);
+                setFastEntryAmount("");
+                setFastEntryLabel("");
+            } catch (e: any) {
+                setError(e.message);
+            } finally {
+                setFastEntrySaving(false);
+            }
+        };
+
+        return shell(
+            <div className="flex flex-col max-h-[85vh]">
+                <button
+                    onClick={onCancel}
+                    className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 transition-colors z-10"
+                    style={{ color: "var(--text-secondary)" }}
+                >
+                    <X className="w-5 h-5" />
+                </button>
+
+                <div className="px-8 pt-8 pb-4 border-b border-slate-100/60 bg-white z-0">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-lg border bg-blue-50 text-blue-600 border-blue-100 italic">Roll Protocol • Step 3.5 of 4</span>
+                    <h2 className="text-2xl font-bold mt-3 tracking-tight" style={{ color: "var(--text-primary)" }}>New Expectations</h2>
+                    <p className="text-[13px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+                        Anything coming in or going out that we don't know about yet?
+                    </p>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-8 py-5 custom-scrollbar bg-slate-50/50 space-y-4">
+                    {fastEntryPendingMatch ? (
+                        <div className="rounded-xl border p-5 bg-amber-50 border-amber-200">
+                            <AlertTriangle className="w-6 h-6 text-amber-500 mb-3" />
+                            <h3 className="font-bold text-amber-900 text-sm">Looks like this is the same {fmt(fastEntryPendingMatch.amount || parseFloat(fastEntryAmount))} {fastEntryDirection === "inflow" ? "payment" : "bill"} for {fastEntryPendingMatch.label}.</h3>
+                            <p className="text-xs text-amber-700 mt-1 mb-4">Would you like to use your manual timing or the accounting record's expected date?</p>
+                            <div className="flex gap-3">
+                                <button onClick={() => handleConfirmMatch("source")} className="px-4 py-2 bg-amber-600 text-white font-bold rounded-lg text-xs hover:bg-amber-700">Use My Timing</button>
+                                <button onClick={() => handleConfirmMatch("target")} className="px-4 py-2 bg-white text-amber-800 border border-amber-300 font-bold rounded-lg text-xs hover:bg-amber-100">Use Accounting Timing</button>
+                                <button onClick={() => { setFastEntryPendingMatch(null); setFastEntryAmount(""); setFastEntryLabel(""); }} className="px-4 py-2 text-amber-600 font-bold rounded-lg text-xs hover:bg-amber-100 ml-auto">Ignore</button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="rounded-xl border p-5 space-y-4 bg-white" style={{ borderColor: "var(--border-default)" }}>
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <label className="text-[11px] uppercase tracking-widest font-bold text-slate-500 mb-1.5 block">Direction</label>
+                                    <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                                        <button 
+                                            onClick={() => setFastEntryDirection("inflow")}
+                                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${fastEntryDirection === "inflow" ? "bg-white shadow-sm text-emerald-700 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}
+                                        >
+                                            Inflow
+                                        </button>
+                                        <button 
+                                            onClick={() => setFastEntryDirection("outflow")}
+                                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${fastEntryDirection === "outflow" ? "bg-white shadow-sm text-rose-700 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}
+                                        >
+                                            Outflow
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="flex-1">
+                                    <label className="text-[11px] uppercase tracking-widest font-bold text-slate-500 mb-1.5 block">Timing</label>
+                                    <select 
+                                        value={fastEntryWeek} 
+                                        onChange={e => setFastEntryWeek(parseInt(e.target.value))}
+                                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-indigo-500"
+                                    >
+                                        <option value={1}>Week 1 (This Week)</option>
+                                        <option value={2}>Week 2</option>
+                                        <option value={3}>Week 3</option>
+                                        <option value={4}>Week 4</option>
+                                        <option value={5}>Week 5</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="flex gap-4">
+                                <div className="flex-[2]">
+                                    <label className="text-[11px] uppercase tracking-widest font-bold text-slate-500 mb-1.5 block">Who / What</label>
+                                    <input 
+                                        type="text" 
+                                        value={fastEntryLabel} 
+                                        onChange={e => setFastEntryLabel(e.target.value)} 
+                                        placeholder="e.g. Big Client Payment"
+                                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-indigo-500"
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="text-[11px] uppercase tracking-widest font-bold text-slate-500 mb-1.5 block">Amount</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                                        <input 
+                                            type="text" 
+                                            value={fastEntryAmount} 
+                                            onChange={e => setFastEntryAmount(e.target.value)} 
+                                            placeholder="0"
+                                            className="w-full border border-slate-200 rounded-lg pl-7 pr-3 py-2 text-sm bg-white focus:outline-none focus:border-indigo-500 font-financial"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={handleAddExpected} 
+                                disabled={fastEntrySaving}
+                                className="w-full py-2.5 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors disabled:opacity-50"
+                            >
+                                {fastEntrySaving ? "Adding..." : "+ Add to Forecast"}
+                            </button>
+                        </div>
+                    )}
+                    
+                    {error && <p className="text-red-500 text-xs font-bold px-1">{error}</p>}
+
+                    {fastEntries.length > 0 && (
+                        <div className="mt-4">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Added Today</p>
+                            <div className="space-y-2">
+                                {fastEntries.map(e => (
+                                    <div key={e.id} className="flex justify-between items-center bg-white border border-slate-200 rounded-lg px-3 py-2">
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-800">{e.label}</p>
+                                            <p className="text-[10px] text-slate-500">Week {e.weekNumber ?? fastEntryWeek}</p>
+                                        </div>
+                                        <span className={`text-sm font-financial font-bold ${e.amount >= 0 ? "text-emerald-600" : "text-slate-800"}`}>
+                                            {fmt(e.amount)}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+                
+                <div className="px-8 py-4 border-t border-slate-100/60 bg-white flex justify-end gap-3 z-0">
+                    <button onClick={() => setStep("balance")} className="px-4 py-2 rounded-xl text-sm font-medium border text-slate-500 bg-slate-50 hover:bg-slate-100">
+                        Back
+                    </button>
+                    <button onClick={() => setStep("preview")} className="px-6 py-2 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md">
+                        Review Forecast →
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     // ── Pre-Roll Preview Step ─────────────────────────────────────────────────
     if (step === "preview") {
