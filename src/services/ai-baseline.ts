@@ -28,7 +28,8 @@ export async function computeAIBaseline(
     baselineOutflowWeekly: number,
     paymentCurveJson: string,
     inflowDelayWeeks: number,
-    outflowDelayWeeks: number
+    outflowDelayWeeks: number,
+    eligibleRowIds: Set<string> = new Set()
 ): Promise<AIBaselineResult | null> {
     try {
         if (!process.env.OPENAI_API_KEY) {
@@ -84,17 +85,19 @@ export async function computeAIBaseline(
         // 2. Assemble context: Last 8 weeks of variance memory
         const eightWeeksAgo = subWeeks(currentMonday, 8);
         
-        const varianceLedger = await prisma.baselineVarianceLedger.findMany({
+        const varianceLedger = (await prisma.baselineVarianceLedger.findMany({
             where: {
                 companyId,
                 weekStart: { gte: eightWeeksAgo, lt: currentMonday }
             },
             orderBy: { weekStart: "desc" },
             take: 8
-        });
+        })).filter(v => eligibleRowIds.has(v.id));
 
         // Compute AR and AP reliance (Deterministic mock based on variance ledger rows)
-        const varianceMemoryInfo = varianceLedger.map((v, i) => {
+        const varianceMemoryInfo = varianceLedger.length === 0 
+            ? "No verified historical variance memory available." 
+            : varianceLedger.map((v, i) => {
             // AR (Inflow)
             const actualTotalInflow = v.actualInflow ?? 0;
             const arRelianceFactor = 0.75 + ((i % 5) * 0.05); 

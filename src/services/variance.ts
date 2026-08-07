@@ -5,7 +5,10 @@ export interface VarianceMultipliers {
     outflow: number;
 }
 
-export function computeVarianceMultipliers(ledger: BaselineVarianceLedger[]): VarianceMultipliers {
+export function computeVarianceMultipliers(
+    ledger: BaselineVarianceLedger[],
+    eligibleRowIds: Set<string> = new Set()
+): VarianceMultipliers {
     if (ledger.length === 0) {
         return { inflow: 1.0, outflow: 1.0 };
     }
@@ -22,12 +25,21 @@ export function computeVarianceMultipliers(ledger: BaselineVarianceLedger[]): Va
         }
     }
 
-    // 2. Filter out outliers (>2.5x variance)
+    // 2. Filter out outliers (>2.5x variance) and unverified rows
     // variancePct = (actual - expected) / expected
     // >2.5x means actual/expected > 2.5, which is variancePct > 1.5
     // also exclude massive drops if variancePct < -0.9? The prompt says ">2.5x outliers"
-    const validOutflow = uniqueLedger.filter(v => v.variancePct <= 1.5 && v.variancePct >= -1.0);
-    const validInflow = uniqueLedger.filter(v => v.variancePctIn !== null && v.variancePctIn <= 1.5 && v.variancePctIn >= -1.0);
+    const validOutflow = uniqueLedger.filter(v => 
+        eligibleRowIds.has(v.id) && 
+        v.variancePct <= 1.5 && 
+        v.variancePct >= -1.0
+    );
+    const validInflow = uniqueLedger.filter(v => 
+        eligibleRowIds.has(v.id) && 
+        v.variancePctIn !== null && 
+        v.variancePctIn <= 1.5 && 
+        v.variancePctIn >= -1.0
+    );
 
     const computeArithmetic = (items: { variancePct: number }[] | { variancePctIn: number }[], isInflow: boolean) => {
         if (items.length === 0) return 1.0;
