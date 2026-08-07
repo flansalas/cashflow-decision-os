@@ -105,6 +105,15 @@ export async function POST(req: NextRequest) {
         } else {
             await prisma.companyNote.create({ data: { companyId, noteText } });
         }
+        // Trigger AI background proposer
+        try {
+            const { waitUntil } = require("@vercel/functions");
+            const { proposeReconciliations } = require("@/services/ai-reconciliation");
+            waitUntil(proposeReconciliations(companyId).catch((err: any) => console.error("AI Reconciliation failed:", err)));
+        } catch (e) {
+            const { proposeReconciliations } = require("@/services/ai-reconciliation");
+            proposeReconciliations(companyId).catch((err: any) => console.error("AI Reconciliation failed:", err));
+        }
 
         return NextResponse.json({
             ok: true,

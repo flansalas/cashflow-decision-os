@@ -112,6 +112,17 @@ export async function POST(req: NextRequest) {
         });
     }
 
+    // Trigger AI background proposer
+    try {
+        const { waitUntil } = require("@vercel/functions");
+        const { proposeReconciliations } = require("@/services/ai-reconciliation");
+        waitUntil(proposeReconciliations(tenantId).catch((err: any) => console.error("AI Reconciliation failed:", err)));
+    } catch (e) {
+        // Fallback for non-vercel envs
+        const { proposeReconciliations } = require("@/services/ai-reconciliation");
+        proposeReconciliations(tenantId).catch((err: any) => console.error("AI Reconciliation failed:", err));
+    }
+
     return NextResponse.json({
         entry: createdEntry,
         pendingMatch: pendingMatch ? { ...pendingMatch, linkId: pendingLinkId } : null

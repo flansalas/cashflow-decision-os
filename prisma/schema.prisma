@@ -908,6 +908,7 @@ model ReconciliationLink {
   status      String  @default("active")
   matchMethod String  @default("manual")
   deductFrom  String?
+  explanation String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

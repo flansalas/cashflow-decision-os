@@ -83,6 +83,21 @@ export function UpdateBalanceDialog({
     const [fastEntryPendingMatch, setFastEntryPendingMatch] = useState<any>(null);
     const [fastEntries, setFastEntries] = useState<any[]>([]);
 
+    useEffect(() => {
+        if (step === "expected" && !fastEntryPendingMatch) {
+            fetch("/api/reconciliation/pending")
+                .then(r => r.json())
+                .then(d => {
+                    if (d.pendingMatch) {
+                        setFastEntryPendingMatch(d.pendingMatch);
+                        setFastEntryAmount(d.pendingMatch.amount.toString());
+                        setFastEntryDirection(d.pendingMatch.direction);
+                    }
+                })
+                .catch(e => console.error("Failed to fetch pending matches", e));
+        }
+    }, [step]);
+
     // Triage state
     const [triageItems, setTriageItems] = useState<TriageItem[]>([]);
     const [weekOptions, setWeekOptions] = useState<WeekOption[]>([]);
