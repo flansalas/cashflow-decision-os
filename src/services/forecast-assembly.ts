@@ -22,6 +22,7 @@ export async function assembleForecastData(companyId: string) {
         cashFlowEntries,
         varianceLedger,
         customerPaymentObs,
+        reconciliationLinks,
     ] = await Promise.all([
         prisma.cashSnapshot.findFirst({ where: { companyId }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] }),
         prisma.cashAdjustment.findMany({ where: { companyId } }),
@@ -50,6 +51,9 @@ export async function assembleForecastData(companyId: string) {
         prisma.customerPaymentObservation.findMany({
             where: { companyId },
             select: { customerName: true, daysEarlyOrLate: true },
+        }),
+        prisma.reconciliationLink.findMany({
+            where: { companyId, status: "active" },
         }),
     ]);
 
@@ -120,6 +124,19 @@ export async function assembleForecastData(companyId: string) {
         }
     }
 
+    const deductions = new Map<string, number>();
+    for (const link of reconciliationLinks) {
+        if (link.status !== "active") continue;
+        const matchedAmount = Number(link.matchedAmount);
+        if (matchedAmount <= 0) continue;
+        
+        // Deterministic deduplication: largest ID yields to smallest ID.
+        // This avoids hardcoding a truth hierarchy (e.g., manual vs accounting)
+        // and respects timing from the "winning" record.
+        const yieldingId = link.sourceId > link.targetId ? link.sourceId : link.targetId;
+        deductions.set(yieldingId, (deductions.get(yieldingId) || 0) + matchedAmount);
+    }
+
     const invoices: ForecastInvoice[] = invoicesRaw.map(inv => {
         const cp = customerMap.get(inv.customerName);
         const ovs = overridesByTarget.get(inv.id) || [];
@@ -132,8 +149,11 @@ export async function assembleForecastData(companyId: string) {
             if (ov.type === "partial_payment" && ov.amount != null) partialPayment = ov.amount;
         }
         if (isExcluded) return null;
+        const ded = deductions.get(inv.id) || 0;
+        const remainder = Math.max(0, inv.amountOpen - ded);
+        if (remainder === 0 && !markedPaid) return null; // Fully covered by other records
         return {
-            id: inv.id, customerName: inv.customerName, invoiceNo: inv.invoiceNo, amountOpen: inv.amountOpen, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, daysPastDue: inv.daysPastDue, status: inv.status, metaJson: inv.metaJson, typicalDelayWeeks: cp?.typicalDelayWeeks ?? computeTypicalDelayWeeks(obsByCustomer.get(inv.customerName) || []) ?? computeTypicalDelayWeeks(customerPaymentObs), riskTag: cp?.riskTag, overrideExpectedDate, overrideAmount, markedPaid, partialPayment,
+            id: inv.id, customerName: inv.customerName, invoiceNo: inv.invoiceNo, amountOpen: remainder, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, daysPastDue: inv.daysPastDue, status: inv.status, metaJson: inv.metaJson, typicalDelayWeeks: cp?.typicalDelayWeeks ?? computeTypicalDelayWeeks(obsByCustomer.get(inv.customerName) || []) ?? computeTypicalDelayWeeks(customerPaymentObs), riskTag: cp?.riskTag, overrideExpectedDate, overrideAmount, markedPaid, partialPayment,
         };
     }).filter((inv): inv is NonNullable<typeof inv> => inv !== null);
 
@@ -149,8 +169,11 @@ export async function assembleForecastData(companyId: string) {
             if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
         }
         if (isExcluded) return null;
+        const ded = deductions.get(bill.id) || 0;
+        const remainder = Math.max(0, bill.amountOpen - ded);
+        if (remainder === 0 && !markedPaid) return null;
         return {
-            id: bill.id, vendorName: bill.vendorName, billNo: bill.billNo, amountOpen: bill.amountOpen, billDate: bill.billDate, dueDate: bill.dueDate, daysPastDue: bill.daysPastDue, status: bill.status, criticality: vp?.criticality, overrideDueDate, overrideAmount, markedPaid, expenseClass: (bill as any).expenseClass,
+            id: bill.id, vendorName: bill.vendorName, billNo: bill.billNo, amountOpen: remainder, billDate: bill.billDate, dueDate: bill.dueDate, daysPastDue: bill.daysPastDue, status: bill.status, criticality: vp?.criticality, overrideDueDate, overrideAmount, markedPaid, expenseClass: (bill as any).expenseClass,
         };
     }).filter((bill): bill is NonNullable<typeof bill> => bill !== null);
 
@@ -200,24 +223,35 @@ export async function assembleForecastData(companyId: string) {
     const totalOpenAR = invoicesRaw.reduce((s, i) => s + i.amountOpen, 0);
     const isARHeavy = totalOpenAR > (baseline.variableInflowWeekly || 0);
 
-    const mappedFutureAdjustments = futureAdjustments.map(a => ({
-        categoryId: "custom",
-        categoryName: a.type,
-        direction: a.amount >= 0 ? ("inflow" as const) : ("outflow" as const),
-        label: a.note || a.type,
-        amount: Math.abs(a.amount),
-        targetDate: a.effectiveDate,
-        sourceId: a.id,
-    }));
+    const mappedFutureAdjustments = futureAdjustments.map(a => {
+        const ded = deductions.get(a.id) || 0;
+        const remainder = Math.max(0, Math.abs(a.amount) - ded);
+        if (remainder === 0) return null;
+        return {
+            categoryId: "custom",
+            categoryName: a.type,
+            direction: a.amount >= 0 ? ("inflow" as const) : ("outflow" as const),
+            label: a.note || a.type,
+            amount: remainder,
+            targetDate: a.effectiveDate,
+            sourceId: a.id,
+        };
+    }).filter((a): a is NonNullable<typeof a> => a !== null);
 
-    const mappedEntries = cashFlowEntries.map((e: any) => ({
-        categoryId: e.categoryId,
-        categoryName: e.category.name,
-        direction: e.category.direction as "inflow" | "outflow",
-        label: e.label,
-        amount: e.amount,
-        targetDate: e.targetDate,
-    }));
+    const mappedEntries = cashFlowEntries.map((e: any) => {
+        const ded = deductions.get(e.id) || 0;
+        const remainder = Math.max(0, e.amount - ded);
+        if (remainder === 0) return null;
+        return {
+            categoryId: e.categoryId,
+            categoryName: e.category.name,
+            direction: e.category.direction as "inflow" | "outflow",
+            label: e.label,
+            amount: remainder,
+            targetDate: e.targetDate,
+            sourceId: e.id,
+        };
+    }).filter((e): e is NonNullable<typeof e> => e !== null);
 
     const input: ForecastInput = {
         adjustedOpeningCash,

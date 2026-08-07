@@ -1,0 +1,13 @@
+[DIAG] invoicesRaw: 0 billsRaw: 0
+[DIAG] recurringPatternsRaw: 0
+[DIAG] overrides: 0
+[DIAG] cashAdjustments: 0
+[DIAG] cashSnapshot asOfDate: undefined
+[DIAG] cashSnapshot bankBalance: undefined
+[DIAG] payrollAllInAmount: null
+[DIAG] payrollNextDate: null
+[DIAG] rentMonthlyAmount: null
+[DIAG] rentDayOfMonth: null
+[DIAG] cache valid: null
+[DIAG] variableInflowWeekly from cache: undefined
+[DIAG] variableOutflowWeekly from cache: undefined

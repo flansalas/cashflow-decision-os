@@ -53,6 +53,7 @@ model Company {
   stagedImportRows              StagedImportRow[]
   vendorPaymentObservations     VendorPaymentObservation[]
   vendorProfiles                VendorProfile[]
+  reconciliationLinks           ReconciliationLink[]
 }
 
 model CompanyNote {
@@ -175,7 +176,7 @@ model BankAccount {
 }
 
 model BankTransaction {
-  id                     String                  @id @default(uuid())
+  id                     String                    @id @default(uuid())
   companyId              String
   accountId              String?
   txDate                 DateTime
@@ -183,12 +184,12 @@ model BankTransaction {
   description            String
   direction              String
   txHash                 String?
-  createdAt              DateTime                @default(now())
+  createdAt              DateTime                  @default(now())
   internalTransferPairId String?
-  internalTransferStatus String                  @default("unresolved")
+  internalTransferStatus String                    @default("unresolved")
   attributions           ActualCashAttribution[]
-  account                BankAccount?            @relation(fields: [accountId], references: [id])
-  company                Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  account                BankAccount?              @relation(fields: [accountId], references: [id])
+  company                Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   transferHistoryAsTx1   InternalTransferHistory[] @relation("TransferTx1")
   transferHistoryAsTx2   InternalTransferHistory[] @relation("TransferTx2")
 
@@ -196,21 +197,21 @@ model BankTransaction {
 }
 
 model InternalTransferHistory {
-  id               String            @id @default(uuid())
+  id               String          @id @default(uuid())
   companyId        String
   pairId           String
   txId1            String
   txId2            String
   pairedByUserId   String
-  pairedAt         DateTime          @default(now())
+  pairedAt         DateTime        @default(now())
   unpairedByUserId String?
   unpairedAt       DateTime?
   unpairReason     String?
   evidenceJson     String?
-  isActive         Boolean           @default(true)
-  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  transaction1     BankTransaction   @relation("TransferTx1", fields: [txId1], references: [id], onDelete: Cascade)
-  transaction2     BankTransaction   @relation("TransferTx2", fields: [txId2], references: [id], onDelete: Cascade)
+  isActive         Boolean         @default(true)
+  company          Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transaction1     BankTransaction @relation("TransferTx1", fields: [txId1], references: [id], onDelete: Cascade)
+  transaction2     BankTransaction @relation("TransferTx2", fields: [txId2], references: [id], onDelete: Cascade)
 
   @@index([companyId, pairId])
   @@index([companyId, isActive])
@@ -889,4 +890,30 @@ model EvaluationJobTrigger {
 
 model TestMigrationVerify {
   id String @id @default(uuid())
+}
+
+model ReconciliationLink {
+  id        String @id @default(uuid())
+  companyId String
+
+  sourceType String
+  sourceId   String
+
+  targetType String
+  targetId   String
+
+  matchedAmount Decimal
+
+  confidence  String @default("high")
+  status      String @default("active")
+  matchMethod String @default("manual")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([sourceType, sourceId])
+  @@index([targetType, targetId])
+  @@index([companyId])
 }

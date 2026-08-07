@@ -1,0 +1,16 @@
+{
+  "deploymentSha": "e635048",
+  "inflowMultiplier": 1,
+  "outflowMultiplier": 1,
+  "rawM1InflowBaseline": 92425,
+  "rawM1OutflowBaseline": 67062.14,
+  "postMultiplierInflow": 92425,
+  "postMultiplierOutflow": 67062.14,
+  "week1": {
+    "startCash": 138816,
+    "expectedInflow": 99885.97,
+    "expectedOutflow": 130334.83,
+    "endCash": 108367.15
+  },
+  "week13EndCash": -457844.18
+}
