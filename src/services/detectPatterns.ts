@@ -106,7 +106,7 @@ function stddev(values: number[]): number {
 
 function addDays(d: Date, n: number): Date {
     const dt = new Date(d);
-    dt.setDate(dt.getDate() + n);
+    dt.setUTCDate(dt.getUTCDate() + n);
     return dt;
 }
 

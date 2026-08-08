@@ -3,22 +3,22 @@ import { BankTxForBaseline, RecurringPatternForBaseline, BaselineAssumptions } f
 
 export function mondayBefore(d: Date, weeksAgo: number): Date {
     const dt = new Date(d);
-    const day = dt.getDay();
+    const day = dt.getUTCDay();
     const diff = day === 0 ? -6 : 1 - day;
-    dt.setDate(dt.getDate() + diff - weeksAgo * 7);
-    dt.setHours(0, 0, 0, 0);
+    dt.setUTCDate(dt.getUTCDate() + diff - weeksAgo * 7);
+    dt.setUTCHours(0, 0, 0, 0);
     return dt;
 }
 
 export function addWeeks(d: Date, n: number): Date {
     const dt = new Date(d);
-    dt.setDate(dt.getDate() + n * 7);
+    dt.setUTCDate(dt.getUTCDate() + n * 7);
     return dt;
 }
 
 export function addDays(d: Date, n: number): Date {
     const dt = new Date(d);
-    dt.setDate(dt.getDate() + n);
+    dt.setUTCDate(dt.getUTCDate() + n);
     return dt;
 }
 
@@ -59,14 +59,14 @@ export function prepareBaselineTransactions(
 
     for (let i = 0; i < weeksToAnalyze; i++) {
         const wStart = addWeeks(weekStart0, i);
-        const wEnd = addDays(wStart, 6);
+        const nextWStart = addWeeks(wStart, 1);
 
         let inflowSum = 0;
         let outflowSum = 0;
 
         for (const tx of txs) {
             if (!tx.date || isNaN(tx.date.getTime())) continue;
-            if (tx.date < wStart || tx.date > wEnd) continue;
+            if (tx.date < wStart || tx.date >= nextWStart) continue;
             
             const txDirection = tx.amount >= 0 ? "inflow" : "outflow";
             const absAmount = Math.abs(tx.amount);
@@ -107,7 +107,7 @@ export function prepareBaselineTransactions(
                     txCategory === "rent" &&
                     txDirection === "outflow"
                 ) {
-                    const txDay = tx.date.getDate();
+                    const txDay = tx.date.getUTCDate();
                     const rentDay = assumptions.rentDayOfMonth;
                     const diff = Math.min(
                         Math.abs(txDay - rentDay),
