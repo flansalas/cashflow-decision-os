@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CheckCircle2, Inbox, Upload, X, TrendingUp, Landmark, AlertTriangle, ShieldCheck, ShieldAlert } from "lucide-react";
 import { VarianceDriverPanel } from "@/ui/VarianceDriverPanel";
 import type { UnifiedVarianceResult } from "@/types/variance";

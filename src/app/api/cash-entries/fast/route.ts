@@ -71,26 +71,26 @@ export async function POST(req: NextRequest) {
 
     if (direction === "inflow") {
         const potentialInvoice = await prisma.receivableInvoice.findFirst({
-            where: { companyId: tenantId, amount, status: "active" }
+            where: { companyId: tenantId, amountOpen: amount, status: "open" }
         });
         if (potentialInvoice) {
             pendingMatch = {
                 id: potentialInvoice.id,
                 label: potentialInvoice.customerName || "Customer Invoice",
                 type: "receivable_invoice",
-                expectedDate: potentialInvoice.expectedDate || potentialInvoice.dueDate
+                expectedDate: potentialInvoice.dueDate
             };
         }
     } else {
         const potentialBill = await prisma.payableBill.findFirst({
-            where: { companyId: tenantId, amount, status: "active" }
+            where: { companyId: tenantId, amountOpen: amount, status: "open" }
         });
         if (potentialBill) {
             pendingMatch = {
                 id: potentialBill.id,
                 label: potentialBill.vendorName || "Vendor Bill",
                 type: "payable_bill",
-                expectedDate: potentialBill.expectedDate || potentialBill.dueDate
+                expectedDate: potentialBill.dueDate
             };
         }
     }

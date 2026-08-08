@@ -12,7 +12,6 @@ try {
 
 async function getAvailableAmountSafe(companyId: string, type: string, id: string): Promise<number> {
     try {
-        const { getAvailableAmount } = await import("./reconciliation");
         // getAvailableAmount is not exported directly, but we can reconstruct or export it
         // Actually, we can just fetch it directly here since we know the schema.
         if (type === "receivable_invoice") {
