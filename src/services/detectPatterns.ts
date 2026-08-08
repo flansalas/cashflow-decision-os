@@ -447,7 +447,12 @@ export function classifyDetectedPattern(
         const amountDiff = ep.typicalAmount > 0
             ? Math.abs(detected.typicalAmount - ep.typicalAmount) / ep.typicalAmount
             : 1;
-        if (amountDiff > amountToleranceRatio) continue;
+
+        // Grouped commitment protection: If there is strong textual evidence (tokenOverlap >= 0.66),
+        // we flag it as an ambiguous_overlap even if the amount is wildly different,
+        // because it could be a named component of an existing grouped commitment.
+        const isStrongTextualEvidence = overlap >= 0.66;
+        if (amountDiff > amountToleranceRatio && !isStrongTextualEvidence) continue;
 
         // Cadence must be compatible (same or one is "irregular")
         const cadenceCompat =

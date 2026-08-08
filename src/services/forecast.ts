@@ -736,6 +736,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 sourceId: entry.sourceId,
                 confidence: "high",
                 section: `Cat: ${entry.categoryName}`,
+                metadata: { categoryName: entry.categoryName }
             });
         }
 
@@ -761,7 +762,18 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         // (Payroll/rent/recurring are already excluded from M1 history and appear via
         //  their own sourceTypes, not "manual", so no double-deduction risk.)
         const scheduledInflowSum = inflowBreakdown
-            .filter(i => i.sourceType === "invoice" || i.sourceType === "recurring" || i.sourceType === "manual")
+            .filter(i => {
+                if (i.sourceType === "invoice" || i.sourceType === "recurring") return true;
+                if (i.sourceType === "manual") {
+                    const cat = i.metadata?.categoryName?.toLowerCase() || "";
+                    // Non-baseline/incremental inflow categories that do not overlap with M1
+                    if (["funding", "equity", "loan", "asset_sale", "one-time", "tax_refund"].includes(cat)) {
+                        return false;
+                    }
+                    return true;
+                }
+                return false;
+            })
             .reduce((s, i) => s + i.amount, 0);
 
         let inflowGap = 0;
@@ -901,6 +913,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 sourceId: entry.sourceId,
                 confidence: "high",
                 section: `Cat: ${entry.categoryName}`,
+                metadata: { categoryName: entry.categoryName }
             });
         }
 
@@ -931,6 +944,16 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             .filter(i => {
                 // Exclude items that were already removed from M1 history:
                 if (["payroll", "recurring", "assumption"].includes(i.sourceType)) return false;
+                
+                if (i.sourceType === "manual") {
+                    const cat = i.metadata?.categoryName?.toLowerCase() || "";
+                    // Non-baseline/incremental outflow categories that do not overlap with M1
+                    if (["taxes", "loan", "asset_sale", "funding", "equity", "debt", "one-time"].includes(cat)) {
+                        return false;
+                    }
+                    return true;
+                }
+                
                 // Include bills (AP) and manual entries — both represent variable spend
                 // that overlaps with M1 statistical history.
                 return true;

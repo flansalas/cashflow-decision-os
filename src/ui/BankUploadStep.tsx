@@ -59,6 +59,8 @@ interface DetectedPattern {
     existingId?: string;
     oldAmount?: number;
     oldCadence?: string;
+    isAmbiguous?: boolean;
+    overlapCandidates?: any[];
 }
 
 interface ReviewPattern extends DetectedPattern {
@@ -285,6 +287,11 @@ function PatternCard({
                     <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                         Seen {pattern.occurrences}× · Next: {new Date(pattern.editedDate).toLocaleDateString("en-US", { timeZone: "UTC" })}
                     </div>
+                    {pattern.isAmbiguous && pattern.overlapCandidates && pattern.overlapCandidates.length > 0 && (
+                        <div className="text-xs text-purple-600 mt-1.5 bg-purple-50 px-2 py-1 rounded border border-purple-100 inline-block">
+                            <span className="font-semibold">Possible duplicate of:</span> {pattern.overlapCandidates.map((c: any) => c.displayName).join(", ")}
+                        </div>
+                    )}
                 </div>
 
                 {/* Amount */}
@@ -524,8 +531,9 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
 
             const suggestions: DetectedPattern[] = d.suggestions ?? [];
             const updateSuggestions: DetectedPattern[] = d.updateSuggestions ?? [];
+            const ambiguousSuggestions: DetectedPattern[] = d.ambiguousSuggestions ?? [];
             
-            const allSuggestions = [...suggestions, ...updateSuggestions];
+            const allSuggestions = [...suggestions, ...updateSuggestions, ...ambiguousSuggestions];
 
             if (allSuggestions.length === 0) {
                 // Nothing found — go straight to finish
@@ -536,7 +544,7 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
             // Convert to ReviewPattern with editable fields
             setReviewPatterns(allSuggestions.map(p => ({
                 ...p,
-                included: p.confidence !== "low",   // pre-check high/med confidence items
+                included: p.confidence !== "low" && !p.isAmbiguous,   // pre-check high/med confidence items, except ambiguous ones
                 editedName: p.displayName,
                 editedAmount: String(Math.round(p.typicalAmount)),
                 editedDate: p.nextExpectedDate,
@@ -861,10 +869,26 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
                     {/* Pattern cards */}
                     <div className="space-y-6 max-h-96 overflow-y-auto custom-scrollbar pr-1">
                         {/* Updates Section */}
-                        {reviewPatterns.filter(p => p.isUpdate).length > 0 && (
+                        {reviewPatterns.filter(p => p.isUpdate && !p.isAmbiguous).length > 0 && (
                             <div className="space-y-2">
                                 <h4 className="text-xs font-bold uppercase tracking-wider text-amber-600 px-1">Updates to Existing Commitments</h4>
-                                {reviewPatterns.map((p, i) => p.isUpdate ? (
+                                {reviewPatterns.map((p, i) => (p.isUpdate && !p.isAmbiguous) ? (
+                                    <PatternCard
+                                        key={p.merchantKey}
+                                        pattern={p}
+                                        onChange={updated =>
+                                            setReviewPatterns(ps => ps.map((x, idx) => idx === i ? updated : x))
+                                        }
+                                    />
+                                ) : null)}
+                            </div>
+                        )}
+
+                        {/* Ambiguous Section */}
+                        {reviewPatterns.filter(p => p.isAmbiguous).length > 0 && (
+                            <div className="space-y-2">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-purple-600 px-1">Possible Existing Commitments</h4>
+                                {reviewPatterns.map((p, i) => p.isAmbiguous ? (
                                     <PatternCard
                                         key={p.merchantKey}
                                         pattern={p}
@@ -877,10 +901,10 @@ export function BankUploadStep({ companyId, onDone, skipButtonText }: Props) {
                         )}
 
                         {/* New Section */}
-                        {reviewPatterns.filter(p => !p.isUpdate).length > 0 && (
+                        {reviewPatterns.filter(p => !p.isUpdate && !p.isAmbiguous).length > 0 && (
                             <div className="space-y-2">
                                 <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 px-1">New Commitments Detected</h4>
-                                {reviewPatterns.map((p, i) => !p.isUpdate ? (
+                                {reviewPatterns.map((p, i) => (!p.isUpdate && !p.isAmbiguous) ? (
                                     <PatternCard
                                         key={p.merchantKey}
                                         pattern={p}

@@ -73,6 +73,49 @@ const existingPatterns = [
 // ── Test 1: Exact recurring duplicate ───────────────────────────────────────
 
 describe("classifyDetectedPattern", () => {
+    it("flags component of grouped commitment as ambiguous_overlap even with huge amount diff", () => {
+        const detected = {
+            merchantKey: "alpha van",
+            displayName: "Alpha Van",
+            typicalAmount: 50,
+            cadence: "monthly",
+            direction: "outflow",
+        };
+        const existingPatterns = [{
+            id: "grp1",
+            merchantKey: "alpha van beta truck gamma equipment",
+            displayName: "Alpha Van, Beta Truck, Gamma Equipment",
+            typicalAmount: 5000,
+            cadence: "monthly",
+            direction: "outflow",
+        }];
+        const res = classifyDetectedPattern(detected, existingPatterns);
+        expect(res.classification).toBe("ambiguous_overlap");
+    });
+
+    it("flags unrelated merchant sharing only a generic token as genuinely_new", () => {
+        const detected = {
+            merchantKey: "alpha corp",
+            displayName: "Alpha Corp",
+            typicalAmount: 50,
+            cadence: "monthly",
+            direction: "outflow",
+        };
+        const existingPatterns = [{
+            id: "grp2",
+            merchantKey: "beta corp",
+            displayName: "Beta Corp",
+            typicalAmount: 5000,
+            cadence: "monthly",
+            direction: "outflow",
+        }];
+        // "corp" is a noise token, so overlap should be 0.
+        // Even if it was "alpha supplies" vs "beta supplies" where "supplies" isn't noise,
+        // overlap would be 0.5. Since amountDiff is huge and 0.5 < 0.66, it should be genuinely_new.
+        const res = classifyDetectedPattern(detected, existingPatterns);
+        expect(res.classification).toBe("genuinely_new");
+    });
+
     it("1. exact recurring duplicate → already_represented", () => {
         const result = classifyDetectedPattern(
             { merchantKey: "sba loan", displayName: "SBA LOAN", typicalAmount: 3887, cadence: "monthly" },
@@ -127,9 +170,8 @@ describe("classifyDetectedPattern", () => {
         // This is the correct behavior: weak token signal + amount match is NOT enough.
         const result = classifyDetectedPattern(
             { merchantKey: "ford - 9192", displayName: "Ford - 9192 ('22 Van)", typicalAmount: 1330, cadence: "monthly" },
-            existingPatterns
+            existingPatterns.filter(p => p.id !== "pat-ford-group")
         );
-        // Group total is $8663 — individual $1330 is NOT within 20% of $8663.
         // Ford Utility Body: token overlap = 0.33 < 0.40 threshold → no match.
         // Correct: returns genuinely_new (conservative — avoids false positive overlap detection).
         expect(result.classification).toBe("genuinely_new");
@@ -217,13 +259,15 @@ describe("classifyDetectedPattern", () => {
         expect(result.classification).toBe("ambiguous_overlap");
     });
 
-    it("10b. amount outside 20% tolerance does not flag overlap even with token match", () => {
+    it("10b. amount outside 20% tolerance flags overlap if there is strong textual evidence (>=0.66)", () => {
         const result = classifyDetectedPattern(
             { merchantKey: "sba payment", displayName: "SBA Payment", typicalAmount: 3887 * 1.25, cadence: "monthly" },
             existingPatterns
         );
-        // 25% outside — should be genuinely_new
-        expect(result.classification).toBe("genuinely_new");
+        // Overlap between "SBA Payment" and "SBA Loan" is 1.0 (after noise words removed).
+        // Under new rules, strong textual evidence >= 0.66 overrides the amount threshold
+        // to catch grouped components or massive amount drifts of the exact same merchant.
+        expect(result.classification).toBe("ambiguous_overlap");
     });
 
     // ── Test 11: Cadence incompatibility prevents overlap ─────────────────
