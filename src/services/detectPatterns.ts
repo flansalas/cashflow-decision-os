@@ -292,3 +292,185 @@ export function isRecurringIdentityMatch(
 
     return true;
 }
+
+// ─── Semantic Duplicate Classification ──────────────────────────────────────
+// Used by /api/upload/bank/detect and /api/upload/bank/patterns to classify
+// detected patterns into four economic-identity buckets.
+
+/** Low-information words excluded from token overlap scoring */
+const NOISE_TOKENS = new Set([
+    "the","a","an","and","or","of","for","in","on","at","to","by","from","with",
+    "is","are","was","were","be","been","being","have","has","had","do","does",
+    "did","will","would","could","should","may","might","can","llc","inc","corp",
+    "co","ltd","payment","loan","debit","credit","ach","ref","transfer","funds",
+    "dep","misc","preauthorized","auto","authorized",
+]);
+
+/** Extract meaningful tokens from a string for overlap scoring */
+export function significantTokens(s: string): Set<string> {
+    return new Set(
+        s.toLowerCase()
+            .replace(/[^a-z0-9\s]/g, " ")
+            .split(/\s+/)
+            .filter(t => t.length >= 3 && !NOISE_TOKENS.has(t))
+    );
+}
+
+/** Jaccard-like overlap ratio on meaningful tokens (0–1).
+ *  Uses min-set denominator: a subset scores 1.0 against its superset. */
+export function tokenOverlapRatio(a: string, b: string): number {
+    const tokA = significantTokens(a);
+    const tokB = significantTokens(b);
+    if (tokA.size === 0 || tokB.size === 0) return 0;
+    let common = 0;
+    for (const t of tokA) if (tokB.has(t)) common++;
+    return common / Math.min(tokA.size, tokB.size);
+}
+
+export type PatternClassification =
+    | "already_represented"  // Exact key match, amount & cadence stable — do NOT create
+    | "update"               // Exact key match but drifted — offer update to existing
+    | "ambiguous_overlap"    // No exact match but semantic signals strongly suggest overlap — do NOT default-select
+    | "genuinely_new";       // No evidence of existing economic representation — may be created
+
+export interface ClassificationResult {
+    classification: PatternClassification;
+    matchedPatternId?: string;        // id of the matching existing pattern (for updates)
+    matchedPatternDisplayName?: string;
+    updateReason?: string;            // human-readable reason for "update"
+    overlapCandidates?: Array<{       // all semantic overlap candidates (for "ambiguous_overlap")
+        id: string;
+        displayName: string;
+        typicalAmount: number;
+        cadence: string;
+        tokenOverlap: number;
+        amountDiff: number;
+    }>;
+}
+
+/**
+ * Classify a detected pattern against the company's existing RecurringPatterns.
+ *
+ * Decision hierarchy:
+ *  1. Exact normalized merchantKey match → already_represented or update
+ *  2. Semantic overlap (token similarity ≥ 0.4 AND amount within 20% AND same direction
+ *     AND compatible cadence) → ambiguous_overlap
+ *  3. No match → genuinely_new
+ *
+ * Never uses amount alone. Never auto-creates for ambiguous_overlap.
+ */
+export function classifyDetectedPattern(
+    detected: {
+        merchantKey: string;
+        displayName: string;
+        typicalAmount: number;
+        cadence: string;
+        direction?: string;
+    },
+    existingPatterns: Array<{
+        id: string;
+        merchantKey: string;
+        displayName: string;
+        typicalAmount: number;
+        cadence: string;
+        direction: string;
+        category?: string;
+        isIncluded?: boolean;
+    }>,
+    options: {
+        /** Minimum token overlap ratio to flag ambiguous overlap (default 0.4) */
+        tokenOverlapThreshold?: number;
+        /** Maximum relative amount difference to flag ambiguous overlap (default 0.20 = 20%) */
+        amountToleranceRatio?: number;
+        /** Amount drift threshold to classify exact-match as "update" (default 0.05 = 5%) */
+        updateDriftThreshold?: number;
+    } = {}
+): ClassificationResult {
+    const {
+        tokenOverlapThreshold = 0.4,
+        amountToleranceRatio = 0.20,
+        updateDriftThreshold = 0.05,
+    } = options;
+
+    const detectedKeyNorm = detected.merchantKey.toLowerCase().trim();
+    const detectedDir = (detected.direction ?? "outflow").toLowerCase();
+
+    // ── Step 1: Exact merchantKey match ────────────────────────────────────
+    const exactMatch = existingPatterns.find(
+        p => p.merchantKey.toLowerCase().trim() === detectedKeyNorm
+    );
+
+    if (exactMatch) {
+        const amountDrift = exactMatch.typicalAmount > 0
+            ? Math.abs(detected.typicalAmount - exactMatch.typicalAmount) / exactMatch.typicalAmount
+            : 1;
+        const cadenceChanged = detected.cadence !== exactMatch.cadence;
+
+        if (amountDrift > updateDriftThreshold || cadenceChanged) {
+            const reasons: string[] = [];
+            if (amountDrift > updateDriftThreshold) {
+                reasons.push(
+                    `amount drifted ${(amountDrift * 100).toFixed(1)}%: ` +
+                    `was $${exactMatch.typicalAmount.toFixed(2)}, now $${detected.typicalAmount.toFixed(2)}`
+                );
+            }
+            if (cadenceChanged) {
+                reasons.push(`cadence changed: '${exactMatch.cadence}' → '${detected.cadence}'`);
+            }
+            return {
+                classification: "update",
+                matchedPatternId: exactMatch.id,
+                matchedPatternDisplayName: exactMatch.displayName,
+                updateReason: reasons.join("; "),
+            };
+        }
+
+        return {
+            classification: "already_represented",
+            matchedPatternId: exactMatch.id,
+            matchedPatternDisplayName: exactMatch.displayName,
+        };
+    }
+
+    // ── Step 2: Semantic overlap check ────────────────────────────────────
+    // Only check patterns in the same direction as the detected pattern.
+    const candidateSearchStr = `${detected.displayName} ${detected.merchantKey}`;
+    const overlapCandidates: NonNullable<ClassificationResult["overlapCandidates"]> = [];
+
+    for (const ep of existingPatterns) {
+        if (ep.direction.toLowerCase() !== detectedDir) continue;
+
+        const existingSearchStr = `${ep.displayName} ${ep.merchantKey}`;
+        const overlap = tokenOverlapRatio(candidateSearchStr, existingSearchStr);
+        if (overlap < tokenOverlapThreshold) continue;
+
+        const amountDiff = ep.typicalAmount > 0
+            ? Math.abs(detected.typicalAmount - ep.typicalAmount) / ep.typicalAmount
+            : 1;
+        if (amountDiff > amountToleranceRatio) continue;
+
+        // Cadence must be compatible (same or one is "irregular")
+        const cadenceCompat =
+            detected.cadence === ep.cadence ||
+            detected.cadence === "irregular" ||
+            ep.cadence === "irregular";
+        if (!cadenceCompat) continue;
+
+        overlapCandidates.push({
+            id: ep.id,
+            displayName: ep.displayName,
+            typicalAmount: ep.typicalAmount,
+            cadence: ep.cadence,
+            tokenOverlap: Math.round(overlap * 100) / 100,
+            amountDiff: Math.round(amountDiff * 100) / 100,
+        });
+    }
+
+    if (overlapCandidates.length > 0) {
+        return { classification: "ambiguous_overlap", overlapCandidates };
+    }
+
+    // ── Step 3: No match ──────────────────────────────────────────────────
+    return { classification: "genuinely_new" };
+}
+

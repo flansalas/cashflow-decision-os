@@ -487,7 +487,13 @@ export function computeForecast(input: ForecastInput): ForecastResult {
     }
 
     // ─── Add Payroll Assumption to recurring outflows ──────────────────
-    if (input.assumptions.payrollAllInAmount && input.assumptions.payrollNextDate) {
+    // Guard: suppress synthetic payroll if an explicit included payroll RecurringPattern
+    // already exists. Prevents double-counting when a payroll pattern was created from
+    // bank transactions AND a payroll assumption is configured.
+    const payrollAlreadyCoveredByPattern = input.recurring.some(
+        r => r.isIncluded && r.direction === "outflow" && r.category === "payroll"
+    );
+    if (input.assumptions.payrollAllInAmount && input.assumptions.payrollNextDate && !payrollAlreadyCoveredByPattern) {
         let d = new Date(input.assumptions.payrollNextDate);
         const amount = input.assumptions.payrollAllInAmount;
         const cadence = input.assumptions.payrollCadence || "biweekly";
@@ -531,7 +537,12 @@ export function computeForecast(input: ForecastInput): ForecastResult {
     }
 
     // ─── Add Rent Assumption to recurring outflows ─────────────────────
-    if (input.assumptions.rentMonthlyAmount && input.assumptions.rentDayOfMonth) {
+    // Guard: suppress synthetic rent if an explicit included rent RecurringPattern
+    // already exists. Prevents double-counting.
+    const rentAlreadyCoveredByPattern = input.recurring.some(
+        r => r.isIncluded && r.direction === "outflow" && r.category === "rent"
+    );
+    if (input.assumptions.rentMonthlyAmount && input.assumptions.rentDayOfMonth && !rentAlreadyCoveredByPattern) {
         const amount = input.assumptions.rentMonthlyAmount;
         const day = input.assumptions.rentDayOfMonth;
         const endDate = addWeeks(currentMonday, 13);
@@ -744,8 +755,13 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         const outflowMultiplier = spendFade * (2 - safetyMargin);
 
         // ── Stage 1 & 2: Pipeline-Aware AI Baseline (Inflow) ──
+        // Include invoice, recurring, AND manual inflows in M1 coverage.
+        // A known manual expected inflow represents the same economic event that M1
+        // statistically captures — it should reduce the residual, not stack on top.
+        // (Payroll/rent/recurring are already excluded from M1 history and appear via
+        //  their own sourceTypes, not "manual", so no double-deduction risk.)
         const scheduledInflowSum = inflowBreakdown
-            .filter(i => i.sourceType === "invoice" || i.sourceType === "recurring")
+            .filter(i => i.sourceType === "invoice" || i.sourceType === "recurring" || i.sourceType === "manual")
             .reduce((s, i) => s + i.amount, 0);
 
         let inflowGap = 0;
@@ -906,9 +922,17 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         }
 
         // ── Stage 1 & 2: Pipeline-Aware AI Baseline (Outflow) ──
+        // Include manual outflows in M1 variable outflow coverage.
+        // A known manual variable outflow represents a specific economic event that M1
+        // statistically represents — including it prevents double-counting.
+        // Payroll, recurring, and assumption items are already excluded from M1 historical
+        // preparation (baseline-shared.ts strips them), so they remain excluded here too.
         const scheduledVariableOutflowSum = outflowBreakdown
             .filter(i => {
-                if (["payroll", "recurring", "assumption", "manual"].includes(i.sourceType)) return false;
+                // Exclude items that were already removed from M1 history:
+                if (["payroll", "recurring", "assumption"].includes(i.sourceType)) return false;
+                // Include bills (AP) and manual entries — both represent variable spend
+                // that overlaps with M1 statistical history.
                 return true;
             })
             .reduce((s, i) => s + i.amount, 0);
