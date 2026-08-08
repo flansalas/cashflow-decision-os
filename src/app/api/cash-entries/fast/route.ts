@@ -4,6 +4,7 @@ import prisma from "@/db/prisma";
 import { v4 as uuidv4 } from "uuid";
 import { resolveTenant } from "@/lib/tenant";
 import { proposeReconciliations } from "@/services/ai-reconciliation";
+import { waitUntil } from "@vercel/functions";
 
 function getMondayUTC(d: Date): Date {
     const day = d.getUTCDay();
@@ -113,13 +114,13 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // Trigger AI background proposer
+    // Trigger AI background proposer safely
     try {
-        const { waitUntil } = require("@vercel/functions");
         waitUntil(proposeReconciliations(tenantId).catch((err: any) => console.error("AI Reconciliation failed:", err)));
     } catch (e) {
-        // Fallback for non-vercel envs
-        proposeReconciliations(tenantId).catch((err: any) => console.error("AI Reconciliation failed:", err));
+        console.error("Failed to schedule AI Reconciliation via waitUntil:", e);
+        // Fallback for non-vercel envs or error
+        proposeReconciliations(tenantId).catch((err: any) => console.error("AI Reconciliation failed (fallback):", err));
     }
 
     return NextResponse.json({

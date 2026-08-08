@@ -6,6 +6,8 @@ import { createImportBatch } from "@/services/payment-memory";
 import { triggerEvaluation, processEvaluationJobs } from "@/services/evaluation-job-worker";
 
 import { resolveTenant } from "@/lib/tenant";
+import { waitUntil } from "@vercel/functions";
+import { buildAndCacheBaseline } from "@/services/baseline-snapshot";
 
 interface NormalizedBankRow {
     date: string | null;
@@ -293,18 +295,24 @@ export async function POST(req: NextRequest) {
         // Bust the baseline cache FIRST so the 24-hour guard doesn't block the rebuild.
         // Then rebuild fresh from all available bank history.
         prisma.baselineSnapshot.deleteMany({ where: { companyId } }).catch(() => {});
-        import("@/services/baseline-snapshot").then(({ buildAndCacheBaseline }) => {
-            const { waitUntil } = require("@vercel/functions");
+        try {
             waitUntil(buildAndCacheBaseline(companyId).catch(err => {
                 console.error("Async baseline cache failed after upload:", err);
             }));
-        });
+        } catch (e) {
+            console.error("Failed to schedule baseline cache via waitUntil:", e);
+            buildAndCacheBaseline(companyId).catch(err => console.error("Async baseline cache failed (fallback):", err));
+        }
         
         // Asynchronously start the worker to process the pending job
-        const { waitUntil } = require("@vercel/functions");
-        waitUntil(processEvaluationJobs(companyId).catch(err => {
-            console.error("Worker processing failed after upload:", err);
-        }));
+        try {
+            waitUntil(processEvaluationJobs(companyId).catch(err => {
+                console.error("Worker processing failed after upload:", err);
+            }));
+        } catch (e) {
+            console.error("Failed to schedule evaluation jobs via waitUntil:", e);
+            processEvaluationJobs(companyId).catch(err => console.error("Worker processing failed (fallback):", err));
+        }
 
         return NextResponse.json({
             ok: true,

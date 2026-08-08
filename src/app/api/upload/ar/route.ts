@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { resolveTenant } from "@/lib/tenant";
+import { waitUntil } from "@vercel/functions";
+import { proposeReconciliations } from "@/services/ai-reconciliation";
 
 interface NormalizedARRow {
     customerName: string;
@@ -105,14 +107,12 @@ export async function POST(req: NextRequest) {
         } else {
             await prisma.companyNote.create({ data: { companyId, noteText } });
         }
-        // Trigger AI background proposer
+        // Trigger AI background proposer safely
         try {
-            const { waitUntil } = require("@vercel/functions");
-            const { proposeReconciliations } = require("@/services/ai-reconciliation");
             waitUntil(proposeReconciliations(companyId).catch((err: any) => console.error("AI Reconciliation failed:", err)));
         } catch (e) {
-            const { proposeReconciliations } = require("@/services/ai-reconciliation");
-            proposeReconciliations(companyId).catch((err: any) => console.error("AI Reconciliation failed:", err));
+            console.error("Failed to schedule AI Reconciliation via waitUntil:", e);
+            proposeReconciliations(companyId).catch((err: any) => console.error("AI Reconciliation failed (fallback):", err));
         }
 
         return NextResponse.json({
