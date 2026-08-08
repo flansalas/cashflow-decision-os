@@ -146,6 +146,22 @@ export async function buildAndCacheBaseline(companyId: string) {
         updatePayload.modelIdentifier = aiBaseline.modelIdentifier;
         
         updatePayload.aiGeneratedAt = new Date();
+    } else {
+        // AI failed (e.g. exception thrown). Neutralize to prevent stale factors remaining economically active.
+        updatePayload.aiInflowFactorsJson = JSON.stringify(new Array(13).fill(1.0));
+        updatePayload.aiOutflowFactorsJson = JSON.stringify(new Array(13).fill(1.0));
+        updatePayload.aiInflowExplanationsJson = JSON.stringify(new Array(13).fill("AI Error: Generation failed. Fallback to deterministic."));
+        updatePayload.aiOutflowExplanationsJson = JSON.stringify(new Array(13).fill("AI Error: Generation failed. Fallback to deterministic."));
+        updatePayload.aiReasoningLogJson = "AI Generation Failed: Fallback to deterministic baseline.";
+        
+        updatePayload.weeklyInflowCoverageJson = JSON.stringify(new Array(13).fill(0));
+        updatePayload.weeklyOutflowCoverageJson = JSON.stringify(new Array(13).fill(0));
+        updatePayload.evidenceStateJson = JSON.stringify(new Array(13).fill("UNKNOWN_INFLOW"));
+        updatePayload.rawAiResponseJson = "{}";
+        updatePayload.promptVersionHash = "v1.0.0-fallback";
+        updatePayload.modelIdentifier = "none";
+        
+        // We do NOT update aiGeneratedAt to preserve accurate audit metadata of the last *successful* generation
     }
 
     // Save BaselineSnapshot

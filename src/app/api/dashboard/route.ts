@@ -12,6 +12,7 @@ import { computeVarianceMultipliers } from "@/services/variance";
 import { computeCOGSCorrelation } from "@/services/cogs-correlation";
 import { computeTypicalDelayWeeks } from "@/services/payment-memory";
 import { computeExpectedPaymentDate, parsePaymentCurve, getMonday, addDays } from "@/services/forecast";
+import { assembleForecastData } from "@/services/forecast-assembly";
 import { resolveTenant } from "@/lib/tenant";
 import type { BusinessCashState } from "@/domain/types";
 
@@ -49,6 +50,7 @@ export async function GET(req: NextRequest) {
             cashFlowEntries,
             varianceLedger,
             customerPaymentObs,
+            cachedBaseline,
         ] = await Promise.all([
             prisma.cashSnapshot.findFirst({ where: { companyId: cid }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] }),
             prisma.cashAdjustment.findMany({ where: { companyId: cid } }),
@@ -77,6 +79,9 @@ export async function GET(req: NextRequest) {
             prisma.customerPaymentObservation.findMany({
                 where: { companyId: cid },
                 select: { customerName: true, daysEarlyOrLate: true },
+            }),
+            prisma.baselineSnapshot.findUnique({
+                where: { companyId: cid }
             }),
         ]);
 
@@ -183,67 +188,31 @@ export async function GET(req: NextRequest) {
             projectionSafetyMargin: 1.0,
         };
 
-        const cachedBaseline = await prisma.baselineSnapshot.findUnique({
-            where: { companyId: cid }
-        });
+        // ── Canonical Forecast Assembly ──────────────────────────────────
+        // (Replacing duplicate dashboard assembly logic)
+        const {
+            input: forecastInput,
+            forecastResult: forecast,
+            organicForecast,
+            baseline,
+            invoices,
+            bills
+        } = await assembleForecastData(cid);
 
-        const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-        const now = Date.now();
-        const isCacheValid = cachedBaseline && (now - cachedBaseline.updatedAt.getTime() < CACHE_TTL_MS);
-
-        let baseline: BaselineResult;
-
-        if (isCacheValid) {
-            baseline = {
-                variableInflowWeekly: cachedBaseline.variableInflowWeekly,
-                variableOutflowWeekly: cachedBaseline.variableOutflowWeekly,
-                variableInflowBand: cachedBaseline.variableInflowBand,
-                variableOutflowBand: cachedBaseline.variableOutflowBand,
-                conservativeInflowWeekly: cachedBaseline.conservativeInflowWeekly,
-                conservativeOutflowWeekly: cachedBaseline.conservativeOutflowWeekly,
-                weeklyBuckets: JSON.parse(cachedBaseline.weeklyBucketsJson),
-                hasSufficientHistory: cachedBaseline.hasSufficientHistory,
-                baselineConfidenceTier: cachedBaseline.baselineConfidenceTier as any,
-                inflowCadence: parseInt(cachedBaseline.inflowCadence || "1", 10),
-                outflowCadence: parseInt(cachedBaseline.outflowCadence || "1", 10),
-                weeksAnalyzed: 0,
-                computedFrom: "bank_tx",
-                note: "Loaded from cache",
-                methodNote: "Cached",
-            };
-        } else {
-            // Compute baseline from bank transactions
-            const bankTxsForBaseline: BankTxForBaseline[] = bankTxs.map(tx => ({
-                amount: tx.amount,
-                date: tx.txDate,
-                merchantKey: tx.description ?? "",
-            }));
-
-            const patternsForBaseline: RecurringPatternForBaseline[] = recurringPatternsRaw.map(rp => ({
-                merchantKey: rp.merchantKey ?? rp.displayName,
-                direction: rp.direction,
-                category: rp.category,
-                isIncluded: rp.isIncluded,
-                typicalAmount: rp.typicalAmount,
-                amountStdDev: rp.amountStdDev,
-        cadence: rp.cadence as any,
-    }));
-
-            baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate, {
-                payrollAllInAmount: assumptions.payrollAllInAmount,
-                payrollNextDate: assumptions.payrollNextDate,
-                payrollCadence: assumptions.payrollCadence,
-                rentMonthlyAmount: assumptions.rentMonthlyAmount,
-                rentDayOfMonth: assumptions.rentDayOfMonth,
-            });
-
-            // Fire-and-forget: update cache in background
-            import("@/services/baseline-snapshot").then(({ buildAndCacheBaseline }) => {
-                waitUntil(buildAndCacheBaseline(cid).catch(err => console.error("Async baseline cache failed:", err)));
-            });
+        const overridesByTarget = new Map<string, typeof overrides>();
+        for (const ov of overrides) {
+            if (ov.targetId) {
+                if (!overridesByTarget.has(ov.targetId)) overridesByTarget.set(ov.targetId, []);
+                overridesByTarget.get(ov.targetId)!.push(ov);
+            }
         }
 
         const hasBankBaseline = baseline.hasSufficientHistory;
+
+        const multipliers = computeVarianceMultipliers(varianceLedger);
+        let varianceMultiplier = multipliers.outflow;
+        let varianceMultiplierIn = multipliers.inflow;
+
         const cogsCorrelation = computeCOGSCorrelation(baseline.weeklyBuckets);
         // DEBUG: log baseline stats so we can verify projection activation
         console.log("[baseline-debug]", {
@@ -259,306 +228,7 @@ export async function GET(req: NextRequest) {
             note: baseline.note,
         });
 
-        // ── Apply Macro-Memory Variance Multipliers (8-week recency-weighted) ─
-        //
-        // Weighting formula:
-        //   The N observations are ordered from most recent (index 0) to oldest.
-        //   Weight for observation i = 2^(N-1-i), giving a geometric decay.
-        //   So with 8 observations: weights = [128, 64, 32, 16, 8, 4, 2, 1]
-        //   This means the most recent week carries 128x the weight of the oldest.
-        //
-        //   Before computing the weighted mean, each variancePct is clipped at
-        //   ±75% to prevent a single abnormal week from dominating the multiplier.
-        //   (e.g., an equipment purchase that triples outflows one week)
-        //
-        //   When fewer than 8 observations exist, the weighting still applies to
-        //   however many observations are available. With 1 observation, only that
-        //   observation is used (weight = 1). With 4: weights = [8, 4, 2, 1].
-        //
-        //   The resulting multiplier is bounded to [0.5, 2.0] as a sanity rail.
 
-        const multipliers = computeVarianceMultipliers(varianceLedger);
-        let varianceMultiplier = multipliers.outflow;
-        let varianceMultiplierIn = multipliers.inflow;
-
-        // We used to mutate baseline directly here, but that corrupts QA checks.
-        // We now apply the multipliers inline when building the forecast inputs.
-
-        // ── Build customer/vendor lookup ────────────────────────────────
-        const customerMap = new Map(customerProfiles.map(c => [c.customerName, c]));
-        const vendorMap = new Map(vendorProfiles.map(v => [v.vendorName, v]));
-
-        const obsByCustomer = new Map<string, Array<{ daysEarlyOrLate: number }>>();
-        for (const obs of customerPaymentObs) {
-            if (!obsByCustomer.has(obs.customerName)) obsByCustomer.set(obs.customerName, []);
-            obsByCustomer.get(obs.customerName)!.push(obs);
-        }
-
-        // ── Apply overrides to invoices ────────────────────────────────
-        const overridesByTarget = new Map<string, typeof overrides>();
-        for (const ov of overrides) {
-            if (ov.targetId) {
-                if (!overridesByTarget.has(ov.targetId)) overridesByTarget.set(ov.targetId, []);
-                overridesByTarget.get(ov.targetId)!.push(ov);
-            }
-        }
-
-        const invoices: ForecastInvoice[] = invoicesRaw.map(inv => {
-            const cp = customerMap.get(inv.customerName);
-            const ovs = overridesByTarget.get(inv.id) || [];
-
-            let markedPaid = false;
-            let overrideExpectedDate: Date | null = null;
-            let overrideAmount: number | null = null;
-            let partialPayment: number | null = null;
-
-            let isExcluded = false;
-
-            for (const ov of ovs) {
-                if (ov.type === "mark_paid") markedPaid = true;
-                if (ov.type === "exclude") isExcluded = true;
-                if (ov.type === "set_expected_payment_date" && ov.effectiveDate) overrideExpectedDate = ov.effectiveDate;
-                if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
-                if (ov.type === "partial_payment" && ov.amount != null) partialPayment = ov.amount;
-            }
-
-            if (isExcluded) return null;
-
-            return {
-                id: inv.id,
-                customerName: inv.customerName,
-                invoiceNo: inv.invoiceNo,
-                amountOpen: inv.amountOpen,
-                invoiceDate: inv.invoiceDate,
-                dueDate: inv.dueDate,
-                daysPastDue: inv.daysPastDue,
-                status: inv.status,
-                metaJson: inv.metaJson,
-                typicalDelayWeeks: cp?.typicalDelayWeeks ?? computeTypicalDelayWeeks(obsByCustomer.get(inv.customerName) || []),
-                riskTag: cp?.riskTag,
-                overrideExpectedDate,
-                overrideAmount,
-                markedPaid,
-                partialPayment,
-            };
-        }).filter((inv): inv is NonNullable<typeof inv> => inv !== null);
-
-        const bills: ForecastBill[] = billsRaw.map(bill => {
-            const vp = vendorMap.get(bill.vendorName);
-            const ovs = overridesByTarget.get(bill.id) || [];
-
-            let markedPaid = false;
-            let overrideDueDate: Date | null = null;
-            let overrideAmount: number | null = null;
-
-            let isExcluded = false;
-
-            for (const ov of ovs) {
-                if (ov.type === "mark_paid") markedPaid = true;
-                if (ov.type === "exclude") isExcluded = true;
-                if (ov.type === "delay_due_date" && ov.effectiveDate) overrideDueDate = ov.effectiveDate;
-                if (ov.type === "set_bill_due_date" && ov.effectiveDate) overrideDueDate = ov.effectiveDate;
-                if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
-            }
-
-            if (isExcluded) return null;
-
-            return {
-                id: bill.id,
-                vendorName: bill.vendorName,
-                billNo: bill.billNo,
-                amountOpen: bill.amountOpen,
-                billDate: bill.billDate,
-                dueDate: bill.dueDate,
-                daysPastDue: bill.daysPastDue,
-                status: bill.status,
-                criticality: vp?.criticality,
-                overrideDueDate,
-                overrideAmount,
-                markedPaid,
-            };
-        }).filter((bill): bill is NonNullable<typeof bill> => bill !== null);
-
-        // Build a map of patternId -> skipDates from active skip_recurring_occurrence overrides
-        const skipDatesByPattern = new Map<string, string[]>();
-        for (const ov of overrides) {
-            if ((ov.type === "skip_recurring_occurrence" || ov.type === "modify_recurring_occurrence") && ov.targetId && ov.effectiveDate) {
-                if (!skipDatesByPattern.has(ov.targetId)) skipDatesByPattern.set(ov.targetId, []);
-                skipDatesByPattern.get(ov.targetId)!.push(ov.effectiveDate.toISOString().slice(0, 10));
-            }
-        }
-
-        const recurring: ForecastRecurring[] = recurringPatternsRaw.map(rp => ({
-            id: rp.id,
-            direction: rp.direction as "inflow" | "outflow",
-            displayName: rp.displayName,
-            typicalAmount: rp.typicalAmount,
-            amountStdDev: rp.amountStdDev,
-            cadence: rp.cadence,
-            nextExpectedDate: rp.nextExpectedDate,
-            confidence: rp.confidence as "high" | "med" | "low",
-            category: rp.category,
-            isIncluded: rp.isIncluded,
-            isCritical: rp.isCritical,
-            status: rp.status,
-            origin: rp.origin,
-            description: rp.description,
-            skipDates: skipDatesByPattern.get(rp.id) ?? [],
-        }));
-
-        // Build one-time outflows from rescheduled/modified recurring items
-        const oneTimeOutflows = overrides
-            .filter(ov => (ov.type === "add_one_time_outflow" || ov.type === "modify_recurring_occurrence") && ov.targetId && ov.effectiveDate && ov.amount != null)
-            .map(ov => {
-                let displayName = ov.type === "modify_recurring_occurrence" ? "Modified Amount" : "Rescheduled Amount";
-                let sourceWeekStart = null;
-                
-                if (ov.metaJson?.startsWith("recurring:")) {
-                    const parts = ov.metaJson.split("|from:");
-                    displayName = parts[0].replace("recurring:", "");
-                    sourceWeekStart = parts[1] || null;
-                } else if (ov.metaJson) {
-                    try {
-                        const parsed = JSON.parse(ov.metaJson);
-                        if (parsed.displayName) displayName = parsed.displayName;
-                    } catch (e) {
-                        // ignore
-                    }
-                }
-
-                return {
-                    patternId: ov.targetId!,
-                    displayName,
-                    amount: ov.amount!,
-                    weekStart: ov.effectiveDate!,
-                    sourceWeekStart,
-                };
-            });
-
-        // ── Cash calculations ──────────────────────────────────────────
-        const bankBalance = cashSnapshot.bankBalance;
-        const pastAdjustments = cashAdjustments.filter(a => a.origin === "system");
-        const futureAdjustments = cashAdjustments.filter(a => a.origin === "user");
-
-        const adjustmentsTotal = pastAdjustments.reduce((sum, a) => sum + a.amount, 0);
-        const adjustedOpeningCash = bankBalance + adjustmentsTotal;
-
-        // ── Compute forecast ───────────────────────────────────────────
-        const totalOpenAR = invoicesRaw.reduce((s, i) => s + i.amountOpen, 0);
-        const isARHeavy = totalOpenAR > (baseline.variableInflowWeekly || 0);
-
-        const forecastInput: ForecastInput = {
-            adjustedOpeningCash,
-            bankBalance,
-            adjustmentsTotal,
-            asOfDate: cashSnapshot.asOfDate,
-            invoices,
-            bills,
-            recurring,
-            assumptions: {
-                bufferMin: assumptions.bufferMin,
-                fixedWeeklyOutflow: assumptions.fixedWeeklyOutflow,
-                payrollCadence: assumptions.payrollCadence,
-                payrollAllInAmount: assumptions.payrollAllInAmount,
-                payrollNextDate: assumptions.payrollNextDate,
-                rentMonthlyAmount: assumptions.rentMonthlyAmount,
-                rentDayOfMonth: assumptions.rentDayOfMonth,
-                paymentCurveJson: assumptions.paymentCurveJson,
-                highRiskAgingDays: assumptions.highRiskAgingDays,
-                projectionSafetyMargin: assumptions.projectionSafetyMargin,
-            },
-            hasBankBaseline,
-            baselineConfidenceTier: baseline.baselineConfidenceTier,
-            variableOutflowWeekly: baseline.variableOutflowWeekly * varianceMultiplier,
-            variableOutflowBand: baseline.variableOutflowBand,
-            baselineInflowWeekly: baseline.variableInflowWeekly * varianceMultiplierIn,
-            baselineInflowBand: baseline.variableInflowBand,
-            baselineInflowCadence: baseline.inflowCadence,
-            baselineOutflowCadence: baseline.outflowCadence,
-            cashMarginRatio: cogsCorrelation.cashMarginRatio,
-            cogsLagWeeks: cogsCorrelation.cogsLagWeeks,
-            isARHeavy,
-            oneTimeOutflows,
-            aiReasoningLog: cachedBaseline?.aiReasoningLogJson ?? undefined,
-            aiInflowFactors: cachedBaseline?.aiInflowFactorsJson ? JSON.parse(cachedBaseline.aiInflowFactorsJson) : undefined,
-            aiOutflowFactors: cachedBaseline?.aiOutflowFactorsJson ? JSON.parse(cachedBaseline.aiOutflowFactorsJson) : undefined,
-            aiInflowExplanations: cachedBaseline?.aiInflowExplanationsJson ? JSON.parse(cachedBaseline.aiInflowExplanationsJson) : undefined,
-            aiOutflowExplanations: cachedBaseline?.aiOutflowExplanationsJson ? JSON.parse(cachedBaseline.aiOutflowExplanationsJson) : undefined,
-            cashFlowEntries: [
-                ...cashFlowEntries.map((e: any) => ({
-                    categoryId: e.categoryId,
-                    categoryName: e.category.name,
-                    direction: e.category.direction as "inflow" | "outflow",
-                    label: e.label,
-                    amount: e.amount,
-                    targetDate: e.targetDate,
-                })),
-                ...futureAdjustments.map(a => ({
-                    categoryId: "custom",
-                    categoryName: a.type,
-                    direction: a.amount >= 0 ? ("inflow" as const) : ("outflow" as const),
-                    label: a.note || a.type,
-                    amount: Math.abs(a.amount),
-                    targetDate: a.effectiveDate,
-                    sourceId: a.id,
-                }))
-            ]
-        };
-
-        const forecast = computeForecast(forecastInput);
-
-        const organicInvoices: ForecastInvoice[] = invoicesRaw.map(inv => {
-            const cp = customerMap.get(inv.customerName);
-            const ovs = overridesByTarget.get(inv.id) || [];
-            let markedPaid = false, overrideAmount: number | null = null, partialPayment: number | null = null, isExcluded = false;
-            for (const ov of ovs) {
-                if (ov.type === "mark_paid") markedPaid = true;
-                if (ov.type === "exclude") isExcluded = true;
-                if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
-                if (ov.type === "partial_payment" && ov.amount != null) partialPayment = ov.amount;
-            }
-            if (isExcluded) return null;
-            return {
-                id: inv.id, customerName: inv.customerName, invoiceNo: inv.invoiceNo, amountOpen: inv.amountOpen, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, daysPastDue: inv.daysPastDue, status: inv.status, metaJson: inv.metaJson, typicalDelayWeeks: cp?.typicalDelayWeeks, riskTag: cp?.riskTag, overrideExpectedDate: null, overrideAmount, markedPaid, partialPayment,
-            };
-        }).filter((inv): inv is NonNullable<typeof inv> => inv !== null);
-
-        const organicBills: ForecastBill[] = billsRaw.map(bill => {
-            const vp = vendorMap.get(bill.vendorName);
-            const ovs = overridesByTarget.get(bill.id) || [];
-            let markedPaid = false, overrideAmount: number | null = null, isExcluded = false;
-            for (const ov of ovs) {
-                if (ov.type === "mark_paid") markedPaid = true;
-                if (ov.type === "exclude") isExcluded = true;
-                if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
-            }
-            if (isExcluded) return null;
-            return {
-                id: bill.id, vendorName: bill.vendorName, billNo: bill.billNo, amountOpen: bill.amountOpen, billDate: bill.billDate, dueDate: bill.dueDate, daysPastDue: bill.daysPastDue, status: bill.status, criticality: vp?.criticality, overrideDueDate: null, overrideAmount, markedPaid,
-            };
-        }).filter((bill): bill is NonNullable<typeof bill> => bill !== null);
-
-        const organicRecurring: ForecastRecurring[] = recurringPatternsRaw.map(rp => ({
-            id: rp.id, direction: rp.direction as "inflow" | "outflow", displayName: rp.displayName, typicalAmount: rp.typicalAmount, amountStdDev: rp.amountStdDev, cadence: rp.cadence, nextExpectedDate: rp.nextExpectedDate, confidence: rp.confidence as "high" | "med" | "low", category: rp.category, isIncluded: rp.isIncluded, isCritical: rp.isCritical, status: rp.status, origin: rp.origin,
-            skipDates: []
-        })).filter(rp => rp.isIncluded);
-        for (const r of organicRecurring) {
-            const ovs = overridesByTarget.get(r.id) || [];
-            const adj = ovs.find(o => o.type === "adjust_amount");
-            if (adj && adj.amount != null) {
-                r.typicalAmount = adj.amount;
-            }
-        }
-
-        const organicInput: ForecastInput = {
-            ...forecastInput,
-            invoices: organicInvoices,
-            bills: organicBills,
-            recurring: organicRecurring,
-            oneTimeOutflows: []
-        };
-
-        const organicForecast = computeForecast(organicInput);
 
         // ── QA / Anomalies / Confidence ────────────────────────────────
         const payrollPattern = recurringPatternsRaw.find(
@@ -797,9 +467,9 @@ export async function GET(req: NextRequest) {
             company: { id: company.id, name: company.name, isDemo: company.isDemo },
             businessCashState,
             cash: {
-                bankBalance,
-                adjustmentsTotal,
-                adjustedOpeningCash,
+                bankBalance: forecastInput.bankBalance,
+                adjustmentsTotal: forecastInput.adjustmentsTotal,
+                adjustedOpeningCash: forecastInput.adjustedOpeningCash,
                 asOfDate: cashSnapshot.asOfDate,
                 adjustments: cashAdjustments.map(a => ({
                     id: a.id, type: a.type, amount: a.amount, note: a.note, description: a.description, date: a.effectiveDate, status: a.status, origin: a.origin
