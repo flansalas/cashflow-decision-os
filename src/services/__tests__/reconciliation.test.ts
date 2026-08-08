@@ -96,7 +96,7 @@ describe('Reconciliation Deduplication Logic', () => {
         const { input } = await assembleForecastData('cid');
         
         // deductFrom: source -> adj_25k yields, amount = 0 (omitted)
-        expect(input.cashFlowEntries.length).toBe(0);
+        expect(input.cashFlowEntries?.length).toBe(0);
         expect(input.invoices).toEqual([
             expect.objectContaining({ id: "inv_25k", amountOpen: 25000 })
         ]);

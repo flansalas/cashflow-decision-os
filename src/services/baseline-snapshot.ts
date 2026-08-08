@@ -1,17 +1,12 @@
 import prisma from "@/db/prisma";
 import { computeBaseline, BankTxForBaseline, RecurringPatternForBaseline } from "./baseline";
 import { computeAIBaseline } from "./ai-baseline";
-
+import { getCanonicalBaselineInputs } from "./baseline-fetch";
 export async function buildAndCacheBaseline(companyId: string) {
-    const bankTxs = await prisma.bankTransaction.findMany({
-        where: { companyId },
-        select: { amount: true, txDate: true, description: true, direction: true, internalTransferStatus: true },
-        orderBy: { txDate: "asc" }
-    });
-
-    const recurringPatternsRaw = await prisma.recurringPattern.findMany({
-        where: { companyId, status: "active" },
-    });
+    const { bankTxsRaw, recurringPatternsRaw, bankTxsForBaseline, patternsForBaseline } = await getCanonicalBaselineInputs(companyId);
+    
+    // We will use bankTxsRaw for the DSO/DPO calculation below
+    const bankTxs = bankTxsRaw;
 
     const cashSnapshot = await prisma.cashSnapshot.findFirst({
         where: { companyId },
@@ -69,28 +64,6 @@ export async function buildAndCacheBaseline(companyId: string) {
         rentMonthlyAmount: null,
         rentDayOfMonth: null,
     };
-
-    const bankTxsForBaseline: BankTxForBaseline[] = bankTxs.map(tx => ({
-        // BankTransaction stores amount as a positive absolute value + direction field.
-        // BankTxForBaseline (baseline-shared.ts line 71) uses signed amounts:
-        //   amount >= 0  → inflow, amount < 0 → outflow
-        // We must re-apply the sign here so the baseline computes outflow correctly.
-        // Confirmed internal transfers (resolved) are excluded — they inflate both
-        // inflow and outflow totals and would double-count real operating cash.
-        amount: tx.internalTransferStatus === 'resolved' ? 0 : (tx.direction === 'outflow' ? -tx.amount : tx.amount),
-        date: tx.txDate,
-        merchantKey: tx.description ?? "",
-    }));
-
-    const patternsForBaseline: RecurringPatternForBaseline[] = recurringPatternsRaw.map(rp => ({
-        merchantKey: rp.merchantKey ?? rp.displayName,
-        direction: rp.direction,
-        category: rp.category,
-        isIncluded: rp.isIncluded,
-        typicalAmount: rp.typicalAmount,
-        amountStdDev: rp.amountStdDev,
-        cadence: rp.cadence as any,
-    }));
 
     const asOfDate = cashSnapshot?.asOfDate ?? new Date();
 

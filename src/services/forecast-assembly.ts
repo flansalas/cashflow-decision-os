@@ -1,6 +1,7 @@
 import prisma from "@/db/prisma";
 import { computeForecast, type ForecastInput, type ForecastInvoice, type ForecastBill, type ForecastRecurring } from "@/services/forecast";
 import { computeBaseline, type BankTxForBaseline, type RecurringPatternForBaseline } from "@/services/baseline";
+import { getCanonicalBaselineInputs } from "@/services/baseline-fetch";
 import { computeTypicalDelayWeeks } from "@/services/payment-memory";
 import { computeCOGSCorrelation } from "@/services/cogs-correlation";
 import { computeVarianceMultipliers } from "@/services/variance";
@@ -14,9 +15,7 @@ export async function assembleForecastData(companyId: string) {
         customerProfiles,
         vendorProfiles,
         assumptionRaw,
-        recurringPatternsRaw,
         overrides,
-        bankTxs,
         companyNotes,
         cashFlowCategories,
         cashFlowEntries,
@@ -31,15 +30,7 @@ export async function assembleForecastData(companyId: string) {
         prisma.customerProfile.findMany({ where: { companyId } }),
         prisma.vendorProfile.findMany({ where: { companyId } }),
         prisma.assumption.findFirst({ where: { companyId } }),
-        prisma.recurringPattern.findMany({ where: { companyId } }),
         prisma.override.findMany({ where: { companyId, status: "active" }, orderBy: { createdAt: "desc" } }),
-        prisma.bankTransaction.findMany({
-            where: {
-                companyId,
-                txDate: { gte: new Date(Date.now() - 365 * 86_400_000) },
-            },
-            select: { amount: true, txDate: true, description: true, direction: true },
-        }),
         prisma.companyNote.findMany({ where: { companyId } }),
         prisma.cashFlowCategory.findMany({ where: { companyId }, orderBy: [{ direction: "asc" }, { sortOrder: "asc" }, { name: "asc" }] }),
         prisma.cashFlowEntry.findMany({ where: { companyId }, include: { category: true } }),
@@ -61,6 +52,8 @@ export async function assembleForecastData(companyId: string) {
         throw new Error("No cash snapshot found");
     }
 
+    const { recurringPatternsRaw, bankTxsForBaseline, patternsForBaseline } = await getCanonicalBaselineInputs(companyId);
+
     const assumptions = assumptionRaw ?? {
         bufferMin: 10000,
         fixedWeeklyOutflow: 0,
@@ -73,22 +66,6 @@ export async function assembleForecastData(companyId: string) {
         highRiskAgingDays: 61,
         projectionSafetyMargin: 1.0,
     };
-
-    const bankTxsForBaseline: BankTxForBaseline[] = bankTxs.map(tx => ({
-        amount: tx.direction === "inflow" ? tx.amount : -tx.amount,
-        date: tx.txDate,
-        merchantKey: tx.description ?? "",
-    }));
-
-    const patternsForBaseline: RecurringPatternForBaseline[] = recurringPatternsRaw.map(rp => ({
-        merchantKey: rp.merchantKey ?? rp.displayName,
-        direction: rp.direction,
-        category: rp.category,
-        isIncluded: rp.isIncluded,
-        typicalAmount: rp.typicalAmount,
-        amountStdDev: rp.amountStdDev,
-        cadence: rp.cadence as any,
-    }));
 
     const baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate, {
         payrollAllInAmount: assumptions.payrollAllInAmount,

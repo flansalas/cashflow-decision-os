@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
 import { v4 as uuidv4 } from "uuid";
 import { resolveTenant } from "@/lib/tenant";
+import { proposeReconciliations } from "@/services/ai-reconciliation";
 
 function getMondayUTC(d: Date): Date {
     const day = d.getUTCDay();
@@ -115,11 +116,9 @@ export async function POST(req: NextRequest) {
     // Trigger AI background proposer
     try {
         const { waitUntil } = require("@vercel/functions");
-        const { proposeReconciliations } = require("@/services/ai-reconciliation");
         waitUntil(proposeReconciliations(tenantId).catch((err: any) => console.error("AI Reconciliation failed:", err)));
     } catch (e) {
         // Fallback for non-vercel envs
-        const { proposeReconciliations } = require("@/services/ai-reconciliation");
         proposeReconciliations(tenantId).catch((err: any) => console.error("AI Reconciliation failed:", err));
     }
 
