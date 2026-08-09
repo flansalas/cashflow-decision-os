@@ -102,17 +102,46 @@ export async function assembleForecastData(companyId: string) {
     }
 
     const deductions = new Map<string, number>();
+    const reconciledRecordIds = new Set<string>();
+    const operatingReconciledRecordIds = new Set<string>();
+
+    const opCategories = new Set(["cogs", "payroll", "rent", "utilities", "materials", "contractors", "software", "marketing", "insurance", "office", "travel", "meals", "legal", "accounting", "general", "operating", "uncategorized expense"]);
+    const isOperatingType = (type: string, id: string) => {
+        if (type === "invoice" || type === "bill") return true;
+        if (type === "cash_flow_entry") {
+            const entry = cashFlowEntries.find(e => e.id === id);
+            if (entry && opCategories.has(entry.category.name.toLowerCase())) return true;
+        }
+        return false;
+    };
+    
     for (const link of reconciliationLinks) {
         if (link.status !== "active") continue;
         const matchedAmount = Number(link.matchedAmount);
         if (matchedAmount <= 0) continue;
         
+        let validDeduction = false;
         if (link.deductFrom === "source") {
             deductions.set(link.sourceId, (deductions.get(link.sourceId) || 0) + matchedAmount);
+            validDeduction = true;
         } else if (link.deductFrom === "target") {
             deductions.set(link.targetId, (deductions.get(link.targetId) || 0) + matchedAmount);
+            validDeduction = true;
         }
-        // If deductFrom is null/undefined or something else, it is unresolved and does not change forecast.
+        // If deductFrom is null/undefined, it is unresolved and does not change forecast.
+        
+        if (validDeduction) {
+            reconciledRecordIds.add(link.sourceId);
+            reconciledRecordIds.add(link.targetId);
+            
+            // Determine if counterpart is operating evidence
+            if (isOperatingType(link.targetType, link.targetId)) {
+                operatingReconciledRecordIds.add(link.sourceId);
+            }
+            if (isOperatingType(link.sourceType, link.sourceId)) {
+                operatingReconciledRecordIds.add(link.targetId);
+            }
+        }
     }
 
     const invoices: ForecastInvoice[] = invoicesRaw.map(inv => {
@@ -213,6 +242,8 @@ export async function assembleForecastData(companyId: string) {
             amount: remainder,
             targetDate: a.effectiveDate,
             sourceId: a.id,
+            hasActiveConfirmedReconciliation: reconciledRecordIds.has(a.id),
+            hasOperatingReconciliation: operatingReconciledRecordIds.has(a.id),
         };
     }).filter((a): a is NonNullable<typeof a> => a !== null);
 
@@ -228,6 +259,8 @@ export async function assembleForecastData(companyId: string) {
             amount: remainder,
             targetDate: e.targetDate,
             sourceId: e.id,
+            hasActiveConfirmedReconciliation: reconciledRecordIds.has(e.id),
+            hasOperatingReconciliation: operatingReconciledRecordIds.has(e.id),
         };
     }).filter((e): e is NonNullable<typeof e> => e !== null);
 

@@ -436,22 +436,73 @@ export function classifyDetectedPattern(
     // Only check patterns in the same direction as the detected pattern.
     const candidateSearchStr = `${detected.displayName} ${detected.merchantKey}`;
     const overlapCandidates: NonNullable<ClassificationResult["overlapCandidates"]> = [];
+    const genericTerms = new Set(['payment', 'loan', 'insurance', 'subscription', 'transfer', 'deposit', 'withdrawal', 'fee', 'ach', 'wire', 'check', 'credit', 'debit', 'bank', 'vehicle', 'equipment', 'truck', 'van', 'auto', 'car', 'llc', 'inc', 'co', 'corp']);
 
     for (const ep of existingPatterns) {
         if (ep.direction.toLowerCase() !== detectedDir) continue;
 
         const existingSearchStr = `${ep.displayName} ${ep.merchantKey}`;
         const overlap = tokenOverlapRatio(candidateSearchStr, existingSearchStr);
-        if (overlap < tokenOverlapThreshold) continue;
+        
+        // Split existing pattern into segments to check for group members
+        // Structural separators: comma, &, "and", +, semicolon
+        const isGrouped = /[,&+\;]|\band\b/i.test(ep.displayName) || /[,&+\;]|\band\b/i.test(ep.merchantKey);
+        let isGroupMember = false;
+
+        if (isGrouped) {
+            const displaySegments = ep.displayName.split(/[,&+\;]|\band\b/i).map(s => s.trim()).filter(s => s.length > 0);
+            const keySegments = ep.merchantKey.split(/[,&+\;]|\band\b/i).map(s => s.trim()).filter(s => s.length > 0);
+            
+            // To be safe, we can check each display segment + its corresponding key segment, or just check them all.
+            // Let's just check them all independently. A member segment should match if either its display or key form matches.
+            const segments = [...displaySegments, ...keySegments];
+            const detToks = significantTokens(candidateSearchStr);
+            
+            for (const segment of segments) {
+                const segToks = significantTokens(segment);
+                if (segToks.size === 0 || detToks.size === 0) continue;
+
+                let commonTokens = 0;
+                let hasStrongIdentifier = false;
+
+                for (const t of detToks) {
+                    if (segToks.has(t)) {
+                        commonTokens++;
+                        if (/\d/.test(t) && !genericTerms.has(t)) {
+                            hasStrongIdentifier = true;
+                        }
+                    }
+                }
+
+                const asymCoverage = commonTokens / detToks.size;
+                if (asymCoverage >= 0.5) {
+                    if (asymCoverage === 1.0 || commonTokens >= 2 || hasStrongIdentifier) {
+                        isGroupMember = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // For group members, amount difference is ignored.
+        // For symmetric matches, overlap must be >= tokenOverlapThreshold
+        if (!isGroupMember && overlap < tokenOverlapThreshold) continue;
 
         const amountDiff = ep.typicalAmount > 0
             ? Math.abs(detected.typicalAmount - ep.typicalAmount) / ep.typicalAmount
             : 1;
 
-        // Grouped commitment protection: If there is strong textual evidence (tokenOverlap >= 0.66),
-        // we flag it as an ambiguous_overlap even if the amount is wildly different,
-        // because it could be a named component of an existing grouped commitment.
-        const isStrongTextualEvidence = overlap >= 0.66;
+        const isStrongTextualEvidence = isGrouped ? isGroupMember : (overlap >= 0.66);
+        console.log("DEBUG CLASSIFY:", { 
+            detected: detected.displayName, 
+            ep: ep.displayName, 
+            isGrouped, 
+            isGroupMember, 
+            overlap, 
+            amountDiff, 
+            amountToleranceRatio, 
+            isStrongTextualEvidence 
+        });
         if (amountDiff > amountToleranceRatio && !isStrongTextualEvidence) continue;
 
         // Cadence must be compatible (same or one is "irregular")
@@ -461,14 +512,16 @@ export function classifyDetectedPattern(
             ep.cadence === "irregular";
         if (!cadenceCompat) continue;
 
+        // If it survives to here, it's a semantic overlap candidate!
         overlapCandidates.push({
             id: ep.id,
             displayName: ep.displayName,
             typicalAmount: ep.typicalAmount,
             cadence: ep.cadence,
-            tokenOverlap: Math.round(overlap * 100) / 100,
+            tokenOverlap: Math.round((isGroupMember ? 1.0 : overlap) * 100) / 100,
             amountDiff: Math.round(amountDiff * 100) / 100,
-        });
+            debug: { isGrouped, isGroupMember, isStrongTextualEvidence },
+        } as any);
     }
 
     if (overlapCandidates.length > 0) {

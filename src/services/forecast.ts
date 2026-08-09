@@ -106,7 +106,7 @@ export interface ForecastInput {
     /** One-time outflows from rescheduled recurring items: { patternId, displayName, amount, weekStart, sourceWeekStart } */
     oneTimeOutflows?: Array<{ patternId: string; displayName: string; amount: number; weekStart: Date; sourceWeekStart?: string | null }>;
     /** Manual cash flow entries from the Cash Adjustments screen */
-    cashFlowEntries?: Array<{ categoryId: string; categoryName: string; direction: "inflow" | "outflow"; label: string; amount: number; targetDate: Date; sourceId?: string }>;
+    cashFlowEntries?: Array<{ categoryId: string; categoryName: string; direction: "inflow" | "outflow"; label: string; amount: number; targetDate: Date; sourceId?: string; hasActiveConfirmedReconciliation?: boolean; hasOperatingReconciliation?: boolean }>;
     
     // AI Baseline Features
     aiReasoningLog?: string;
@@ -736,7 +736,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 sourceId: entry.sourceId,
                 confidence: "high",
                 section: `Cat: ${entry.categoryName}`,
-                metadata: { categoryName: entry.categoryName }
+                metadata: { categoryName: entry.categoryName, hasActiveConfirmedReconciliation: entry.hasActiveConfirmedReconciliation, hasOperatingReconciliation: entry.hasOperatingReconciliation }
             });
         }
 
@@ -913,7 +913,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 sourceId: entry.sourceId,
                 confidence: "high",
                 section: `Cat: ${entry.categoryName}`,
-                metadata: { categoryName: entry.categoryName }
+                metadata: { categoryName: entry.categoryName, hasActiveConfirmedReconciliation: entry.hasActiveConfirmedReconciliation, hasOperatingReconciliation: entry.hasOperatingReconciliation }
             });
         }
 
@@ -951,7 +951,18 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                     if (["taxes", "loan", "asset_sale", "funding", "equity", "debt", "one-time"].includes(cat)) {
                         return false;
                     }
-                    return true;
+
+                    // Operating categories that overlap with M1
+                    if (["cogs", "payroll", "rent", "utilities", "materials", "contractors", "software", "marketing", "insurance", "office", "travel", "meals", "legal", "accounting", "general", "operating", "uncategorized expense"].includes(cat)) {
+                        return true;
+                    }
+
+                    // Unknown/uncategorized fallback: only consume if explicitly reconciled to operating source
+                    if (i.metadata?.hasOperatingReconciliation) {
+                        return true;
+                    }
+
+                    return false;
                 }
                 
                 // Include bills (AP) and manual entries — both represent variable spend
