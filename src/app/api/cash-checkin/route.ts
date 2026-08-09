@@ -101,9 +101,14 @@ export async function POST(req: NextRequest) {
             // For v0.1, we replace all adjustments with the new list provided during the roll ritual
             await tx.cashAdjustment.deleteMany({ where: { companyId } });
 
-            if (adjustments.length > 0) {
+            const validAdjustments = adjustments.filter((a: any) => {
+                const allowedTypes = ["uncleared_check", "pending_deposit", "other"];
+                return allowedTypes.includes(a.type);
+            });
+
+            if (validAdjustments.length > 0) {
                 await tx.cashAdjustment.createMany({
-                    data: adjustments.map(a => ({
+                    data: validAdjustments.map((a: any) => ({
                         companyId,
                         type: a.type,
                         amount: a.amount,

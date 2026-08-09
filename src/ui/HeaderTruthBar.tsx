@@ -415,7 +415,7 @@ export function HeaderTruthBar({
                                 onClick={() => setEditBalanceOpen(!editBalanceOpen)} 
                                 className="flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-widest bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-md transition-colors"
                             >
-                                ✎ Adjust Baseline
+                                ✎ Reconcile Starting Cash
                             </button>
                         </div>
                         

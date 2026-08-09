@@ -453,7 +453,7 @@ export function UpdateBalanceDialog({
                 <div className="space-y-4">
                     <div className="flex gap-3">
                         <div className="flex-1">
-                            <label className="text-xs uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-muted)" }}>Bank Statement Balance</label>
+                            <label className="text-xs uppercase tracking-wider block mb-1.5" style={{ color: "var(--text-muted)" }}>Total Cash Across All Active Accounts</label>
                             <div className="relative group/input">
                                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm pointer-events-none transition-colors" style={{ color: "var(--text-faint)" }}>$</span>
                                 <input id="update-bank-balance-input" type="text" inputMode="decimal"
@@ -472,7 +472,7 @@ export function UpdateBalanceDialog({
                     <div className="rounded-xl p-3 border space-y-1.5" style={{ background: "var(--bg-raised)", borderColor: "var(--border-subtle)" }}>
                         <p className="text-xs uppercase tracking-wider mb-2" style={{ color: "var(--text-faint)" }}>Breakdown</p>
                         <div className="flex justify-between text-sm">
-                            <span style={{ color: "var(--text-muted)" }}>Statement</span>
+                            <span style={{ color: "var(--text-muted)" }}>Total Banks</span>
                             <span className="font-financial" style={{ color: "var(--text-primary)" }}>{fmt(parsedBalance || 0)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
@@ -487,10 +487,10 @@ export function UpdateBalanceDialog({
                 </div>
 
                 <div className="space-y-3">
-                    <label className="text-xs uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>Outstanding Items</label>
+                    <label className="text-xs uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>Bank Reconciliation Adjustments</label>
                     <div className="max-h-[120px] overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
                         {adjustments.length === 0 ? (
-                            <p className="text-[11px] italic py-2" style={{ color: "var(--text-faint)" }}>No outstanding items.</p>
+                            <p className="text-[11px] italic py-2" style={{ color: "var(--text-faint)" }}>No reconciliation adjustments.</p>
                         ) : (
                             adjustments.map(a => (
                                 <div key={a.id} className="flex items-center justify-between border rounded-lg px-2.5 py-1.5 group" style={{ background: "var(--bg-raised)", borderColor: "var(--border-subtle)" }}>
@@ -512,7 +512,7 @@ export function UpdateBalanceDialog({
                             style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)", color: "var(--text-secondary)" }}>
                             <option value="uncleared_check">Check (–)</option>
                             <option value="pending_deposit">Deposit (+)</option>
-                            <option value="other">Other</option>
+                            <option value="other">Other Reconciliation Item</option>
                         </select>
                         <div className="w-[85px] relative">
                             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] pointer-events-none transition-colors" style={{ color: "var(--text-faint)" }}>$</span>
