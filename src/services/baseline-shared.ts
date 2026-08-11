@@ -77,7 +77,7 @@ export function prepareBaselineTransactions(
                 if (
                     assumptions.payrollAllInAmount &&
                     txDirection === "outflow" &&
-                    tx.accountName?.toLowerCase().includes("payroll")
+                    txCategory === "payroll"
                 ) {
                     matchesAssumption = true;
                 }
