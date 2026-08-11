@@ -24,15 +24,15 @@ describe('M1 Input Preparation (getCanonicalBaselineInputs)', () => {
     });
 
     it('always zeroes resolved internal transfers regardless of direction or stored sign', () => {
-        expect(normalizeBankTransactionAmount({ direction: 'outflow', amount: -500, internalTransferStatus: 'resolved' })).toBe(0);
-        expect(normalizeBankTransactionAmount({ direction: 'inflow', amount: 500, internalTransferStatus: 'resolved' })).toBe(0);
+        expect(normalizeBankTransactionAmount({ direction: 'outflow', amount: -500, internalTransferStatus: 'confirmed' })).toBe(0);
+        expect(normalizeBankTransactionAmount({ direction: 'inflow', amount: 500, internalTransferStatus: 'confirmed' })).toBe(0);
     });
 
     it('excludes confirmed internal transfers from M1 (resolved status)', async () => {
         const mockTxs = [
             { amount: 1000, txDate: new Date('2026-07-20'), description: 'Operating Income', direction: 'inflow', internalTransferStatus: null },
-            { amount: 500, txDate: new Date('2026-07-21'), description: 'Transfer to Savings', direction: 'outflow', internalTransferStatus: 'resolved' },
-            { amount: 500, txDate: new Date('2026-07-22'), description: 'Transfer from Checking', direction: 'inflow', internalTransferStatus: 'resolved' }
+            { amount: 500, txDate: new Date('2026-07-21'), description: 'Transfer to Savings', direction: 'outflow', internalTransferStatus: 'confirmed' },
+            { amount: 500, txDate: new Date('2026-07-22'), description: 'Transfer from Checking', direction: 'inflow', internalTransferStatus: 'confirmed' }
         ];
 
         vi.mocked(prisma.bankTransaction.findMany).mockResolvedValue(mockTxs as any);

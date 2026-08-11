@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { OnboardingWizard } from "@/ui/OnboardingWizard";
+import { AccountRoleManager } from "@/ui/AccountRoleManager";
 import { Settings2, ArrowLeft, Box } from "lucide-react";
 
 export default function SettingsPage() {
@@ -49,6 +50,7 @@ export default function SettingsPage() {
                         </div>
                     )}
                 </div>
+                {companyId && <AccountRoleManager companyId={companyId} />}
             </main>
         </div>
     );

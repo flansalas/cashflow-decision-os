@@ -168,6 +168,7 @@ model BankAccount {
   id                        String                      @id @default(uuid())
   companyId                 String
   name                      String?
+  role                      String                      @default("operating")
   isActive                  Boolean                     @default(true)
   createdAt                 DateTime                    @default(now())
   company                   Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)

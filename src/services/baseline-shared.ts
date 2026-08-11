@@ -36,26 +36,23 @@ export function prepareBaselineTransactions(
     const excludedPatterns = patterns
         .filter(p => p.isIncluded)
         .map(p => {
-            const isVolatile = ["utilities", "fuel", "taxes", "card_payment", "payroll"].includes(p.category);
-            const tolerance = isVolatile ? 0.5 : 0.2;
+            const isVolatile = ["utilities", "fuel", "taxes", "card_payment", "payroll"].includes(p.category || "");
+            const tolerance = isVolatile ? 0.35 : 0.15;
+            
             return {
-                merchantKey: (p.merchantKey || p.displayName || ""),
-                displayName: p.displayName || "",
-                direction: p.direction,
-                typicalAmount: p.typicalAmount,
-                amountStdDev: p.amountStdDev,
-                cadence: p.cadence,
+                ...p,
                 minAmount: p.minAmount || p.typicalAmount * (1 - tolerance),
                 maxAmount: p.maxAmount || p.typicalAmount * (1 + tolerance),
                 lastMatchedDate: null as Date | null
             };
         });
 
-    let lastPayrollMatchedDate: Date | null = null;
-    const weekBuckets: { inflow: number; outflow: number }[] = [];
+    const weekBuckets: Array<{ inflow: number; outflow: number }> = [];
     const weekStart0 = mondayBefore(asOfDate, weeksToAnalyze);
-    const dailyInflowSeries = new Array(weeksToAnalyze * 7).fill(0);
-    const dailyOutflowSeries = new Array(weeksToAnalyze * 7).fill(0);
+    const daySpan = weeksToAnalyze * 7;
+    const dailyInflowSeries = new Array(daySpan).fill(0);
+    const dailyOutflowSeries = new Array(daySpan).fill(0);
+    let lastPayrollMatchedDate: Date | null = null;
 
     for (let i = 0; i < weeksToAnalyze; i++) {
         const wStart = addWeeks(weekStart0, i);
@@ -77,36 +74,9 @@ export function prepareBaselineTransactions(
                 if (
                     assumptions.payrollAllInAmount &&
                     txDirection === "outflow" &&
-                    txCategory === "payroll"
+                    tx.accountRole === "payroll"
                 ) {
                     matchesAssumption = true;
-                }
-
-                if (
-                    !matchesAssumption &&
-                    assumptions.payrollAllInAmount &&
-                    assumptions.payrollNextDate &&
-                    txDirection === "outflow" &&
-                    absAmount >= assumptions.payrollAllInAmount * 0.5 &&
-                    absAmount <= assumptions.payrollAllInAmount * 1.5
-                ) {
-                    let canMatch = true;
-                    if (lastPayrollMatchedDate) {
-                        const daysSince = Math.abs(daysBetween(lastPayrollMatchedDate, tx.date));
-                        const cooldown = assumptions.payrollCadence === "weekly" ? 5 : assumptions.payrollCadence === "biweekly" ? 10 : 20;
-                        if (daysSince < cooldown) canMatch = false;
-                    }
-                    
-                    if (canMatch) {
-                        const daysDiff = Math.abs(daysBetween(tx.date, assumptions.payrollNextDate));
-                        const cadenceDays = assumptions.payrollCadence === "weekly" ? 7 : assumptions.payrollCadence === "biweekly" ? 14 : 30;
-                        const remainder = daysDiff % cadenceDays;
-                        const toleranceDays = cadenceDays === 7 ? 1 : 3;
-                        if (remainder <= toleranceDays || remainder >= cadenceDays - toleranceDays) {
-                            matchesAssumption = true;
-                            lastPayrollMatchedDate = tx.date;
-                        }
-                    }
                 }
 
                 if (

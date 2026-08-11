@@ -25,8 +25,8 @@ export interface DetectedPattern {
 // ─── Normalization ───────────────────────────────────────────────────────────
 
 // Strip common bank noise from descriptions to get a consistent merchant key
-export function normalizeDescription(raw: string): string {
-    let s = raw.trim().toUpperCase();
+export function normalizeDescription(raw: string | null | undefined): string {
+    let s = (raw || '').trim().toUpperCase();
 
     // Remove leading/trailing transaction IDs like "POS #3948", ref numbers, etc.
     // Remove trailing sequences of digits (transaction IDs)
@@ -229,7 +229,7 @@ export function detectPatterns(
 
 export interface RecurringMatchCandidate {
     merchantKey: string;
-    displayName: string;
+    displayName?: string;
     direction: string;
     typicalAmount: number;
     amountStdDev: number;

@@ -9,7 +9,7 @@ export type BankTransactionForNormalization = {
 
 /** Direction is authoritative; stored amount sign is not. */
 export function normalizeBankTransactionAmount(tx: BankTransactionForNormalization): number {
-    if (tx.internalTransferStatus === "resolved") return 0;
+    if (tx.internalTransferStatus === "resolved" || tx.internalTransferStatus === "confirmed") return 0;
 
     const magnitude = Math.abs(tx.amount);
     if (tx.direction === "outflow") return -magnitude;
@@ -26,7 +26,7 @@ export async function getCanonicalBaselineInputs(companyId: string) {
             description: true,
             direction: true,
             internalTransferStatus: true,
-            account: { select: { name: true } },
+            account: { select: { name: true, role: true } },
         },
         orderBy: { txDate: "asc" }
     });
@@ -42,6 +42,7 @@ export async function getCanonicalBaselineInputs(companyId: string) {
         date: tx.txDate,
         merchantKey: tx.description ?? "",
         accountName: tx.account?.name ?? null,
+        accountRole: tx.account?.role ?? "operating",
     }));
 
     const patternsForBaseline: RecurringPatternForBaseline[] = recurringPatternsRaw.map(rp => ({

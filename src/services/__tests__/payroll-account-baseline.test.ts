@@ -9,14 +9,12 @@ const assumptions = {
     rentDayOfMonth: null,
 };
 
-describe("Payroll account M1 input exclusion", () => {
-    it("excludes true split payroll debits while retaining unrelated bank fees in a Payroll account", () => {
+describe("Payroll account M1 input exclusion (Deterministic Role-based)", () => {
+    it("excludes outflows from an explicitly Payroll-role account when payroll assumption is active", () => {
         const result = prepareBaselineTransactions(
             [
-                { amount: -100, date: new Date("2026-08-07T00:00:00.000Z"), merchantKey: "ADP PAYROLL", accountName: "0070 UB - 3740 (Payroll)" },
-                { amount: -185.96, date: new Date("2026-08-07T00:00:00.000Z"), merchantKey: "ADP TAXES", accountName: "0070 UB - 3740 (Payroll)" },
-                { amount: -37, date: new Date("2026-08-07T00:00:00.000Z"), merchantKey: "Bank Fee", accountName: "0070 UB - 3740 (Payroll)" },
-                { amount: -500, date: new Date("2026-08-07T00:00:00.000Z"), merchantKey: "Operating supplier", accountName: "0050 UB - 0446 (Spending)" },
+                { amount: -54309, date: new Date("2026-08-07T00:00:00.000Z"), merchantKey: "PREAUTHORIZED ACH DEBIT", accountRole: "payroll" },
+                { amount: -37, date: new Date("2026-08-07T00:00:00.000Z"), merchantKey: "Bank Fee", accountRole: "payroll" },
             ],
             [],
             new Date("2026-08-10T00:00:00.000Z"),
@@ -24,7 +22,47 @@ describe("Payroll account M1 input exclusion", () => {
             2,
         );
 
-        // 500 (supplier) + 37 (bank fee) = 537
-        expect(result.weekBuckets.reduce((sum, week) => sum + week.outflow, 0)).toBe(537);
+        // Entire Payroll account is the cash envelope, so ALL outflows are excluded
+        expect(result.weekBuckets.reduce((sum, week) => sum + week.outflow, 0)).toBe(0);
+    });
+
+    it("retains the identical transaction from an Operating-role account", () => {
+        const result = prepareBaselineTransactions(
+            [
+                { amount: -54309, date: new Date("2026-08-07T00:00:00.000Z"), merchantKey: "PREAUTHORIZED ACH DEBIT", accountRole: "operating" },
+                { amount: -37, date: new Date("2026-08-07T00:00:00.000Z"), merchantKey: "Bank Fee", accountRole: "operating" },
+            ],
+            [],
+            new Date("2026-08-10T00:00:00.000Z"),
+            assumptions,
+            2,
+        );
+        expect(result.weekBuckets.reduce((sum, week) => sum + week.outflow, 0)).toBe(54346);
+    });
+
+    it("does not exclude anything merely by naming an Operating account 'Payroll Account'", () => {
+        const result = prepareBaselineTransactions(
+            [
+                { amount: -54309, date: new Date("2026-08-07T00:00:00.000Z"), merchantKey: "PREAUTHORIZED ACH DEBIT", accountName: "Payroll Account", accountRole: "operating" },
+            ],
+            [],
+            new Date("2026-08-10T00:00:00.000Z"),
+            assumptions,
+            2,
+        );
+        expect(result.weekBuckets.reduce((sum, week) => sum + week.outflow, 0)).toBe(54309);
+    });
+
+    it("does not silently remove Payroll-role account activity without an explicit payroll assumption", () => {
+        const result = prepareBaselineTransactions(
+            [
+                { amount: -54309, date: new Date("2026-08-07T00:00:00.000Z"), merchantKey: "PREAUTHORIZED ACH DEBIT", accountRole: "payroll" },
+            ],
+            [],
+            new Date("2026-08-10T00:00:00.000Z"),
+            undefined,
+            2,
+        );
+        expect(result.weekBuckets.reduce((sum, week) => sum + week.outflow, 0)).toBe(54309);
     });
 });
