@@ -76,6 +76,15 @@ export function prepareBaselineTransactions(
             if (assumptions) {
                 if (
                     assumptions.payrollAllInAmount &&
+                    txDirection === "outflow" &&
+                    tx.accountName?.toLowerCase().includes("payroll")
+                ) {
+                    matchesAssumption = true;
+                }
+
+                if (
+                    !matchesAssumption &&
+                    assumptions.payrollAllInAmount &&
                     assumptions.payrollNextDate &&
                     txDirection === "outflow" &&
                     absAmount >= assumptions.payrollAllInAmount * 0.5 &&

@@ -14,6 +14,7 @@ import { computeVarianceMultipliers } from "@/services/variance";
 import { computeCOGSCorrelation } from "@/services/cogs-correlation";
 import { computeTypicalDelayWeeks } from "@/services/payment-memory";
 import { resolveTenant } from "@/lib/tenant";
+import { normalizeBankTransactionAmount } from "@/services/baseline-fetch";
 
 export async function GET(req: NextRequest) {
     const companyId = await resolveTenant(req);
@@ -56,7 +57,14 @@ export async function GET(req: NextRequest) {
         // For baseline computation (mirrors dashboard API)
         prisma.bankTransaction.findMany({
             where: { companyId: cid, txDate: { gte: new Date(Date.now() - 365 * 86_400_000) } },
-            select: { amount: true, txDate: true, description: true, direction: true },
+            select: {
+                amount: true,
+                txDate: true,
+                description: true,
+                direction: true,
+                internalTransferStatus: true,
+                account: { select: { name: true } },
+            },
         }),
         // For manual cash flow entries (mirrors dashboard API)
         prisma.cashFlowEntry.findMany({ where: { companyId: cid }, include: { category: true } }),
@@ -395,9 +403,10 @@ export async function GET(req: NextRequest) {
     // This ensures the Ledger balance row tells the same story as the Dashboard
     // chart, table, and header — one pipeline, one source of truth.
     const bankTxsForBaseline: BankTxForBaseline[] = bankTxs.map(tx => ({
-        amount: tx.direction === "inflow" ? tx.amount : -tx.amount,
+        amount: normalizeBankTransactionAmount(tx),
         date: tx.txDate,
         merchantKey: tx.description ?? "",
+        accountName: tx.account?.name ?? null,
     }));
     const patternsForBaseline: RecurringPatternForBaseline[] = recurringPatternsRaw.map(rp => ({
         merchantKey: rp.merchantKey ?? rp.displayName,
@@ -520,7 +529,7 @@ export async function GET(req: NextRequest) {
         };
     });
 
-    const totalOpenAR = invoicesRaw.reduce((s, i) => s + i.amountOpen, 0);
+    const totalOpenAR = forecastInvoices.reduce((s, i) => s + i.amountOpen, 0);
     const isARHeavy = totalOpenAR > (baseline.conservativeInflowWeekly || 0);
 
     const cogsCorrelation = computeCOGSCorrelation(baseline.weeklyBuckets);

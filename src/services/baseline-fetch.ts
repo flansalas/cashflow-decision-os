@@ -1,10 +1,33 @@
 import prisma from "@/db/prisma";
 import type { BankTxForBaseline, RecurringPatternForBaseline } from "./baseline";
 
+export type BankTransactionForNormalization = {
+    amount: number;
+    direction: string;
+    internalTransferStatus?: string | null;
+};
+
+/** Direction is authoritative; stored amount sign is not. */
+export function normalizeBankTransactionAmount(tx: BankTransactionForNormalization): number {
+    if (tx.internalTransferStatus === "resolved") return 0;
+
+    const magnitude = Math.abs(tx.amount);
+    if (tx.direction === "outflow") return -magnitude;
+    if (tx.direction === "inflow") return magnitude;
+    return tx.amount;
+}
+
 export async function getCanonicalBaselineInputs(companyId: string) {
     const bankTxsRaw = await prisma.bankTransaction.findMany({
         where: { companyId },
-        select: { amount: true, txDate: true, description: true, direction: true, internalTransferStatus: true },
+        select: {
+            amount: true,
+            txDate: true,
+            description: true,
+            direction: true,
+            internalTransferStatus: true,
+            account: { select: { name: true } },
+        },
         orderBy: { txDate: "asc" }
     });
 
@@ -15,9 +38,10 @@ export async function getCanonicalBaselineInputs(companyId: string) {
     const bankTxsForBaseline: BankTxForBaseline[] = bankTxsRaw.map(tx => ({
         // Confirmed internal transfers (resolved) are excluded — they inflate both
         // inflow and outflow totals and would double-count real operating cash.
-        amount: tx.internalTransferStatus === 'resolved' ? 0 : (tx.direction === 'outflow' ? -tx.amount : tx.amount),
+        amount: normalizeBankTransactionAmount(tx),
         date: tx.txDate,
         merchantKey: tx.description ?? "",
+        accountName: tx.account?.name ?? null,
     }));
 
     const patternsForBaseline: RecurringPatternForBaseline[] = recurringPatternsRaw.map(rp => ({

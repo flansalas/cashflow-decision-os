@@ -15,6 +15,7 @@ import { computeExpectedPaymentDate, parsePaymentCurve, getMonday, addDays } fro
 import { assembleForecastData } from "@/services/forecast-assembly";
 import { resolveTenant } from "@/lib/tenant";
 import type { BusinessCashState } from "@/domain/types";
+import { buildManagerialVisibility, visibleBills, visibleInvoices } from "@/services/managerial-visibility";
 
 export const dynamic = 'force-dynamic';
 
@@ -206,6 +207,14 @@ export async function GET(req: NextRequest) {
                 overridesByTarget.get(ov.targetId)!.push(ov);
             }
         }
+        const visibility = buildManagerialVisibility(
+            overrides.filter(override => override.type === "exclude").map(override => ({
+                targetId: override.targetId,
+                targetType: override.targetType,
+            })),
+        );
+        const managerialInvoicesRaw = visibleInvoices(invoicesRaw, visibility);
+        const managerialBillsRaw = visibleBills(billsRaw, visibility);
 
         const hasBankBaseline = baseline.hasSufficientHistory;
 
@@ -236,7 +245,7 @@ export async function GET(req: NextRequest) {
         );
 
         const qaInput: QAInput = {
-            invoices: invoicesRaw.map(i => ({
+            invoices: managerialInvoicesRaw.map(i => ({
                 id: i.id,
                 customerName: i.customerName,
                 invoiceNo: i.invoiceNo,
@@ -245,7 +254,7 @@ export async function GET(req: NextRequest) {
                 dueDate: i.dueDate,
                 daysPastDue: i.daysPastDue,
             })),
-            bills: billsRaw.map(b => ({
+            bills: managerialBillsRaw.map(b => ({
                 id: b.id,
                 vendorName: b.vendorName,
                 billNo: b.billNo,
@@ -326,7 +335,7 @@ export async function GET(req: NextRequest) {
         const currentMonday = getMonday(today);
         const paymentCurve = parsePaymentCurve(assumptions.paymentCurveJson);
 
-        const overdueAP = billsRaw
+        const overdueAP = managerialBillsRaw
             .filter(bill => {
                 if (bill.status !== "open") return false;
                 const ovs = overridesByTarget.get(bill.id) || [];
@@ -358,7 +367,7 @@ export async function GET(req: NextRequest) {
                 kind: "ap" as const,
             }));
 
-        const overdueAR = invoicesRaw
+        const overdueAR = managerialInvoicesRaw
             .filter(inv => {
                 if (inv.status !== "open") return false;
                 const ovs = overridesByTarget.get(inv.id) || [];

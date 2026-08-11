@@ -7,6 +7,7 @@ import prisma from "@/db/prisma";
 import { v4 as uuidv4 } from "uuid";
 import { resolveForecastHashAfter } from "@/services/forecast-hash";
 import { recordCustomerPaymentObservation, recordVendorPaymentObservation, PaymentObservationSource, VendorObservationSource } from "@/services/payment-memory";
+import { restoreManagerialItem } from "@/services/managerial-visibility";
 
 const VALID_TYPES = [
     "partial_payment", "mark_paid", "delay_due_date",
@@ -50,6 +51,17 @@ export async function POST(req: NextRequest) {
     const targetType = rawTargetType === "invoice" ? "receivable_invoice" :
                        rawTargetType === "bill" ? "payable_bill" :
                        rawTargetType;
+
+    // Deliberately placing a hidden AR/AP item back into a weekly grid is an
+    // explicit restore. Preserve the source row and archive only its active
+    // visibility override before applying the new schedule.
+    const isWeeklyGridPlacement = type === "set_expected_payment_date" ||
+                                  type === "set_bill_due_date" ||
+                                  type === "delay_due_date";
+    if (targetId && isWeeklyGridPlacement &&
+        (targetType === "receivable_invoice" || targetType === "payable_bill")) {
+        await restoreManagerialItem(tenantId, targetId);
+    }
 
     // 1. Check for existing active overrides to prevent duplicates and find oldValue
     const existingOverrides = await prisma.override.findMany({

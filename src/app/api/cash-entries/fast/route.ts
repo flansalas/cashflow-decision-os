@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import { resolveTenant } from "@/lib/tenant";
 import { proposeReconciliations } from "@/services/ai-reconciliation";
 import { waitUntil } from "@vercel/functions";
+import { getManagerialVisibility } from "@/services/managerial-visibility";
 
 function getMondayUTC(d: Date): Date {
     const day = d.getUTCDay();
@@ -70,10 +71,11 @@ export async function POST(req: NextRequest) {
     // Check for pending matches (Exact dollar matching only, same direction, active AR/AP)
     let pendingMatch = null;
     let pendingLinkId = null;
+    const visibility = await getManagerialVisibility(tenantId);
 
     if (direction === "inflow") {
         const potentialInvoice = await prisma.receivableInvoice.findFirst({
-            where: { companyId: tenantId, amountOpen: amount, status: "open" }
+            where: { companyId: tenantId, amountOpen: amount, status: "open", id: { notIn: [...visibility.hiddenInvoiceIds] } }
         });
         if (potentialInvoice) {
             pendingMatch = {
@@ -85,7 +87,7 @@ export async function POST(req: NextRequest) {
         }
     } else {
         const potentialBill = await prisma.payableBill.findFirst({
-            where: { companyId: tenantId, amountOpen: amount, status: "open" }
+            where: { companyId: tenantId, amountOpen: amount, status: "open", id: { notIn: [...visibility.hiddenBillIds] } }
         });
         if (potentialBill) {
             pendingMatch = {

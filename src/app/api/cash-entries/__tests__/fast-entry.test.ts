@@ -26,6 +26,9 @@ vi.mock('@/db/prisma', () => ({
             create: vi.fn().mockImplementation(async (args) => args.data),
             findUnique: vi.fn(),
             update: vi.fn().mockImplementation(async (args) => args.data)
+        },
+        override: {
+            findMany: vi.fn().mockResolvedValue([])
         }
     }
 }));

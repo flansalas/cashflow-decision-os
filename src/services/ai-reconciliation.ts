@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import prisma from "@/db/prisma";
 import { validateReconciliationLink } from "./reconciliation";
 import { v4 as uuidv4 } from "uuid";
+import { getManagerialVisibility } from "./managerial-visibility";
 
 let openai: OpenAI | null = null;
 try {
@@ -67,12 +68,13 @@ export async function proposeReconciliations(companyId: string) {
     if (activeEntries.length === 0) return;
 
     // 2. Fetch active AR/AP candidates
+    const visibility = await getManagerialVisibility(companyId);
     const invoices = await prisma.receivableInvoice.findMany({
-        where: { companyId, status: "active", amountOpen: { gt: 0 } }
+        where: { companyId, status: "active", amountOpen: { gt: 0 }, id: { notIn: [...visibility.hiddenInvoiceIds] } }
     });
     
     const bills = await prisma.payableBill.findMany({
-        where: { companyId, status: "active", amountOpen: { gt: 0 } }
+        where: { companyId, status: "active", amountOpen: { gt: 0 }, id: { notIn: [...visibility.hiddenBillIds] } }
     });
 
     // 3. Process each entry

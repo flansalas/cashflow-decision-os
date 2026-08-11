@@ -3,6 +3,7 @@
 // Pure read-only analysis — 4 DB queries, no writes, no AI.
 
 import prisma from "@/db/prisma";
+import { getManagerialVisibility } from "./managerial-visibility";
 import type { WeekBreakdown, WeekBreakdownItem } from "@/domain/types";
 
 // ─── Output types ────────────────────────────────────────────────────────────
@@ -172,6 +173,7 @@ export async function computeVarianceDrivers(
     }
 
     // ── Collect IDs to batch-query ────────────────────────────────────────────
+    const visibility = await getManagerialVisibility(companyId);
     const invoiceIds = breakdown.inflows
         .filter(i => i.sourceType === "invoice" && i.sourceId)
         .map(i => i.sourceId as string);
@@ -180,10 +182,13 @@ export async function computeVarianceDrivers(
         .filter(o => o.sourceType === "bill" && o.sourceId)
         .map(o => o.sourceId as string);
 
+    const visibleInvoiceIds = invoiceIds.filter(id => !visibility.hiddenInvoiceIds.has(id));
+    const visibleBillIds = billIds.filter(id => !visibility.hiddenBillIds.has(id));
+
     // ── Query 4a: Batch load invoices ─────────────────────────────────────────
-    const invoiceRows = invoiceIds.length > 0
+    const invoiceRows = visibleInvoiceIds.length > 0
         ? await prisma.receivableInvoice.findMany({
-            where: { id: { in: invoiceIds } },
+            where: { companyId, id: { in: visibleInvoiceIds } },
             select: { id: true, status: true, amountOpen: true },
         })
         : [];
@@ -191,9 +196,9 @@ export async function computeVarianceDrivers(
     const invoiceMap = new Map(invoiceRows.map(r => [r.id, r]));
 
     // ── Query 4b: Batch load bills ────────────────────────────────────────────
-    const billRows = billIds.length > 0
+    const billRows = visibleBillIds.length > 0
         ? await prisma.payableBill.findMany({
-            where: { id: { in: billIds } },
+            where: { companyId, id: { in: visibleBillIds } },
             select: { id: true, status: true, amountOpen: true },
         })
         : [];
@@ -217,6 +222,7 @@ export async function computeVarianceDrivers(
 
     // ── Classify inflow items ─────────────────────────────────────────────────
     for (const item of breakdown.inflows) {
+        if (item.sourceType === "invoice" && item.sourceId && visibility.hiddenInvoiceIds.has(item.sourceId)) continue;
         const base: Omit<DriverItem, "currentAmount" | "currentStatus" | "impact"> = {
             label: item.label,
             sourceType: item.sourceType,
@@ -255,6 +261,7 @@ export async function computeVarianceDrivers(
 
     // ── Classify outflow items ────────────────────────────────────────────────
     for (const item of breakdown.outflows) {
+        if (item.sourceType === "bill" && item.sourceId && visibility.hiddenBillIds.has(item.sourceId)) continue;
         const base: Omit<DriverItem, "currentAmount" | "currentStatus" | "impact"> = {
             label: item.label,
             sourceType: item.sourceType,

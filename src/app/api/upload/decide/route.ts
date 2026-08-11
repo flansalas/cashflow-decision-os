@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
 import { resolveTenant } from "@/lib/tenant";
+import { getManagerialVisibility } from "@/services/managerial-visibility";
 
 export async function PATCH(req: NextRequest) {
     try {
@@ -74,7 +75,11 @@ export async function PATCH(req: NextRequest) {
                     return NextResponse.json({ error: "linkedRecordId is required for link_and_review" }, { status: 400 });
                 }
 
-                // Validate tenant ownership and correct entity type
+                // Validate tenant ownership, managerial visibility, and correct entity type
+                const visibility = await getManagerialVisibility(tenantId);
+                if (visibility.hiddenItemIds.has(linkedRecordId)) {
+                    return NextResponse.json({ error: "Hidden AR/AP items cannot be reconciliation candidates" }, { status: 400 });
+                }
                 if (row.importType === "ar") {
                     const invoice = await prisma.receivableInvoice.findFirst({ where: { id: linkedRecordId, companyId: tenantId } });
                     if (!invoice) return NextResponse.json({ error: "Invalid or cross-tenant linkedRecordId for AR" }, { status: 400 });

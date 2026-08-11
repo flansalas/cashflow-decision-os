@@ -2,6 +2,7 @@ import { prisma } from "@/db/prisma";
 import crypto from "crypto";
 import { getMonday } from "./forecast";
 import { isRecurringIdentityMatch } from "./detectPatterns";
+import { getManagerialVisibility } from "./managerial-visibility";
 
 export interface AttributionTarget {
     transactionId: string;
@@ -99,13 +100,15 @@ export async function runAttributionForWeek(
     
     // Pass 1: AR/AP Matches (Basic example logic for cautious deterministic matching based on exact amount and recent date)
     // For simplicity, we just stub this cautious matching. The exact AR/AP matching engine is complex.
-    const openInvoices = await prisma.receivableInvoice.findMany({
-        where: { companyId, status: "open" }
-    });
-
-    const openBills = await prisma.payableBill.findMany({
-        where: { companyId, status: "open" }
-    });
+    const visibility = await getManagerialVisibility(companyId);
+    const [openInvoices, openBills] = await Promise.all([
+        prisma.receivableInvoice.findMany({
+            where: { companyId, status: "open", id: { notIn: [...visibility.hiddenInvoiceIds] } }
+        }),
+        prisma.payableBill.findMany({
+            where: { companyId, status: "open", id: { notIn: [...visibility.hiddenBillIds] } }
+        }),
+    ]);
 
     for (const tx of transactions) {
         let remainingCents = Math.round(Math.abs(tx.amount) * 100);

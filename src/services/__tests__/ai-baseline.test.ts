@@ -40,6 +40,7 @@ describe('AI Baseline', () => {
         vi.spyOn(prisma.company, 'findUnique').mockResolvedValue({ id: 'c1', name: 'Test', isDemo: false, defaultBankAccountName: 'Test' } as any);
         vi.spyOn(prisma.receivableInvoice, 'findMany').mockResolvedValue([]);
         vi.spyOn(prisma.payableBill, 'findMany').mockResolvedValue([]);
+        vi.spyOn(prisma.override, 'findMany').mockResolvedValue([]);
         
         // We want to track what variance ledger returns, then verify it gets filtered
         vi.spyOn(prisma.baselineVarianceLedger, 'findMany').mockResolvedValue([

@@ -2,25 +2,26 @@ import prisma from "@/db/prisma";
 import { computeBaseline, BankTxForBaseline, RecurringPatternForBaseline } from "./baseline";
 import { computeAIBaseline } from "./ai-baseline";
 import { getCanonicalBaselineInputs } from "./baseline-fetch";
+import { getManagerialVisibility } from "./managerial-visibility";
 export async function buildAndCacheBaseline(companyId: string) {
     const { bankTxsRaw, recurringPatternsRaw, bankTxsForBaseline, patternsForBaseline } = await getCanonicalBaselineInputs(companyId);
     
     // We will use bankTxsRaw for the DSO/DPO calculation below
     const bankTxs = bankTxsRaw;
 
-    const cashSnapshot = await prisma.cashSnapshot.findFirst({
-        where: { companyId },
-        orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }],
-    });
-
-    const assumptionsRaw = await prisma.assumption.findFirst({
-        where: { companyId },
-    });
+    const [cashSnapshot, assumptionsRaw, visibility] = await Promise.all([
+        prisma.cashSnapshot.findFirst({
+            where: { companyId },
+            orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }],
+        }),
+        prisma.assumption.findFirst({ where: { companyId } }),
+        getManagerialVisibility(companyId),
+    ]);
 
     // --- Dynamic DSO Calculation ---
     // 1. Get total open AR
     const openInvoices = await prisma.receivableInvoice.findMany({
-        where: { companyId, status: "open" },
+        where: { companyId, status: "open", id: { notIn: [...visibility.hiddenInvoiceIds] } },
         select: { amountOpen: true }
     });
     const totalOpenAR = openInvoices.reduce((sum, inv) => sum + inv.amountOpen, 0);
@@ -31,7 +32,7 @@ export async function buildAndCacheBaseline(companyId: string) {
     
     const ninetyDayInflows = bankTxs
         .filter(tx => tx.direction === "inflow" && tx.txDate >= ninetyDaysAgo)
-        .reduce((sum, tx) => sum + tx.amount, 0);
+        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
     // 3. Calculate DSO and Inflow Delay Weeks
     const dso = (totalOpenAR / Math.max(1, ninetyDayInflows)) * 90;
@@ -40,7 +41,7 @@ export async function buildAndCacheBaseline(companyId: string) {
     // --- Dynamic DPO Calculation ---
     // 1. Get total open AP
     const openBills = await prisma.payableBill.findMany({
-        where: { companyId, status: "open" },
+        where: { companyId, status: "open", id: { notIn: [...visibility.hiddenBillIds] } },
         select: { amountOpen: true }
     });
     const totalOpenAP = openBills.reduce((sum, bill) => sum + bill.amountOpen, 0);
@@ -48,7 +49,7 @@ export async function buildAndCacheBaseline(companyId: string) {
     // 2. Get 90-day cash outflows
     const ninetyDayOutflows = bankTxs
         .filter(tx => tx.direction === "outflow" && tx.txDate >= ninetyDaysAgo)
-        .reduce((sum, tx) => sum + tx.amount, 0);
+        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
     // 3. Calculate DPO and Outflow Delay Weeks
     const dpo = (totalOpenAP / Math.max(1, ninetyDayOutflows)) * 90;

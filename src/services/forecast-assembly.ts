@@ -5,6 +5,7 @@ import { getCanonicalBaselineInputs } from "@/services/baseline-fetch";
 import { computeTypicalDelayWeeks } from "@/services/payment-memory";
 import { computeCOGSCorrelation } from "@/services/cogs-correlation";
 import { computeVarianceMultipliers } from "@/services/variance";
+import { buildManagerialVisibility, visibleBills, visibleInvoices } from "@/services/managerial-visibility";
 
 export async function assembleForecastData(companyId: string) {
     const [
@@ -101,6 +102,15 @@ export async function assembleForecastData(companyId: string) {
         }
     }
 
+    const visibility = buildManagerialVisibility(
+        overrides.filter(override => override.type === "exclude").map(override => ({
+            targetId: override.targetId,
+            targetType: override.targetType,
+        })),
+    );
+    const managerialInvoices = visibleInvoices(invoicesRaw, visibility);
+    const managerialBills = visibleBills(billsRaw, visibility);
+
     const deductions = new Map<string, number>();
     const reconciledRecordIds = new Set<string>();
     const operatingReconciledRecordIds = new Set<string>();
@@ -117,6 +127,7 @@ export async function assembleForecastData(companyId: string) {
     
     for (const link of reconciliationLinks) {
         if (link.status !== "active") continue;
+        if (visibility.hiddenItemIds.has(link.sourceId) || visibility.hiddenItemIds.has(link.targetId)) continue;
         const matchedAmount = Number(link.matchedAmount);
         if (matchedAmount <= 0) continue;
         
@@ -144,7 +155,7 @@ export async function assembleForecastData(companyId: string) {
         }
     }
 
-    const invoices: ForecastInvoice[] = invoicesRaw.map(inv => {
+    const invoices: ForecastInvoice[] = managerialInvoices.map(inv => {
         const cp = customerMap.get(inv.customerName);
         const ovs = overridesByTarget.get(inv.id) || [];
         let markedPaid = false, overrideExpectedDate: Date | null = null, overrideAmount: number | null = null, partialPayment: number | null = null, isExcluded = false;
@@ -164,7 +175,7 @@ export async function assembleForecastData(companyId: string) {
         };
     }).filter((inv): inv is NonNullable<typeof inv> => inv !== null);
 
-    const bills: ForecastBill[] = billsRaw.map(bill => {
+    const bills: ForecastBill[] = managerialBills.map(bill => {
         const vp = vendorMap.get(bill.vendorName);
         const ovs = overridesByTarget.get(bill.id) || [];
         let markedPaid = false, overrideDueDate: Date | null = null, overrideAmount: number | null = null, isExcluded = false;
@@ -227,7 +238,7 @@ export async function assembleForecastData(companyId: string) {
     const adjustmentsTotal = pastAdjustments.reduce((s, a) => s + a.amount, 0);
     const adjustedOpeningCash = bankBalance + adjustmentsTotal;
 
-    const totalOpenAR = invoicesRaw.reduce((s, i) => s + i.amountOpen, 0);
+    const totalOpenAR = managerialInvoices.reduce((s, i) => s + i.amountOpen, 0);
     const isARHeavy = totalOpenAR > (baseline.variableInflowWeekly || 0);
 
     const mappedFutureAdjustments = futureAdjustments.map(a => {
@@ -302,7 +313,7 @@ export async function assembleForecastData(companyId: string) {
 
     const forecastResult = computeForecast(input);
 
-    const organicInvoices: ForecastInvoice[] = invoicesRaw.map(inv => {
+    const organicInvoices: ForecastInvoice[] = managerialInvoices.map(inv => {
         const cp = customerMap.get(inv.customerName);
         const ovs = overridesByTarget.get(inv.id) || [];
         let markedPaid = false, overrideAmount: number | null = null, partialPayment: number | null = null, isExcluded = false;
@@ -318,7 +329,7 @@ export async function assembleForecastData(companyId: string) {
         };
     }).filter((inv): inv is NonNullable<typeof inv> => inv !== null);
 
-    const organicBills: ForecastBill[] = billsRaw.map(bill => {
+    const organicBills: ForecastBill[] = managerialBills.map(bill => {
         const vp = vendorMap.get(bill.vendorName);
         const ovs = overridesByTarget.get(bill.id) || [];
         let markedPaid = false, overrideAmount: number | null = null, isExcluded = false;

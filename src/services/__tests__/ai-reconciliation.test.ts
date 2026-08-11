@@ -46,6 +46,9 @@ vi.mock('@/db/prisma', () => ({
             findMany: vi.fn().mockResolvedValue([]),
             findFirst: vi.fn().mockResolvedValue(null),
             create: vi.fn()
+        },
+        override: {
+            findMany: vi.fn().mockResolvedValue([])
         }
     }
 }));

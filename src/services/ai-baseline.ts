@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import prisma from "@/db/prisma";
 import { BaselineVarianceLedger, Company } from "@prisma/client";
 import { endOfWeek, startOfWeek, subWeeks } from "date-fns";
+import { getManagerialVisibility } from "./managerial-visibility";
 
 let openai: OpenAI | null = null;
 try {
@@ -54,13 +55,14 @@ export async function computeAIBaseline(
         // 1. Fetch Pipeline context to calculate coverage 
         const currentMonday = startOfWeek(new Date(), { weekStartsOn: 1 });
         const endDate = endOfWeek(subWeeks(currentMonday, -12)); // 13 weeks out
+        const visibility = await getManagerialVisibility(companyId);
 
         const invoices = await prisma.receivableInvoice.findMany({
-            where: { companyId, dueDate: { gte: currentMonday, lte: endDate } }
+            where: { companyId, id: { notIn: [...visibility.hiddenInvoiceIds] }, dueDate: { gte: currentMonday, lte: endDate } }
         });
         
         const bills = await prisma.payableBill.findMany({
-            where: { companyId, dueDate: { gte: currentMonday, lte: endDate } }
+            where: { companyId, id: { notIn: [...visibility.hiddenBillIds] }, dueDate: { gte: currentMonday, lte: endDate } }
         });
 
         const weeklyInflowCoverage = new Array(13).fill(0);

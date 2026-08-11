@@ -62,6 +62,28 @@ describe('Reconciliation Deduplication Logic', () => {
         mockFindManyObs.mockResolvedValue([]);
     });
 
+    it('hidden AR/AP has zero forecast and reconciliation authority', async () => {
+        mockFindManyInvoices.mockResolvedValue([
+            { id: "inv_hidden", customerName: "LHI", invoiceNo: "LHI-1", amountOpen: 25000, status: "open", dueDate: new Date("2026-08-07") }
+        ]);
+        mockFindManyAdjustments.mockResolvedValue([
+            { id: "adj_25k", amount: 25000, origin: "user", effectiveDate: new Date("2026-08-05") }
+        ]);
+        mockFindManyOverrides.mockResolvedValue([
+            { id: "hide_inv", type: "exclude", status: "active", targetId: "inv_hidden", targetType: "receivable_invoice" }
+        ]);
+        mockFindManyLinks.mockResolvedValue([
+            { status: "active", sourceId: "adj_25k", targetId: "inv_hidden", matchedAmount: 25000, deductFrom: "source" }
+        ]);
+
+        const { input } = await assembleForecastData('cid');
+
+        expect(input.invoices).toEqual([]);
+        expect(input.cashFlowEntries).toEqual([
+            expect.objectContaining({ sourceId: "adj_25k", amount: 25000 })
+        ]);
+    });
+
     it('1. explicit deductFrom="target" makes target yield, source retains amount', async () => {
         mockFindManyAdjustments.mockResolvedValue([
             { id: "adj_25k", amount: 25000, origin: "user", effectiveDate: new Date("2026-08-05") }

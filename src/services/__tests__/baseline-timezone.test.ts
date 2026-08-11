@@ -17,20 +17,20 @@ describe('Baseline Date Bucketing & Timezone Invariance', () => {
         const txs: BankTxForBaseline[] = [
             // Exact week boundaries
             // Week 0 starts 2026-07-13T00:00:00.000Z
-            { id: '1', date: new Date('2026-07-13T00:00:00.000Z'), amount: 100, merchantKey: 'w0_monday' }, // Included in Week 0
-            { id: '2', date: new Date('2026-07-19T00:00:00.000Z'), amount: 100, merchantKey: 'w0_sunday' }, // Included in Week 0
+            { date: new Date('2026-07-13T00:00:00.000Z'), amount: 100, merchantKey: 'w0_monday' }, // Included in Week 0
+            { date: new Date('2026-07-19T00:00:00.000Z'), amount: 100, merchantKey: 'w0_sunday' }, // Included in Week 0
             
             // Week 1 starts 2026-07-20T00:00:00.000Z
-            { id: '3', date: new Date('2026-07-20T00:00:00.000Z'), amount: 100, merchantKey: 'w1_monday' }, // Included in Week 1
-            { id: '4', date: new Date('2026-07-26T00:00:00.000Z'), amount: 100, merchantKey: 'w1_sunday' }, // Included in Week 1
+            { date: new Date('2026-07-20T00:00:00.000Z'), amount: 100, merchantKey: 'w1_monday' }, // Included in Week 1
+            { date: new Date('2026-07-26T00:00:00.000Z'), amount: 100, merchantKey: 'w1_sunday' }, // Included in Week 1
             
             // Outside bounds
-            { id: 'out1', date: new Date('2026-07-12T00:00:00.000Z'), amount: 100, merchantKey: 'out_sunday_before' }, // Excluded (before W0)
-            { id: 'out2', date: new Date('2026-07-27T00:00:00.000Z'), amount: 100, merchantKey: 'out_monday_after' }, // Excluded (after W1)
+            { date: new Date('2026-07-12T00:00:00.000Z'), amount: 100, merchantKey: 'out_sunday_before' }, // Excluded (before W0)
+            { date: new Date('2026-07-27T00:00:00.000Z'), amount: 100, merchantKey: 'out_monday_after' }, // Excluded (after W1)
             
             // Mid-week with time components
-            { id: '5', date: new Date('2026-07-20T12:00:00.000Z'), amount: 100, merchantKey: 'w1_monday_noon' }, // Included in Week 1
-            { id: '6', date: new Date('2026-07-26T23:59:59.999Z'), amount: 100, merchantKey: 'w1_sunday_end' }, // Included in Week 1
+            { date: new Date('2026-07-20T12:00:00.000Z'), amount: 100, merchantKey: 'w1_monday_noon' }, // Included in Week 1
+            { date: new Date('2026-07-26T23:59:59.999Z'), amount: 100, merchantKey: 'w1_sunday_end' }, // Included in Week 1
         ];
 
         return txs;
@@ -89,10 +89,10 @@ describe('Baseline Date Bucketing & Timezone Invariance', () => {
         // Add a recurring pattern match that should be excluded
         const patterns: RecurringPatternForBaseline[] = [
             {
-                id: 'p1',
                 merchantKey: 'w0_monday',
                 displayName: 'W0 Monday',
                 direction: 'inflow',
+                category: 'operating',
                 typicalAmount: 100,
                 amountStdDev: 0,
                 cadence: 'weekly',

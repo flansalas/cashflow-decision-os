@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/db/prisma";
 import { resolveTenant } from "@/lib/tenant";
+import { getManagerialVisibility } from "@/services/managerial-visibility";
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -18,9 +19,10 @@ export async function GET(req: NextRequest) {
     const amountQuery = isNumeric ? Number(q.replace(/[^0-9.]/g, "")) : null;
 
     const results = [];
+    const visibility = await getManagerialVisibility(companyId);
 
     // 1. Search AR (ReceivableInvoices)
-    const arQuery: any = { companyId };
+    const arQuery: any = { companyId, id: { notIn: [...visibility.hiddenInvoiceIds] } };
     if (amountQuery) {
         // search +/- 1%
         const min = amountQuery * 0.99;
@@ -48,7 +50,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 2. Search AP (PayableBills)
-    const apQuery: any = { companyId };
+    const apQuery: any = { companyId, id: { notIn: [...visibility.hiddenBillIds] } };
     if (amountQuery) {
         const min = amountQuery * 0.99;
         const max = amountQuery * 1.01;

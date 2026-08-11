@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import prisma from "@/db/prisma";
+import { getManagerialVisibility } from "./managerial-visibility";
 
 /**
  * Validates whether a proposed reconciliation link over-allocates either the source or target.
@@ -16,6 +17,11 @@ export async function validateReconciliationLink(
 ) {
     if (proposedAmount <= 0) {
         throw new Error("Proposed matched amount must be strictly positive");
+    }
+
+    const visibility = await getManagerialVisibility(companyId);
+    if (visibility.hiddenItemIds.has(sourceId) || visibility.hiddenItemIds.has(targetId)) {
+        throw new Error("Hidden AR/AP items cannot participate in reconciliation");
     }
 
     // 1. Fetch current available amounts for source and target

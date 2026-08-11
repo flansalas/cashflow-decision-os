@@ -280,6 +280,7 @@ describe("M1 residual outflow coverage — manual outflow reduces residual", () 
                 label: "Emergency Repair",
                 amount: 2_000,
                 targetDate: new Date("2026-08-12T00:00:00Z"),
+                hasOperatingReconciliation: true,
             }],
         });
         const resultWithManual = computeForecast(inputWithManual);

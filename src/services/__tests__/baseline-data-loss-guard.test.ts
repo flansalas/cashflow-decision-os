@@ -11,6 +11,7 @@ const { mockPrisma, mockComputeBaseline } = vi.hoisted(() => {
         assumption: { findFirst: vi.fn() },
         receivableInvoice: { findMany: vi.fn() },
         payableBill: { findMany: vi.fn() },
+        override: { findMany: vi.fn() },
         baselineSnapshot: {
             findUnique: vi.fn(),
             update: vi.fn(),
@@ -79,6 +80,7 @@ function resetPrismaMocks() {
     mockPrisma.assumption.findFirst.mockResolvedValue(null);
     mockPrisma.receivableInvoice.findMany.mockResolvedValue([]);
     mockPrisma.payableBill.findMany.mockResolvedValue([]);
+    mockPrisma.override.findMany.mockResolvedValue([]);
     mockPrisma.baselineSnapshot.findUnique.mockResolvedValue(null);
     mockPrisma.baselineSnapshot.update.mockResolvedValue({});
     mockPrisma.baselineSnapshot.upsert.mockResolvedValue({});
@@ -196,5 +198,26 @@ describe('baseline-snapshot data loss guard', () => {
 
         // Normal upsert path executes
         expect(mockPrisma.baselineSnapshot.upsert).toHaveBeenCalledTimes(1);
+    });
+
+    it('excludes hidden AR/AP from DSO and DPO inputs while retaining source rows', async () => {
+        mockPrisma.override.findMany.mockResolvedValue([
+            { targetId: 'inv-hidden', targetType: 'receivable_invoice' },
+            { targetId: 'bill-hidden', targetType: 'payable_bill' },
+        ]);
+        mockComputeBaseline.mockReturnValue(makeBaseline(true));
+
+        await buildAndCacheBaseline('company-123');
+
+        expect(mockPrisma.receivableInvoice.findMany).toHaveBeenCalledWith({
+            where: { companyId: 'company-123', status: 'open', id: { notIn: ['inv-hidden'] } },
+            select: { amountOpen: true },
+        });
+        expect(mockPrisma.payableBill.findMany).toHaveBeenCalledWith({
+            where: { companyId: 'company-123', status: 'open', id: { notIn: ['bill-hidden'] } },
+            select: { amountOpen: true },
+        });
+        expect(mockPrisma.receivableInvoice).not.toHaveProperty('deleteMany');
+        expect(mockPrisma.payableBill).not.toHaveProperty('deleteMany');
     });
 });

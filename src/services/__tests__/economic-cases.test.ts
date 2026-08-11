@@ -71,11 +71,8 @@ describe('Economic Cases', () => {
             bufferMin: 10000,
             fixedWeeklyOutflow: 0,
             payrollCadence: "biweekly",
-            projectionSafetyMargin: 1.0,
-            invoiceTypicalDelayDays: 0,
-            billTypicalDelayDays: 0,
-            startingCashOffset: 0
-        };
+            projectionSafetyMargin: 1.0
+        } as any;
 
         const f = computeForecast(input);
         
@@ -103,11 +100,8 @@ describe('Economic Cases', () => {
             bufferMin: 10000,
             fixedWeeklyOutflow: 0,
             payrollCadence: "biweekly",
-            projectionSafetyMargin: 1.0,
-            invoiceTypicalDelayDays: 0,
-            billTypicalDelayDays: 0,
-            startingCashOffset: 0
-        };
+            projectionSafetyMargin: 1.0
+        } as any;
         
         const f = computeForecast(input);
         
@@ -135,11 +129,8 @@ describe('Economic Cases', () => {
             bufferMin: 10000,
             fixedWeeklyOutflow: 0,
             payrollCadence: "biweekly",
-            projectionSafetyMargin: 1.0,
-            invoiceTypicalDelayDays: 0,
-            billTypicalDelayDays: 0,
-            startingCashOffset: 0
-        };
+            projectionSafetyMargin: 1.0
+        } as any;
         
         const f = computeForecast(input);
         
@@ -166,11 +157,8 @@ describe('Economic Cases', () => {
             bufferMin: 10000,
             fixedWeeklyOutflow: 0,
             payrollCadence: "biweekly",
-            projectionSafetyMargin: 1.0,
-            invoiceTypicalDelayDays: 0,
-            billTypicalDelayDays: 0,
-            startingCashOffset: 0
-        };
+            projectionSafetyMargin: 1.0
+        } as any;
         
         const f = computeForecast(input);
         

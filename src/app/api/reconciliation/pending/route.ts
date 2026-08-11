@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
 import { resolveTenant } from "@/lib/tenant";
+import { getManagerialVisibility } from "@/services/managerial-visibility";
 
 export async function GET(req: NextRequest) {
     const authResult = await auth();
@@ -10,23 +11,30 @@ export async function GET(req: NextRequest) {
     const tenantId = await resolveTenant(req);
     if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const pendingLinks = await prisma.reconciliationLink.findMany({
-        where: {
-            companyId: tenantId,
-            deductFrom: null,
-            status: "active"
-        },
-        orderBy: {
-            matchedAmount: "desc"
-        },
-        take: 1
-    });
+    const [pendingLinks, visibility] = await Promise.all([
+        prisma.reconciliationLink.findMany({
+            where: {
+                companyId: tenantId,
+                deductFrom: null,
+                status: "active"
+            },
+            orderBy: {
+                matchedAmount: "desc"
+            },
+        }),
+        getManagerialVisibility(tenantId),
+    ]);
 
-    if (pendingLinks.length === 0) {
+    const visibleLink = pendingLinks.find(link =>
+        !visibility.hiddenItemIds.has(link.sourceId) &&
+        !visibility.hiddenItemIds.has(link.targetId)
+    );
+
+    if (!visibleLink) {
         return NextResponse.json({ pendingMatch: null });
     }
 
-    const link = pendingLinks[0];
+    const link = visibleLink;
     let label = "Unknown";
     let type = link.targetType;
     let amount = Number(link.matchedAmount);

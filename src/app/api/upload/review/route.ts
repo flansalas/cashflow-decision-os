@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
+import { getManagerialVisibility } from "@/services/managerial-visibility";
 import { resolveTenant } from "@/lib/tenant";
 
 export async function GET(req: NextRequest) {
@@ -92,6 +93,7 @@ export async function GET(req: NextRequest) {
             reviewStatus
         };
 
+        const visibility = await getManagerialVisibility(tenantId);
         const rowPreview = await Promise.all(stagedRows.map(async (r) => {
             let matchBasis = null;
             if (r.conflictType !== "new" && r.conflictType !== "invalid") {
@@ -108,13 +110,13 @@ export async function GET(req: NextRequest) {
                     // Just return all open invoices for this company as candidates for simplicity,
                     // or filter by amount/customer if we want to be smart. Let's just return a few recent/open ones.
                     candidates = await prisma.receivableInvoice.findMany({
-                        where: { companyId: tenantId },
+                        where: { companyId: tenantId, id: { notIn: [...visibility.hiddenInvoiceIds] } },
                         take: 50,
                         select: { id: true, invoiceNo: true, customerName: true, amountOpen: true }
                     });
                 } else if (batch.importType === "ap") {
                     candidates = await prisma.payableBill.findMany({
-                        where: { companyId: tenantId },
+                        where: { companyId: tenantId, id: { notIn: [...visibility.hiddenBillIds] } },
                         take: 50,
                         select: { id: true, billNo: true, vendorName: true, amountOpen: true }
                     });
