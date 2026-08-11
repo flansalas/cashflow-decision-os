@@ -37,7 +37,7 @@ export function prepareBaselineTransactions(
         .filter(p => p.isIncluded)
         .map(p => {
             const isVolatile = ["utilities", "fuel", "taxes", "card_payment", "payroll"].includes(p.category || "");
-            const tolerance = isVolatile ? 0.35 : 0.15;
+            const tolerance = isVolatile ? 0.50 : 0.20;
             
             return {
                 ...p,

@@ -50,7 +50,7 @@ export default function SettingsPage() {
                         </div>
                     )}
                 </div>
-                {companyId && <AccountRoleManager companyId={companyId} />}
+                <AccountRoleManager />
             </main>
         </div>
     );

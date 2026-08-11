@@ -2,31 +2,33 @@
 
 import { useState, useEffect } from "react";
 
-export function AccountRoleManager({ companyId }: { companyId: string }) {
+export function AccountRoleManager() {
     const [accounts, setAccounts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!companyId) return;
-        fetch(`/api/company/accounts?companyId=${companyId}`)
+        fetch(`/api/company/accounts`)
             .then(r => r.json())
             .then(d => {
                 if (d.accounts) setAccounts(d.accounts);
                 setLoading(false);
             })
             .catch(console.error);
-    }, [companyId]);
+    }, []);
 
     const updateRole = async (accountId: string, role: string) => {
-        setAccounts(accs => accs.map(a => a.id === accountId ? { ...a, role } : a));
         try {
-            await fetch(`/api/company/accounts/${accountId}/role`, {
+            const res = await fetch(`/api/company/accounts/${accountId}/role`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ role })
             });
+            if (!res.ok) throw new Error("Server rejected role update");
+            
+            setAccounts(accs => accs.map(a => a.id === accountId ? { ...a, role } : a));
         } catch (e) {
             console.error("Failed to update role", e);
+            // Optionally could add a toast here. But we definitely don't update local state on failure.
         }
     };
 

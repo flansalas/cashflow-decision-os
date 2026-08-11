@@ -1,19 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
+import { resolveTenant } from "@/lib/tenant";
 
 export async function GET(req: NextRequest) {
     const { userId } = getAuth(req);
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const searchParams = req.nextUrl.searchParams;
-    const companyId = searchParams.get("companyId");
-    
-    if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Tenant resolution failed" }, { status: 403 });
 
     try {
         const accounts = await prisma.bankAccount.findMany({
-            where: { companyId },
+            where: { companyId: tenantId },
             orderBy: { name: 'asc' }
         });
         

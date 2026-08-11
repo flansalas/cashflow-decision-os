@@ -8,6 +8,7 @@ export interface BankTxForBaseline {
     date: Date;
     merchantKey: string;  // typically the description field from bank tx
     accountName?: string | null;
+    accountRole?: string | null;
 }
 
 import { normalizeDescription, categorize, isRecurringIdentityMatch } from "./detectPatterns";
