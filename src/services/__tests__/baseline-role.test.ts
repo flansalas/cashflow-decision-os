@@ -20,11 +20,11 @@ describe('BankAccount Role-based Baseline Treatment (prepareBaselineTransactions
         expect(result.weekBuckets[0].outflow).toBe(0);
     });
 
-    it('same outflow from Operating-role account with neutral merchant -> remains in M1', () => {
+    it('same outflow from Operating-role account with merchant "ADP PAYROLL" -> remains in M1', () => {
         const txs: BankTxForBaseline[] = [{
             amount: -1000,
             date: new Date('2024-01-24'),
-            merchantKey: 'VENDOR PAYMENT',   // neutral merchant — not categorized as payroll
+            merchantKey: 'ADP PAYROLL',   // merchant inference must NOT exclude this
             accountRole: 'operating',
             accountName: 'Payroll Account'   // account name alone must not infer exclusion
         }];
@@ -37,9 +37,9 @@ describe('BankAccount Role-based Baseline Treatment (prepareBaselineTransactions
         const txs: BankTxForBaseline[] = [{
             amount: -1000,
             date: new Date('2024-01-24'),
-            merchantKey: 'VENDOR PAYMENT',   // neutral merchant
+            merchantKey: 'VENDOR PAYMENT',
             accountRole: 'operating',
-            accountName: 'Payroll'            // name-only — must not exclude
+            accountName: 'Payroll'
         }];
         const assumptions: BaselineAssumptions = { payrollAllInAmount: 5000, payrollCadence: 'biweekly', rentMonthlyAmount: null, rentDayOfMonth: null, payrollNextDate: null };
         const result = prepareBaselineTransactions(txs, patterns, asOfDate, assumptions, weeksToAnalyze);
@@ -79,7 +79,7 @@ describe('computeBaseline() low-history fallback respects Payroll-role exclusion
             // Normal inflow
             { amount: 10000, date: new Date('2024-01-24'), merchantKey: 'CLIENT PAYMENT', accountRole: 'operating' },
             // Payroll outflow from payroll-role account — must be excluded
-            { amount: -5000, date: new Date('2024-01-25'), merchantKey: 'PAYROLL DISTRIBUTION', accountRole: 'payroll' },
+            { amount: -5000, date: new Date('2024-01-25'), merchantKey: 'NEUTRAL VENDOR', accountRole: 'payroll' },
         ];
 
         const result = computeBaseline(txs, patterns, asOfDate, assumptions);
@@ -88,11 +88,11 @@ describe('computeBaseline() low-history fallback respects Payroll-role exclusion
         expect(result.variableInflowWeekly).toBeGreaterThan(0);
     });
 
-    it('Operating-role with neutral merchant -> outflow remains in fallback residual M1', () => {
+    it('Operating-role with merchant "ADP PAYROLL" -> outflow remains in fallback residual M1', () => {
         const txs: BankTxForBaseline[] = [
             { amount: 10000, date: new Date('2024-01-24'), merchantKey: 'CLIENT PAYMENT', accountRole: 'operating' },
-            // Neutral merchant, operating-role — must NOT be excluded
-            { amount: -5000, date: new Date('2024-01-25'), merchantKey: 'VENDOR PAYMENT', accountRole: 'operating' },
+            // Merchant inference must not exclude this
+            { amount: -5000, date: new Date('2024-01-25'), merchantKey: 'ADP PAYROLL', accountRole: 'operating' },
         ];
 
         const result = computeBaseline(txs, patterns, asOfDate, assumptions);
