@@ -23,9 +23,14 @@ describe('M1 Input Preparation (getCanonicalBaselineInputs)', () => {
         expect(normalizeBankTransactionAmount({ direction, amount })).toBe(expected);
     });
 
-    it('always zeroes resolved internal transfers regardless of direction or stored sign', () => {
+    it('zeroes confirmed internal transfers regardless of direction or stored sign', () => {
         expect(normalizeBankTransactionAmount({ direction: 'outflow', amount: -500, internalTransferStatus: 'confirmed' })).toBe(0);
         expect(normalizeBankTransactionAmount({ direction: 'inflow', amount: 500, internalTransferStatus: 'confirmed' })).toBe(0);
+    });
+
+    it('zeroes legacy "resolved" status transfers (backward-compatible with historical data)', () => {
+        expect(normalizeBankTransactionAmount({ direction: 'outflow', amount: -500, internalTransferStatus: 'resolved' })).toBe(0);
+        expect(normalizeBankTransactionAmount({ direction: 'inflow', amount: 500, internalTransferStatus: 'resolved' })).toBe(0);
     });
 
     it('excludes confirmed internal transfers from M1 (resolved status)', async () => {

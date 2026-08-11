@@ -74,9 +74,36 @@ export function prepareBaselineTransactions(
                 if (
                     assumptions.payrollAllInAmount &&
                     txDirection === "outflow" &&
-                    tx.accountRole === "payroll"
+                    (txCategory === "payroll" || tx.accountRole === "payroll")
                 ) {
                     matchesAssumption = true;
+                }
+
+                if (
+                    !matchesAssumption &&
+                    assumptions.payrollAllInAmount &&
+                    assumptions.payrollNextDate &&
+                    txDirection === "outflow" &&
+                    absAmount >= assumptions.payrollAllInAmount * 0.5 &&
+                    absAmount <= assumptions.payrollAllInAmount * 1.5
+                ) {
+                    let canMatch = true;
+                    if (lastPayrollMatchedDate) {
+                        const daysSince = Math.abs(daysBetween(lastPayrollMatchedDate, tx.date));
+                        const cooldown = assumptions.payrollCadence === "weekly" ? 5 : assumptions.payrollCadence === "biweekly" ? 10 : 20;
+                        if (daysSince < cooldown) canMatch = false;
+                    }
+                    
+                    if (canMatch) {
+                        const daysDiff = Math.abs(daysBetween(tx.date, assumptions.payrollNextDate));
+                        const cadenceDays = assumptions.payrollCadence === "weekly" ? 7 : assumptions.payrollCadence === "biweekly" ? 14 : 30;
+                        const remainder = daysDiff % cadenceDays;
+                        const toleranceDays = cadenceDays === 7 ? 1 : 3;
+                        if (remainder <= toleranceDays || remainder >= cadenceDays - toleranceDays) {
+                            matchesAssumption = true;
+                            lastPayrollMatchedDate = tx.date;
+                        }
+                    }
                 }
 
                 if (

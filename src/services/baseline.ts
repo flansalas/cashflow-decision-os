@@ -96,8 +96,11 @@ export function computeBaseline(
 
         if (daySpan >= 1) {
             const weeksSpan = Math.max(1, daySpan / 7);
-            const totalInflow = txs.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-            const totalOutflow = txs.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+            // Use weekBuckets totals so the payroll-role exclusion applied by
+            // prepareBaselineTransactions() is honoured here too.  Raw tx.amount
+            // aggregation would bypass that exclusion and double-count payroll.
+            const totalInflow = weekBuckets.reduce((s, b) => s + b.inflow, 0);
+            const totalOutflow = weekBuckets.reduce((s, b) => s + b.outflow, 0);
 
             // Subtract estimated recurring contribution over this span
             let recurringInflowTotal = 0;
