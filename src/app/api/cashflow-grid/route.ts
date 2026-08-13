@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
             .map(invRaw => {
                 const canonical = input.invoices.find(i => i.id === invRaw.id);
                 const isExcluded = !canonical && overridesByTarget.get(invRaw.id)?.some(o => o.type === "exclude");
-                const markedPaid = !canonical && overridesByTarget.get(invRaw.id)?.some(o => o.type === "mark_paid");
+                const markedPaid = overridesByTarget.get(invRaw.id)?.some(o => o.type === "mark_paid") ?? false;
                 const cp = customerMap.get(invRaw.customerName);
                 
                 // If not in canonical and not excluded/paid, it was fully reconciled away canonically
@@ -176,7 +176,7 @@ export async function GET(req: NextRequest) {
             .map(billRaw => {
                 const canonical = input.bills.find(b => b.id === billRaw.id);
                 const isExcluded = !canonical && overridesByTarget.get(billRaw.id)?.some(o => o.type === "exclude");
-                const markedPaid = !canonical && overridesByTarget.get(billRaw.id)?.some(o => o.type === "mark_paid");
+                const markedPaid = overridesByTarget.get(billRaw.id)?.some(o => o.type === "mark_paid") ?? false;
                 const vp = vendorMap.get(billRaw.vendorName);
                 
                 const isFullyReconciled = !canonical && !isExcluded && !markedPaid;

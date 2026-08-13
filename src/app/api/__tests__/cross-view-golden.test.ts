@@ -65,6 +65,22 @@ describe("Package 1A: Cross-View Golden Test & Semantic Grid Derivation", () => 
             status: "open"
         };
 
+        const rawMarkedPaidInvoice = {
+            id: "inv_paid",
+            customerName: "Corp Paid",
+            invoiceNo: "1112",
+            amountOpen: 75000,
+            status: "open"
+        };
+
+        const rawMarkedPaidBill = {
+            id: "bill_paid",
+            vendorName: "Vendor Paid",
+            billNo: "5556",
+            amountOpen: 25000,
+            status: "open"
+        };
+
         const rawReconciledInvoice = {
             id: "inv_recon",
             customerName: "Corp C",
@@ -96,12 +112,32 @@ describe("Package 1A: Cross-View Golden Test & Semantic Grid Derivation", () => 
             overrideDueDate: new Date("2026-08-29T00:00:00.000Z"),
         };
 
+        const canonicalMarkedPaidInvoice = {
+            id: "inv_paid",
+            customerName: "Corp Paid",
+            invoiceNo: "1112",
+            amountOpen: 75000,
+            status: "open",
+            markedPaid: true,
+        };
+
+        const canonicalMarkedPaidBill = {
+            id: "bill_paid",
+            vendorName: "Vendor Paid",
+            billNo: "5556",
+            amountOpen: 25000,
+            status: "open",
+            markedPaid: true,
+        };
+
         // Note: inv_recon is fully reconciled, so it doesn't appear in canonical items!
 
         const overrides = [
             { targetId: "inv_1", targetType: "invoice", type: "set_expected_payment_date", effectiveDate: new Date("2026-08-15T00:00:00.000Z") },
             { targetId: "inv_hidden", targetType: "invoice", type: "exclude" },
-            { targetId: "bill_1", targetType: "bill", type: "set_bill_due_date", effectiveDate: new Date("2026-08-29T00:00:00.000Z") }
+            { targetId: "bill_1", targetType: "bill", type: "set_bill_due_date", effectiveDate: new Date("2026-08-29T00:00:00.000Z") },
+            { targetId: "inv_paid", targetType: "invoice", type: "mark_paid" },
+            { targetId: "bill_paid", targetType: "bill", type: "mark_paid" }
         ];
 
         const today = new Date("2026-08-01T00:00:00.000Z");
@@ -111,8 +147,8 @@ describe("Package 1A: Cross-View Golden Test & Semantic Grid Derivation", () => 
             bankBalance: 10000,
             adjustmentsTotal: 0,
             asOfDate: today,
-            invoices: [canonicalInvoice], // Canonical processed items only
-            bills: [canonicalBill],
+            invoices: [canonicalInvoice, canonicalMarkedPaidInvoice], // Canonical processed items only
+            bills: [canonicalBill, canonicalMarkedPaidBill],
             recurring: [],
             assumptions: { bufferMin: 10000, payrollCadence: "biweekly", paymentCurveJson: "{}" },
             oneTimeOutflows: []
@@ -137,12 +173,12 @@ describe("Package 1A: Cross-View Golden Test & Semantic Grid Derivation", () => 
                 conservativeOutflowWeekly: 6000,
                 weeklyBuckets: []
             },
-            invoices: [canonicalInvoice],
-            bills: [canonicalBill],
+            invoices: [canonicalInvoice, canonicalMarkedPaidInvoice],
+            bills: [canonicalBill, canonicalMarkedPaidBill],
             cashSnapshot: { asOfDate: today },
             cashAdjustments: [],
-            invoicesRaw: [rawInvoice, rawHiddenInvoice, rawReconciledInvoice], // Raw includes hidden/reconciled
-            billsRaw: [rawBill],
+            invoicesRaw: [rawInvoice, rawHiddenInvoice, rawReconciledInvoice, rawMarkedPaidInvoice], // Raw includes hidden/reconciled
+            billsRaw: [rawBill, rawMarkedPaidBill],
             assumptions: { paymentCurveJson: "{}" },
             overrides: overrides,
             recurring: [],
@@ -173,6 +209,8 @@ describe("Package 1A: Cross-View Golden Test & Semantic Grid Derivation", () => 
         const hiddenInvoice = gridInvoices.find((i: any) => i.id === "inv_hidden");
         const reconciledInvoice = gridInvoices.find((i: any) => i.id === "inv_recon");
         const visibleBill = gridBills.find((b: any) => b.id === "bill_1");
+        const markedPaidInvoice = gridInvoices.find((i: any) => i.id === "inv_paid");
+        const markedPaidBill = gridBills.find((b: any) => b.id === "bill_paid");
 
         expect(visibleInvoice).toBeDefined();
         expect(hiddenInvoice).toBeDefined();
@@ -180,6 +218,10 @@ describe("Package 1A: Cross-View Golden Test & Semantic Grid Derivation", () => 
 
         // fully reconciled items MUST NOT reappear as active $0 Backlog items
         expect(reconciledInvoice).toBeUndefined();
+        
+        // marked paid items MUST NOT appear in grid output at all
+        expect(markedPaidInvoice).toBeUndefined();
+        expect(markedPaidBill).toBeUndefined();
 
         // 1. Grid-visible managerially active amount/timing equals the canonical processed economic state
         // AR: canonical amountOpen 60000, overrideAmount 50000, partialPayment 10000 => 40000
