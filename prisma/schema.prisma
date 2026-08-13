@@ -66,13 +66,13 @@ model CompanyNote {
 }
 
 model CashSnapshot {
-  id                 String              @id @default(uuid())
-  companyId          String
-  asOfDate           DateTime
-  bankBalance        Float
-  createdAt          DateTime            @default(now())
-  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  forecastCheckpoint ForecastCheckpoint?
+  id                  String               @id @default(uuid())
+  companyId           String
+  asOfDate            DateTime
+  bankBalance         Float
+  createdAt           DateTime             @default(now())
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  forecastCheckpoints ForecastCheckpoint[]
 }
 
 model CashAdjustment {
@@ -315,28 +315,32 @@ model ChangeLog {
 }
 
 model ForecastWeek {
-  id                  String   @id @default(uuid())
-  companyId           String
-  weekStart           DateTime
-  weekEnd             DateTime
-  startCash           Float
-  inflowsExpected     Float
-  outflowsExpected    Float
-  endCashExpected     Float
-  inflowsBest         Float
-  outflowsBest        Float
-  endCashBest         Float
-  inflowsWorst        Float
-  outflowsWorst       Float
-  endCashWorst        Float
-  zone                String
-  confidenceScore     Int      @default(100)
-  breakdownJson       String?
-  computedAt          DateTime @default(now())
-  forecastVersionHash String
-  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id                     String              @id @default(uuid())
+  companyId              String
+  weekStart              DateTime
+  weekEnd                DateTime
+  startCash              Float
+  inflowsExpected        Float
+  outflowsExpected       Float
+  endCashExpected        Float
+  inflowsBest            Float
+  outflowsBest           Float
+  endCashBest            Float
+  inflowsWorst           Float
+  outflowsWorst          Float
+  endCashWorst           Float
+  zone                   String
+  confidenceScore        Int                 @default(100)
+  breakdownJson          String?
+  computedAt             DateTime            @default(now())
+  forecastVersionHash    String
+  forecastCheckpointId   String?
+  company                Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  forecastCheckpoint     ForecastCheckpoint?  @relation("CheckpointWeeks", fields: [forecastCheckpointId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, weekStart, forecastVersionHash])
+  @@unique([forecastCheckpointId, weekStart])
+  @@index([forecastCheckpointId])
 }
 
 model ActionItem {
@@ -410,7 +414,7 @@ model CashFlowEntry {
 model ForecastCheckpoint {
   id                            String                          @id @default(uuid())
   companyId                     String
-  cashSnapshotId                String                          @unique
+  cashSnapshotId                String
   snapshotSource                String                          @default("client_observed_v1")
   forecastVersionHash           String?
   generatedAt                   DateTime?
@@ -423,13 +427,21 @@ model ForecastCheckpoint {
   isBankCoverageVerified        Boolean                         @default(false)
   bankCoverageEvidenceJson      String?
   createdAt                     DateTime                        @default(now())
+  forecastSchemaVersion         Int?
+  hashAlgorithm                 String?
+  canonicalPayloadJson          String?
+  sealedAt                      DateTime?
   ActualCashAttribution         ActualCashAttribution[]
   BaselineSnapshotHistory       BaselineSnapshotHistory?
   cashSnapshot                  CashSnapshot                    @relation(fields: [cashSnapshotId], references: [id], onDelete: Cascade)
   company                       Company                         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   componentSnapshots            ForecastComponentSnapshot[]
+  forecastWeeks                 ForecastWeek[]                  @relation("CheckpointWeeks")
   ForecastEvaluationObservation ForecastEvaluationObservation[]
   forecastEvaluationRuns        ForecastEvaluationRun[]
+
+  @@index([companyId, forecastVersionHash])
+  @@index([cashSnapshotId])
 }
 
 model BaselineVarianceLedger {

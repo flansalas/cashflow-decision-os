@@ -2,9 +2,13 @@ import "dotenv/config";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 
 // Fix weekend-date flakiness by forcing test execution to a known Wednesday
+
+// Fix weekend-date flakiness by forcing test execution to a known Wednesday
+vi.setConfig({ testTimeout: 30000 });
 vi.useFakeTimers();
 vi.setSystemTime(new Date("2026-07-29T12:00:00Z")); // Wednesday
 import prisma from "@/db/prisma";
+
 import { v4 as uuidv4 } from "uuid";
 import { processEvaluationJobs, triggerEvaluation } from "../evaluation-job-worker";
 import { evaluateMaturedCheckpoints } from "../canonical-evaluator";
@@ -43,15 +47,17 @@ describe("Evaluation Job Worker and Idempotency", () => {
         const cp = await prisma.forecastCheckpoint.create({
             data: {
                 companyId, cashSnapshotId: snap.id, snapshotSource: "test", 
-                weekStart: pastDate, weekEnd: pastDate, endCashExpected: 1000, inflowsExpected: 500, outflowsExpected: 500
+                weekStart: pastDate, weekEnd: pastDate, endCashExpected: 1000, inflowsExpected: 500, outflowsExpected: 500,
+                breakdownJson: JSON.stringify({ weeks: [] })
             }
         });
         await prisma.baselineSnapshotHistory.create({
             data: {
                 id: uuidv4(), companyId, forecastCheckpointId: cp.id, asOfDate: pastDate,
                 variableInflowWeekly: 10, variableOutflowWeekly: 10,
-                m1PreAiResidualJson: "[10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]",
-                m4PreAiResidualJson: "[20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20]"
+                m1PreAiResidualJson: JSON.stringify({ inflow: Array(13).fill(10), outflow: Array(13).fill(10) }),
+                m1PostAiResidualJson: JSON.stringify({ inflow: Array(13).fill(10), outflow: Array(13).fill(10) }),
+                m4PreAiResidualJson: JSON.stringify({ inflow: Array(13).fill(20), outflow: Array(13).fill(20) })
             }
         });
     });

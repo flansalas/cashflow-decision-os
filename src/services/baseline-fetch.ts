@@ -17,8 +17,11 @@ export function normalizeBankTransactionAmount(tx: BankTransactionForNormalizati
     return tx.amount;
 }
 
-export async function getCanonicalBaselineInputs(companyId: string) {
-    const bankTxsRaw = await prisma.bankTransaction.findMany({
+import { PrismaClient } from "@prisma/client";
+
+export async function getCanonicalBaselineInputs(companyId: string, db: any = prisma) {
+    const prismaDb = db as PrismaClient;
+    const bankTxsRaw = await prismaDb.bankTransaction.findMany({
         where: { companyId },
         select: {
             amount: true,
@@ -31,7 +34,7 @@ export async function getCanonicalBaselineInputs(companyId: string) {
         orderBy: { txDate: "asc" }
     });
 
-    const recurringPatternsRaw = await prisma.recurringPattern.findMany({
+    const recurringPatternsRaw = await prismaDb.recurringPattern.findMany({
         where: { companyId, status: "active" },
     });
 

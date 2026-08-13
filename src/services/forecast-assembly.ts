@@ -7,7 +7,10 @@ import { computeCOGSCorrelation } from "@/services/cogs-correlation";
 import { computeVarianceMultipliers } from "@/services/variance";
 import { buildManagerialVisibility, visibleBills, visibleInvoices } from "@/services/managerial-visibility";
 
-export async function assembleForecastData(companyId: string) {
+import { PrismaClient } from "@prisma/client";
+
+export async function assembleForecastData(companyId: string, db: any = prisma) {
+    const prismaDb = db as PrismaClient;
     const [
         cashSnapshot,
         cashAdjustments,
@@ -24,27 +27,27 @@ export async function assembleForecastData(companyId: string) {
         customerPaymentObs,
         reconciliationLinks,
     ] = await Promise.all([
-        prisma.cashSnapshot.findFirst({ where: { companyId }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] }),
-        prisma.cashAdjustment.findMany({ where: { companyId } }),
-        prisma.receivableInvoice.findMany({ where: { companyId } }),
-        prisma.payableBill.findMany({ where: { companyId } }),
-        prisma.customerProfile.findMany({ where: { companyId } }),
-        prisma.vendorProfile.findMany({ where: { companyId } }),
-        prisma.assumption.findFirst({ where: { companyId } }),
-        prisma.override.findMany({ where: { companyId, status: "active" }, orderBy: { createdAt: "desc" } }),
-        prisma.companyNote.findMany({ where: { companyId } }),
-        prisma.cashFlowCategory.findMany({ where: { companyId }, orderBy: [{ direction: "asc" }, { sortOrder: "asc" }, { name: "asc" }] }),
-        prisma.cashFlowEntry.findMany({ where: { companyId }, include: { category: true } }),
-        prisma.baselineVarianceLedger.findMany({
+        prismaDb.cashSnapshot.findFirst({ where: { companyId }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] }),
+        prismaDb.cashAdjustment.findMany({ where: { companyId } }),
+        prismaDb.receivableInvoice.findMany({ where: { companyId } }),
+        prismaDb.payableBill.findMany({ where: { companyId } }),
+        prismaDb.customerProfile.findMany({ where: { companyId } }),
+        prismaDb.vendorProfile.findMany({ where: { companyId } }),
+        prismaDb.assumption.findFirst({ where: { companyId } }),
+        prismaDb.override.findMany({ where: { companyId, status: "active" }, orderBy: { createdAt: "desc" } }),
+        prismaDb.companyNote.findMany({ where: { companyId } }),
+        prismaDb.cashFlowCategory.findMany({ where: { companyId }, orderBy: [{ direction: "asc" }, { sortOrder: "asc" }, { name: "asc" }] }),
+        prismaDb.cashFlowEntry.findMany({ where: { companyId }, include: { category: true } }),
+        prismaDb.baselineVarianceLedger.findMany({
             where: { companyId },
             orderBy: { weekStart: "desc" },
             take: 8,
         }),
-        prisma.customerPaymentObservation.findMany({
+        prismaDb.customerPaymentObservation.findMany({
             where: { companyId },
             select: { customerName: true, daysEarlyOrLate: true },
         }),
-        prisma.reconciliationLink.findMany({
+        prismaDb.reconciliationLink.findMany({
             where: { companyId, status: "active" },
         }),
     ]);
@@ -53,7 +56,7 @@ export async function assembleForecastData(companyId: string) {
         throw new Error("No cash snapshot found");
     }
 
-    const { recurringPatternsRaw, bankTxsForBaseline, patternsForBaseline } = await getCanonicalBaselineInputs(companyId);
+    const { recurringPatternsRaw, bankTxsForBaseline, patternsForBaseline } = await getCanonicalBaselineInputs(companyId, db);
 
     const assumptions = assumptionRaw ?? {
         bufferMin: 10000,
