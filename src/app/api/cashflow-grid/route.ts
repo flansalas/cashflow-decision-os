@@ -1,632 +1,296 @@
 export const dynamic = 'force-dynamic';
-// api/cashflow-grid/route.ts — returns invoices, bills, recurring, and week metadata for the grid
-// NOTE: Now also runs computeForecast (the canonical engine) so the Ledger balance row
-// matches the Dashboard chart/table exactly — one pipeline, one story.
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/db/prisma";
-import {
-    getMonday, addWeeks, addDays, isInWeek,
-    computeExpectedPaymentDate, parsePaymentCurve, computeForecast,
-    type ForecastInvoice, type ForecastBill, type ForecastRecurring, type ForecastInput,
-} from "@/services/forecast";
-import { computeBaseline, type BankTxForBaseline, type RecurringPatternForBaseline } from "@/services/baseline";
-import { computeVarianceMultipliers } from "@/services/variance";
-import { computeCOGSCorrelation } from "@/services/cogs-correlation";
-import { computeTypicalDelayWeeks } from "@/services/payment-memory";
+import { getMonday, addWeeks, addDays, isInWeek, computeExpectedPaymentDate, parsePaymentCurve, resolveInvoiceForecastAmount, resolveBillForecastAmount } from "@/services/forecast";
 import { resolveTenant } from "@/lib/tenant";
-import { normalizeBankTransactionAmount } from "@/services/baseline-fetch";
+import { assembleForecastData } from "@/services/forecast-assembly";
+import { computeTypicalDelayWeeks } from "@/services/payment-memory";
 
 export async function GET(req: NextRequest) {
-    const companyId = await resolveTenant(req);
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Missing or invalid company" }, { status: 401 });
 
-    let company;
-    if (companyId) {
-        company = await prisma.company.findUnique({ where: { id: companyId } });
-    }
-
-    if (!company) return NextResponse.json({ error: "Company not found" }, { status: 404 });
-
-    const cid = company.id;
-
-    const [
-        cashSnapshot,
-        cashAdjustments,
-        invoicesRaw,
-        billsRaw,
-        customerProfiles,
-        vendorProfiles,
-        assumptionRaw,
-        overrides,
-        recurringPatternsRaw,
-        executionPlan,
-        bankTxs,
-        cashFlowEntries,
-        varianceLedger,
-        customerPaymentObs,
-    ] = await Promise.all([
-        prisma.cashSnapshot.findFirst({ where: { companyId: cid }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] }),
-        prisma.cashAdjustment.findMany({ where: { companyId: cid } }),
-        prisma.receivableInvoice.findMany({ where: { companyId: cid } }),
-        prisma.payableBill.findMany({ where: { companyId: cid } }),
-        prisma.customerProfile.findMany({ where: { companyId: cid } }),
-        prisma.vendorProfile.findMany({ where: { companyId: cid } }),
-        prisma.assumption.findFirst({ where: { companyId: cid } }),
-        prisma.override.findMany({ where: { companyId: cid, status: "active" }, orderBy: { createdAt: "desc" } }),
-        prisma.recurringPattern.findMany({ where: { companyId: cid } }),
-        prisma.executionPlan.findFirst({ where: { companyId: cid, status: "active" }, orderBy: { version: "desc" } }),
-        // For baseline computation (mirrors dashboard API)
-        prisma.bankTransaction.findMany({
-            where: { companyId: cid, txDate: { gte: new Date(Date.now() - 365 * 86_400_000) } },
-            select: {
-                amount: true,
-                txDate: true,
-                description: true,
-                direction: true,
-                internalTransferStatus: true,
-                account: { select: { name: true } },
-            },
-        }),
-        // For manual cash flow entries (mirrors dashboard API)
-        prisma.cashFlowEntry.findMany({ where: { companyId: cid }, include: { category: true } }),
-        prisma.baselineVarianceLedger.findMany({
-            where: { companyId: cid },
-            orderBy: { weekStart: "desc" },
-            take: 8,
-        }),
-        prisma.customerPaymentObservation.findMany({
-            where: { companyId: cid },
-            select: { customerName: true, daysEarlyOrLate: true },
-        }),
-    ]);
-
-    let executionPlanData = null;
-    if (executionPlan) {
-        let planForecast = null;
-        if (executionPlan.forecastStateJson) {
-            try {
-                planForecast = JSON.parse(executionPlan.forecastStateJson);
-            } catch (e) {
-                // Ignore parse errors
+    const requestedCompanyId = req.nextUrl.searchParams.get("companyId");
+    if (requestedCompanyId && requestedCompanyId !== tenantId) {
+        let isAuthorized = false;
+        if (requestedCompanyId.startsWith("org_")) {
+            const company = await prisma.company.findUnique({
+                where: { clerkOrgId: requestedCompanyId },
+                select: { id: true }
+            });
+            if (company?.id === tenantId) {
+                isAuthorized = true;
             }
         }
-        executionPlanData = {
-            id: executionPlan.id,
-            version: executionPlan.version,
-            createdAt: executionPlan.createdAt.toISOString(),
-            approvedBy: executionPlan.approvedBy,
-            planForecast
-        };
-    }
-
-    if (!cashSnapshot) {
-        return NextResponse.json({ error: "No cash snapshot found" }, { status: 400 });
-    }
-
-
-    const assumptions = assumptionRaw ?? {
-        bufferMin: 10000,
-        fixedWeeklyOutflow: 0,
-        projectionSafetyMargin: 1.0,
-        paymentCurveJson: '{"current":0,"1-14":1,"15-30":2,"31-60":3,"61+":4}',
-        highRiskAgingDays: 61,
-        payrollAllInAmount: null as number | null,
-        payrollNextDate: null as Date | null,
-        payrollCadence: "biweekly",
-        rentMonthlyAmount: null as number | null,
-        rentDayOfMonth: null as number | null,
-    };
-
-
-    const today = cashSnapshot.asOfDate;
-    const currentMonday = getMonday(today);
-    const paymentCurve = parsePaymentCurve(assumptions.paymentCurveJson);
-
-    // Build 13-week timeline
-    const weeks = Array.from({ length: 13 }, (_, w) => {
-        const weekStart = addWeeks(currentMonday, w);
-        const weekEnd = addDays(weekStart, 6);
-        return {
-            weekNumber: w + 1,
-            weekStart: weekStart.toISOString(),
-            weekEnd: weekEnd.toISOString(),
-        };
-    });
-
-    // Override lookup
-    const overridesByTarget = new Map<string, typeof overrides>();
-    for (const ov of overrides) {
-        if (ov.targetId) {
-            if (!overridesByTarget.has(ov.targetId)) overridesByTarget.set(ov.targetId, []);
-            overridesByTarget.get(ov.targetId)!.push(ov);
+        if (!isAuthorized) {
+            return NextResponse.json({ error: "Forbidden: cross-tenant access denied" }, { status: 403 });
         }
     }
+    
+    const cid = tenantId;
 
-    // Customer/vendor lookup
-    const customerMap = new Map(customerProfiles.map(c => [c.customerName, c]));
-    const vendorMap = new Map(vendorProfiles.map(v => [v.vendorName, v]));
+    try {
+        const {
+            input,
+            forecastResult,
+            cashSnapshot,
+            overrides,
+            invoicesRaw,
+            billsRaw,
+            customerProfiles,
+            vendorProfiles,
+            customerPaymentObs,
+            recurring,
+            assumptions
+        } = await assembleForecastData(cid);
 
-    const obsByCustomer = new Map<string, Array<{ daysEarlyOrLate: number }>>();
-    for (const obs of customerPaymentObs) {
-        if (!obsByCustomer.has(obs.customerName)) obsByCustomer.set(obs.customerName, []);
-        obsByCustomer.get(obs.customerName)!.push(obs);
-    }
+        const currentMonday = getMonday(cashSnapshot.asOfDate);
+        const today = cashSnapshot.asOfDate;
+        const paymentCurve = parsePaymentCurve(assumptions.paymentCurveJson);
 
-    // ─── Enrich invoices ──────────────────────────────────────────────────
-    const enrichedInvoices = invoicesRaw
-        .filter(inv => inv.status === "open")
-        .map(inv => {
-            const cp = customerMap.get(inv.customerName);
-            const ovs = overridesByTarget.get(inv.id) || [];
+        const executionPlan = await prisma.executionPlan.findFirst({
+            where: { companyId: cid, status: "approved", weekStart: currentMonday },
+            orderBy: { version: "desc" }
+        });
 
-            let markedPaid = false;
-            let overrideExpectedDate: Date | null = null;
-            let overrideAmount: number | null = null;
-            let partialPayment: number | null = null;
-
-            let isExcluded = false;
-
-            for (const ov of ovs) {
-                if (ov.type === "mark_paid") markedPaid = true;
-                if (ov.type === "exclude") isExcluded = true;
-                if (ov.type === "set_expected_payment_date" && ov.effectiveDate) overrideExpectedDate = ov.effectiveDate;
-                if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
-                if (ov.type === "partial_payment" && ov.amount != null) partialPayment = ov.amount;
+        let executionPlanData = null;
+        if (executionPlan) {
+            let planForecast = null;
+            if (executionPlan.forecastStateJson) {
+                try {
+                    planForecast = JSON.parse(executionPlan.forecastStateJson as string);
+                } catch (e) {}
             }
-
-            if (markedPaid) return null;
-
-            const forecastInv: ForecastInvoice = {
-                id: inv.id,
-                customerName: inv.customerName,
-                invoiceNo: inv.invoiceNo,
-                amountOpen: inv.amountOpen,
-                invoiceDate: inv.invoiceDate,
-                dueDate: inv.dueDate,
-                daysPastDue: inv.daysPastDue,
-                status: inv.status,
-                metaJson: inv.metaJson,
-                typicalDelayWeeks: cp?.typicalDelayWeeks ?? computeTypicalDelayWeeks(obsByCustomer.get(inv.customerName) || []),
-                riskTag: cp?.riskTag,
-                overrideExpectedDate,
-                overrideAmount,
-                markedPaid,
-                partialPayment,
+            executionPlanData = {
+                id: executionPlan.id,
+                version: executionPlan.version,
+                createdAt: executionPlan.createdAt.toISOString(),
+                approvedBy: executionPlan.approvedBy,
+                planForecast
             };
+        }
 
-            let amount = inv.amountOpen;
-            if (overrideAmount != null) amount = overrideAmount;
-            if (partialPayment != null) amount = Math.max(0, amount - partialPayment);
-            if (amount <= 0) return null;
-
-            const { date: expectedDate, confidence } = computeExpectedPaymentDate(forecastInv, today, paymentCurve);
-
-            // Find effective week
-            let effectiveWeek: number | null = null;
-            for (let w = 0; w < 13; w++) {
-                const weekStart = addWeeks(currentMonday, w);
-                const weekEnd = addDays(weekStart, 6);
-                if (isInWeek(expectedDate, weekStart, weekEnd)) {
-                    effectiveWeek = w + 1;
-                    break;
-                }
-            }
-
-            // Count how many times this item has been moved (number of override records)
-            const moveCount = ovs.filter(o => o.type === "set_expected_payment_date").length;
-
-            // Days past due relative to today
-            const dueDaysAgo = inv.dueDate
-                ? Math.floor((today.getTime() - new Date(inv.dueDate).getTime()) / 86400000)
-                : null;
-
+        // Build 13-week timeline
+        const weeks = Array.from({ length: 13 }, (_, w) => {
+            const weekStart = addWeeks(currentMonday, w);
+            const weekEnd = addDays(weekStart, 6);
             return {
-                id: inv.id,
-                customerName: inv.customerName,
-                invoiceNo: inv.invoiceNo,
-                amountOpen: amount,
-                originalAmount: inv.amountOpen,
-                invoiceDate: inv.invoiceDate?.toISOString() ?? null,
-                dueDate: inv.dueDate?.toISOString() ?? null,
-                daysPastDue: dueDaysAgo,
-                expectedDate: expectedDate.toISOString(),
-                effectiveWeek,
-                overrideDate: overrideExpectedDate?.toISOString() ?? null,
-                riskTag: cp?.riskTag ?? "low",
-                confidence,
-                moveCount,
-                isExcluded,
-                kind: "ar" as const,
-            };
-        })
-        .filter(Boolean);
-
-    // ─── Enrich bills ─────────────────────────────────────────────────────
-    const enrichedBills = billsRaw
-        .filter(bill => bill.status === "open")
-        .map(bill => {
-            const vp = vendorMap.get(bill.vendorName);
-            const ovs = overridesByTarget.get(bill.id) || [];
-
-            let markedPaid = false;
-            let overrideDueDate: Date | null = null;
-            let overrideAmount: number | null = null;
-
-            let isExcluded = false;
-
-            for (const ov of ovs) {
-                if (ov.type === "mark_paid") markedPaid = true;
-                if (ov.type === "exclude") isExcluded = true;
-                if (ov.type === "delay_due_date" && ov.effectiveDate) overrideDueDate = ov.effectiveDate;
-                if (ov.type === "set_bill_due_date" && ov.effectiveDate) overrideDueDate = ov.effectiveDate;
-                if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
-            }
-
-            if (markedPaid) return null;
-
-            let amount = bill.amountOpen;
-            if (overrideAmount != null) amount = overrideAmount;
-            if (amount <= 0) return null;
-
-            let billDueDate: Date;
-            if (overrideDueDate) {
-                billDueDate = new Date(overrideDueDate);
-            } else if (bill.dueDate) {
-                billDueDate = new Date(bill.dueDate);
-            } else if (bill.billDate) {
-                billDueDate = addDays(new Date(bill.billDate), 30);
-            } else {
-                billDueDate = addDays(today, 7);
-            }
-
-            let effectiveWeek: number | null = null;
-            for (let w = 0; w < 13; w++) {
-                const weekStart = addWeeks(currentMonday, w);
-                const weekEnd = addDays(weekStart, 6);
-                if (isInWeek(billDueDate, weekStart, weekEnd)) {
-                    effectiveWeek = w + 1;
-                    break;
-                }
-            }
-
-            // Count how many times this bill has been moved
-            const moveCount = ovs.filter(o => o.type === "set_bill_due_date" || o.type === "delay_due_date").length;
-
-            // Days past due relative to today
-            const originalDue = bill.dueDate ? new Date(bill.dueDate) : null;
-            const dueDaysAgo = originalDue
-                ? Math.floor((today.getTime() - originalDue.getTime()) / 86400000)
-                : null;
-
-            return {
-                id: bill.id,
-                vendorName: bill.vendorName,
-                billNo: bill.billNo,
-                amountOpen: amount,
-                originalAmount: bill.amountOpen,
-                billDate: bill.billDate?.toISOString() ?? null,
-                dueDate: bill.dueDate?.toISOString() ?? null,
-                daysPastDue: dueDaysAgo,
-                effectiveDate: billDueDate.toISOString(),
-                effectiveWeek,
-                overrideDate: overrideDueDate?.toISOString() ?? null,
-                criticality: vp?.criticality ?? "normal",
-                moveCount,
-                isExcluded,
-                kind: "ap" as const,
-            };
-        })
-        .filter(Boolean);
-
-    // ─── Recurring patterns → weekly sums (for grid display) ────────────────
-    const weeklyRecurringOutflows: number[] = new Array(13).fill(0);
-    const weeklyRecurringInflows: number[] = new Array(13).fill(0);
-
-    for (const rec of recurringPatternsRaw) {
-        if (!rec.isIncluded) continue;
-        if (!rec.nextExpectedDate) continue;
-
-        let d = new Date(rec.nextExpectedDate);
-        const endDate = addWeeks(currentMonday, 13);
-
-        while (d <= endDate) {
-            for (let w = 0; w < 13; w++) {
-                const weekStart = addWeeks(currentMonday, w);
-                const weekEnd = addDays(weekStart, 6);
-                if (isInWeek(d, weekStart, weekEnd)) {
-                    if (rec.direction === "outflow") weeklyRecurringOutflows[w] += rec.typicalAmount;
-                    else weeklyRecurringInflows[w] += rec.typicalAmount;
-                    break;
-                }
-            }
-            if (rec.cadence === "weekly") d = addDays(d, 7);
-            else if (rec.cadence === "biweekly") d = addDays(d, 14);
-            else if (rec.cadence === "monthly") {
-                const next = new Date(d);
-                next.setMonth(next.getMonth() + 1);
-                d = next;
-            } else break;
-        }
-    }
-
-    // ─── Payroll assumption (synthetic) → matches computeForecast logic ───
-    const hasPayrollPattern = recurringPatternsRaw.some(rp => rp.category === "payroll" && rp.isIncluded);
-    if (!hasPayrollPattern && assumptions.payrollAllInAmount && assumptions.payrollNextDate) {
-        let d = new Date(assumptions.payrollNextDate);
-        const cadence = assumptions.payrollCadence || "biweekly";
-        const endDate = addWeeks(currentMonday, 13);
-        while (d <= endDate) {
-            for (let w = 0; w < 13; w++) {
-                const weekStart = addWeeks(currentMonday, w);
-                const weekEnd = addDays(weekStart, 6);
-                if (isInWeek(d, weekStart, weekEnd)) {
-                    weeklyRecurringOutflows[w] += assumptions.payrollAllInAmount!;
-                    break;
-                }
-            }
-            if (cadence === "weekly") d = addDays(d, 7);
-            else if (cadence === "biweekly") d = addDays(d, 14);
-            else if (cadence === "monthly") { const n = new Date(d); n.setMonth(n.getMonth() + 1); d = n; }
-            else break;
-        }
-    }
-
-    // ─── Rent assumption (synthetic) → matches computeForecast logic ──────
-    if (assumptions.rentMonthlyAmount && assumptions.rentDayOfMonth) {
-        const day = assumptions.rentDayOfMonth;
-        const endDate = addWeeks(currentMonday, 13);
-        let d = new Date(currentMonday);
-        d.setDate(day);
-        if (d < currentMonday) d.setMonth(d.getMonth() + 1);
-        while (d <= endDate) {
-            for (let w = 0; w < 13; w++) {
-                const weekStart = addWeeks(currentMonday, w);
-                const weekEnd = addDays(weekStart, 6);
-                if (isInWeek(d, weekStart, weekEnd)) {
-                    weeklyRecurringOutflows[w] += assumptions.rentMonthlyAmount!;
-                    break;
-                }
-            }
-            const next = new Date(d);
-            next.setMonth(next.getMonth() + 1);
-            d = next;
-        }
-    }
-
-    const bankBalance = cashSnapshot.bankBalance;
-    const pastAdjustments = cashAdjustments.filter(a => a.origin === "system");
-    const futureAdjustments = cashAdjustments.filter(a => a.origin === "user");
-
-    const adjustmentsTotal = pastAdjustments.reduce((s, a) => s + a.amount, 0);
-    const openingCash = bankBalance + adjustmentsTotal;
-
-    // ─── Run the canonical forecast engine (same as /api/dashboard) ─────────
-    // This ensures the Ledger balance row tells the same story as the Dashboard
-    // chart, table, and header — one pipeline, one source of truth.
-    const bankTxsForBaseline: BankTxForBaseline[] = bankTxs.map(tx => ({
-        amount: normalizeBankTransactionAmount(tx),
-        date: tx.txDate,
-        merchantKey: tx.description ?? "",
-        accountName: tx.account?.name ?? null,
-    }));
-    const patternsForBaseline: RecurringPatternForBaseline[] = recurringPatternsRaw.map(rp => ({
-        merchantKey: rp.merchantKey ?? rp.displayName,
-        direction: rp.direction,
-        category: rp.category,
-        isIncluded: rp.isIncluded,
-        typicalAmount: rp.typicalAmount,
-        amountStdDev: rp.amountStdDev,
-        cadence: rp.cadence as any,
-    }));
-    const baseline = computeBaseline(bankTxsForBaseline, patternsForBaseline, cashSnapshot.asOfDate, {
-        payrollAllInAmount: assumptions.payrollAllInAmount,
-        payrollNextDate: assumptions.payrollNextDate,
-        payrollCadence: assumptions.payrollCadence,
-        rentMonthlyAmount: assumptions.rentMonthlyAmount,
-        rentDayOfMonth: assumptions.rentDayOfMonth,
-    });
-
-    const multipliers = computeVarianceMultipliers(varianceLedger);
-    const varianceMultiplier = multipliers.outflow;
-    const varianceMultiplierIn = multipliers.inflow;
-
-    const cachedBaseline = await prisma.baselineSnapshot.findUnique({
-        where: { companyId: cid }
-    });
-
-    // We now apply variance multipliers inline when building the forecast inputs.
-
-    // Build recurring forecast input (with skip dates for rescheduled occurrences)
-    const skipDatesByPattern = new Map<string, string[]>();
-    for (const ov of overrides) {
-        if (ov.type === "skip_recurring_occurrence" && ov.targetId && ov.effectiveDate) {
-            if (!skipDatesByPattern.has(ov.targetId)) skipDatesByPattern.set(ov.targetId, []);
-            skipDatesByPattern.get(ov.targetId)!.push(ov.effectiveDate.toISOString().slice(0, 10));
-        }
-    }
-    const recurring: ForecastRecurring[] = recurringPatternsRaw.map(rp => ({
-        id: rp.id,
-        direction: rp.direction as "inflow" | "outflow",
-        displayName: rp.displayName,
-        typicalAmount: rp.typicalAmount,
-        amountStdDev: rp.amountStdDev,
-        cadence: rp.cadence,
-        nextExpectedDate: rp.nextExpectedDate,
-        confidence: rp.confidence as "high" | "med" | "low",
-        category: rp.category,
-        isIncluded: rp.isIncluded,
-        isCritical: rp.isCritical,
-        status: rp.status,
-        origin: rp.origin,
-        skipDates: skipDatesByPattern.get(rp.id) ?? [],
-    }));
-
-    // One-time outflows from rescheduled recurring items
-    const oneTimeOutflows = overrides
-        .filter(ov => ov.type === "add_one_time_outflow" && ov.targetId && ov.effectiveDate && ov.amount != null && ov.metaJson?.startsWith("recurring:"))
-        .map(ov => {
-            const parts = ov.metaJson!.split("|from:");
-            return {
-                patternId: ov.targetId!,
-                displayName: parts[0].replace("recurring:", ""),
-                amount: ov.amount!,
-                weekStart: ov.effectiveDate!,
-                sourceWeekStart: parts[1] || null,
+                weekNumber: w + 1,
+                weekStart: weekStart.toISOString(),
+                weekEnd: weekEnd.toISOString(),
             };
         });
 
-    // Build invoice/bill inputs (same enrichment already done above, re-use the data)
-    const forecastInvoices: ForecastInvoice[] = enrichedInvoices.filter((inv: any) => !inv.isExcluded).map((inv: any) => {
-        const ovs = overridesByTarget.get(inv.id) || [];
-        let overrideExpectedDate: Date | null = null;
-        let overrideAmount: number | null = null;
-        let partialPayment: number | null = null;
-        for (const ov of ovs) {
-            if (ov.type === "set_expected_payment_date" && ov.effectiveDate) overrideExpectedDate = ov.effectiveDate;
-            if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
-            if (ov.type === "partial_payment" && ov.amount != null) partialPayment = ov.amount;
+        const overridesByTarget = new Map<string, typeof overrides>();
+        for (const ov of overrides) {
+            if (ov.targetId) {
+                if (!overridesByTarget.has(ov.targetId)) overridesByTarget.set(ov.targetId, []);
+                overridesByTarget.get(ov.targetId)!.push(ov);
+            }
         }
-        const cp = customerMap.get(inv.customerName);
-        return {
-            id: inv.id,
-            customerName: inv.customerName,
-            invoiceNo: inv.invoiceNo,
-            amountOpen: inv.amountOpen,
-            invoiceDate: inv.invoiceDate ? new Date(inv.invoiceDate) : null,
-            dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
-            daysPastDue: inv.daysPastDue,
-            status: "open",
-            metaJson: null,
-            typicalDelayWeeks: cp?.typicalDelayWeeks,
-            riskTag: cp?.riskTag,
-            overrideExpectedDate,
-            overrideAmount,
-            markedPaid: false,
-            partialPayment,
-        };
-    });
 
-    const forecastBills: ForecastBill[] = enrichedBills.filter((bill: any) => !bill.isExcluded).map((bill: any) => {
-        const ovs = overridesByTarget.get(bill.id) || [];
-        let overrideDueDate: Date | null = null;
-        let overrideAmount: number | null = null;
-        for (const ov of ovs) {
-            if (ov.type === "delay_due_date" && ov.effectiveDate) overrideDueDate = ov.effectiveDate;
-            if (ov.type === "set_bill_due_date" && ov.effectiveDate) overrideDueDate = ov.effectiveDate;
-            if (ov.type === "adjust_amount" && ov.amount != null) overrideAmount = ov.amount;
+        const customerMap = new Map(customerProfiles.map(c => [c.customerName, c]));
+        const vendorMap = new Map(vendorProfiles.map(v => [v.vendorName, v]));
+        const obsByCustomer = new Map<string, Array<{ daysEarlyOrLate: number }>>();
+        for (const obs of customerPaymentObs) {
+            if (!obsByCustomer.has(obs.customerName)) obsByCustomer.set(obs.customerName, []);
+            obsByCustomer.get(obs.customerName)!.push(obs);
         }
-        return {
-            id: bill.id,
-            vendorName: bill.vendorName,
-            billNo: bill.billNo,
-            amountOpen: bill.amountOpen,
-            billDate: bill.billDate ? new Date(bill.billDate) : null,
-            dueDate: bill.dueDate ? new Date(bill.dueDate) : null,
-            daysPastDue: bill.daysPastDue,
-            status: "open",
-            overrideDueDate,
-            overrideAmount,
-            markedPaid: false,
-        };
-    });
 
-    const totalOpenAR = forecastInvoices.reduce((s, i) => s + i.amountOpen, 0);
-    const isARHeavy = totalOpenAR > (baseline.conservativeInflowWeekly || 0);
+        // Helper to find the week an item landed in canonically
+        function findForecastBreakdownItem(targetId: string, listName: 'inflows' | 'outflows', expectedSourceType: string): { weekNumber: number, item: any } | null {
+            for (const w of forecastResult.weeks) {
+                const found = w.breakdown[listName].find((i: any) => i.sourceId === targetId && i.sourceType === expectedSourceType);
+                if (found) {
+                    return { weekNumber: w.weekNumber, item: found };
+                }
+            }
+            return null;
+        }
 
-    const cogsCorrelation = computeCOGSCorrelation(baseline.weeklyBuckets);
+        const enrichedInvoices = invoicesRaw
+            .filter(inv => inv.status === "open")
+            .map(invRaw => {
+                const canonical = input.invoices.find(i => i.id === invRaw.id);
+                const isExcluded = !canonical && overridesByTarget.get(invRaw.id)?.some(o => o.type === "exclude");
+                const markedPaid = !canonical && overridesByTarget.get(invRaw.id)?.some(o => o.type === "mark_paid");
+                const cp = customerMap.get(invRaw.customerName);
+                
+                // If not in canonical and not excluded/paid, it was fully reconciled away canonically
+                const isFullyReconciled = !canonical && !isExcluded && !markedPaid;
 
-    const forecastInput: ForecastInput = {
-        adjustedOpeningCash: openingCash,
-        bankBalance,
-        adjustmentsTotal,
-        asOfDate: cashSnapshot.asOfDate,
-        invoices: forecastInvoices,
-        bills: forecastBills,
-        recurring,
-        assumptions: {
-            bufferMin: assumptions.bufferMin ?? 10000,
-            fixedWeeklyOutflow: assumptions.fixedWeeklyOutflow ?? 0,
-            payrollCadence: assumptions.payrollCadence ?? "biweekly",
-            payrollAllInAmount: assumptions.payrollAllInAmount ?? null,
-            payrollNextDate: assumptions.payrollNextDate ?? null,
-            rentMonthlyAmount: assumptions.rentMonthlyAmount ?? null,
-            rentDayOfMonth: assumptions.rentDayOfMonth ?? null,
-            paymentCurveJson: assumptions.paymentCurveJson,
-            highRiskAgingDays: assumptions.highRiskAgingDays ?? 61,
-            projectionSafetyMargin: assumptions.projectionSafetyMargin ?? 1.0,
-        },
-        hasBankBaseline: baseline.hasSufficientHistory,
-        baselineConfidenceTier: baseline.baselineConfidenceTier,
-        variableOutflowWeekly: baseline.variableOutflowWeekly * varianceMultiplier,
-        variableOutflowBand: baseline.variableOutflowBand,
-        baselineInflowWeekly: baseline.variableInflowWeekly * varianceMultiplierIn,
-        baselineInflowBand: baseline.variableInflowBand,
-        baselineInflowCadence: baseline.inflowCadence,
-        baselineOutflowCadence: baseline.outflowCadence,
-        cashMarginRatio: cogsCorrelation.cashMarginRatio,
-        cogsLagWeeks: cogsCorrelation.cogsLagWeeks,
-        isARHeavy,
-        oneTimeOutflows,
-        aiInflowFactors: cachedBaseline?.aiInflowFactorsJson ? JSON.parse(cachedBaseline.aiInflowFactorsJson) : undefined,
-        aiOutflowFactors: cachedBaseline?.aiOutflowFactorsJson ? JSON.parse(cachedBaseline.aiOutflowFactorsJson) : undefined,
-        aiInflowExplanations: cachedBaseline?.aiInflowExplanationsJson ? JSON.parse(cachedBaseline.aiInflowExplanationsJson) : undefined,
-        aiOutflowExplanations: cachedBaseline?.aiOutflowExplanationsJson ? JSON.parse(cachedBaseline.aiOutflowExplanationsJson) : undefined,
-        cashFlowEntries: [
-            ...cashFlowEntries.map((e: any) => ({
-                categoryId: e.categoryId,
-                categoryName: e.category.name,
-                direction: e.category.direction as "inflow" | "outflow",
-                label: e.label,
-                amount: e.amount,
-                targetDate: e.targetDate,
-            })),
-            ...futureAdjustments.map(a => ({
-                categoryId: "custom",
-                categoryName: a.type,
-                direction: a.amount >= 0 ? ("inflow" as const) : ("outflow" as const),
-                label: a.note || a.type,
-                amount: Math.abs(a.amount),
-                targetDate: a.effectiveDate,
-                sourceId: a.id,
-            }))
-        ]
-    };
+                if (markedPaid || isFullyReconciled) return null;
 
-    const forecast = computeForecast(forecastInput);
+                let effectiveWeek: number | null = null;
+                let canonicalExpectedDate: Date | null = null;
+                let canonicalConfidence = "low";
+                let effectiveAmount = 0;
 
-    return NextResponse.json({
-        companyId: cid,
-        openingCash,
-        weeks,
-        invoices: enrichedInvoices,
-        bills: enrichedBills,
-        weeklyRecurringOutflows: weeklyRecurringOutflows.map((total, i) => ({ weekNumber: i + 1, total })),
-        weeklyRecurringInflows: weeklyRecurringInflows.map((total, i) => ({ weekNumber: i + 1, total })),
-        // Canonical forecast — same computation as the Dashboard chart/table.
-        // The Ledger uses these for its balance row so all views agree.
-        forecast: {
-            weeks: forecast.weeks.map(w => ({
-                weekNumber: w.weekNumber,
-                startCash: w.startCash,
-                endCashExpected: w.endCashExpected,
-                inflowsExpected: w.inflowsExpected,
-                outflowsExpected: w.outflowsExpected,
-                projectedInflow: Math.max(0, w.inflowsExpected -
-                    w.breakdown.inflows
-                        .filter((i: any) => i.sourceType === "invoice" || i.sourceType === "recurring")
-                        .reduce((s: number, i: any) => s + i.amount, 0)
-                ),
-                projectedOutflow: Math.max(0, w.outflowsExpected -
-                    w.breakdown.outflows
-                        .filter((i: any) => i.sourceType === "bill" || i.sourceType === "recurring")
-                        .reduce((s: number, i: any) => s + i.amount, 0)
-                ),
-                breakdown: w.breakdown,
-            })),
-            input: forecastInput,
+                if (canonical) {
+                    const breakdownMatch = findForecastBreakdownItem(canonical.id, 'inflows', 'invoice');
+                    
+                    if (breakdownMatch) {
+                        effectiveWeek = breakdownMatch.weekNumber;
+                        effectiveAmount = breakdownMatch.item.amount;
+                        canonicalConfidence = breakdownMatch.item.confidence;
+                        const { date } = computeExpectedPaymentDate(canonical as any, today, paymentCurve);
+                        canonicalExpectedDate = date;
+                    } else {
+                        // Backlog or outside 13-week horizon
+                        effectiveAmount = resolveInvoiceForecastAmount(canonical);
+                        const { date, confidence } = computeExpectedPaymentDate(canonical as any, today, paymentCurve);
+                        canonicalExpectedDate = date;
+                        canonicalConfidence = confidence;
+                    }
+                }
+
+                const dueDaysAgo = invRaw.dueDate
+                    ? Math.floor((today.getTime() - new Date(invRaw.dueDate).getTime()) / 86400000)
+                    : null;
+
+                const moveCount = overridesByTarget.get(invRaw.id)?.filter(o => o.type === "set_expected_payment_date").length || 0;
+
+                return {
+                    id: invRaw.id,
+                    customerName: invRaw.customerName,
+                    invoiceNo: invRaw.invoiceNo,
+                    amountOpen: effectiveAmount, // Canonical processed amount
+                    originalAmount: invRaw.amountOpen,
+                    invoiceDate: invRaw.invoiceDate?.toISOString() ?? null,
+                    dueDate: invRaw.dueDate?.toISOString() ?? null,
+                    daysPastDue: dueDaysAgo,
+                    expectedDate: canonicalExpectedDate?.toISOString() ?? null,
+                    effectiveWeek,
+                    overrideDate: canonical?.overrideExpectedDate?.toISOString() ?? null,
+                    riskTag: canonical?.riskTag ?? cp?.riskTag ?? "low",
+                    confidence: canonical ? canonicalConfidence : "low",
+                    moveCount,
+                    isExcluded: !!isExcluded,
+                    isFullyReconciled,
+                    kind: "ar" as const,
+                };
+            }).filter(Boolean);
+
+        const enrichedBills = billsRaw
+            .filter(bill => bill.status === "open")
+            .map(billRaw => {
+                const canonical = input.bills.find(b => b.id === billRaw.id);
+                const isExcluded = !canonical && overridesByTarget.get(billRaw.id)?.some(o => o.type === "exclude");
+                const markedPaid = !canonical && overridesByTarget.get(billRaw.id)?.some(o => o.type === "mark_paid");
+                const vp = vendorMap.get(billRaw.vendorName);
+                
+                const isFullyReconciled = !canonical && !isExcluded && !markedPaid;
+
+                if (markedPaid || isFullyReconciled) return null;
+
+                let effectiveWeek: number | null = null;
+                let canonicalEffectiveDate: Date | null = null;
+                let effectiveAmount = 0;
+
+                if (canonical) {
+                    const breakdownMatch = findForecastBreakdownItem(canonical.id, 'outflows', 'bill');
+                    
+                    if (breakdownMatch) {
+                        effectiveWeek = breakdownMatch.weekNumber;
+                        effectiveAmount = breakdownMatch.item.amount;
+                    } else {
+                        effectiveAmount = resolveBillForecastAmount(canonical);
+                    }
+
+                    if (canonical.overrideDueDate) {
+                        canonicalEffectiveDate = new Date(canonical.overrideDueDate);
+                    } else if (canonical.dueDate) {
+                        canonicalEffectiveDate = new Date(canonical.dueDate);
+                    } else if (canonical.billDate) {
+                        canonicalEffectiveDate = addDays(new Date(canonical.billDate), 30);
+                    } else {
+                        canonicalEffectiveDate = addDays(today, 7);
+                    }
+                }
+
+                const originalDue = billRaw.dueDate ? new Date(billRaw.dueDate) : null;
+                const dueDaysAgo = originalDue
+                    ? Math.floor((today.getTime() - originalDue.getTime()) / 86400000)
+                    : null;
+
+                const moveCount = overridesByTarget.get(billRaw.id)?.filter(o => o.type === "set_bill_due_date" || o.type === "delay_due_date").length || 0;
+
+                return {
+                    id: billRaw.id,
+                    vendorName: billRaw.vendorName,
+                    billNo: billRaw.billNo,
+                    amountOpen: effectiveAmount, // Canonical processed amount
+                    originalAmount: billRaw.amountOpen,
+                    billDate: billRaw.billDate?.toISOString() ?? null,
+                    dueDate: billRaw.dueDate?.toISOString() ?? null,
+                    daysPastDue: dueDaysAgo,
+                    effectiveDate: canonicalEffectiveDate?.toISOString() ?? null,
+                    effectiveWeek,
+                    overrideDate: canonical?.overrideDueDate?.toISOString() ?? null,
+                    criticality: canonical?.criticality ?? vp?.criticality ?? "normal",
+                    moveCount,
+                    isExcluded: !!isExcluded,
+                    isFullyReconciled,
+                    kind: "ap" as const,
+                };
+            }).filter(Boolean);
+
+        const weeklyRecurringOutflows: number[] = new Array(13).fill(0);
+        const weeklyRecurringInflows: number[] = new Array(13).fill(0);
+
+        for (const w of forecastResult.weeks) {
+            const outTotal = w.breakdown.outflows
+                .filter((o: any) => o.sourceType === "recurring" || o.sourceType === "synthetic_payroll")
+                .reduce((s: number, o: any) => s + o.amount, 0);
+            if (w.weekNumber >= 1 && w.weekNumber <= 13) {
+                weeklyRecurringOutflows[w.weekNumber - 1] = outTotal;
+            }
+            
+            const inTotal = w.breakdown.inflows
+                .filter((i: any) => i.sourceType === "recurring")
+                .reduce((s: number, i: any) => s + i.amount, 0);
+            if (w.weekNumber >= 1 && w.weekNumber <= 13) {
+                weeklyRecurringInflows[w.weekNumber - 1] = inTotal;
+            }
+        }
+
+        return NextResponse.json({
+            companyId: cid,
+            openingCash: input.adjustedOpeningCash,
+            weeks,
             invoices: enrichedInvoices,
             bills: enrichedBills,
-            recurring: forecastInput.recurring,
-        },
-        executionPlan: executionPlanData,
-    });
+            weeklyRecurringOutflows: weeklyRecurringOutflows.map((total, i) => ({ weekNumber: i + 1, total })),
+            weeklyRecurringInflows: weeklyRecurringInflows.map((total, i) => ({ weekNumber: i + 1, total })),
+            forecast: {
+                weeks: forecastResult.weeks.map(w => ({
+                    weekNumber: w.weekNumber,
+                    startCash: w.startCash,
+                    endCashExpected: w.endCashExpected,
+                    inflowsExpected: w.inflowsExpected,
+                    outflowsExpected: w.outflowsExpected,
+                    projectedInflow: Math.max(0, w.inflowsExpected -
+                        w.breakdown.inflows
+                            .filter((i: any) => i.sourceType === "invoice" || i.sourceType === "recurring")
+                            .reduce((s: number, i: any) => s + i.amount, 0)
+                    ),
+                    projectedOutflow: Math.max(0, w.outflowsExpected -
+                        w.breakdown.outflows
+                            .filter((i: any) => i.sourceType === "bill" || i.sourceType === "recurring" || i.sourceType === "synthetic_payroll")
+                            .reduce((s: number, i: any) => s + i.amount, 0)
+                    ),
+                    breakdown: w.breakdown,
+                })),
+                input: input,
+                invoices: enrichedInvoices.filter((i: any) => !i.isExcluded),
+                bills: enrichedBills.filter((b: any) => !b.isExcluded),
+                recurring: recurring,
+            },
+            executionPlan: executionPlanData,
+        });
+
+    } catch (e: any) {
+        console.error("CashFlow Grid GET Error:", e);
+        return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 });
+    }
 }

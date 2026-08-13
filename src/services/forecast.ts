@@ -13,6 +13,19 @@ import { DEFAULT_PAYMENT_CURVE } from "@/domain/types";
 
 // ─── Input Types ────────────────────────────────────────────────────────
 
+export function resolveInvoiceForecastAmount(inv: any): number {
+    let amount = inv.amountOpen;
+    if (inv.overrideAmount != null) amount = inv.overrideAmount;
+    if (inv.partialPayment != null) amount = Math.max(0, amount - inv.partialPayment);
+    return Math.max(0, amount);
+}
+
+export function resolveBillForecastAmount(bill: any): number {
+    let amount = bill.amountOpen;
+    if (bill.overrideAmount != null) amount = bill.overrideAmount;
+    return Math.max(0, amount);
+}
+
 export interface ForecastInvoice {
     id: string;
     customerName: string;
@@ -241,7 +254,7 @@ export function computeExpectedPaymentDate(
 ): { date: Date; confidence: ConfidenceLevel; missingDate: boolean } {
     // Override takes priority
     if (invoice.overrideExpectedDate) {
-        return { date: invoice.overrideExpectedDate, confidence: "high", missingDate: false };
+        return { date: new Date(invoice.overrideExpectedDate), confidence: "high", missingDate: false };
     }
 
     // Step 1: Determine baseDueDate
@@ -343,9 +356,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         if (inv.status !== "open") continue;
         if (inv.markedPaid) continue;
 
-        let amount = inv.amountOpen;
-        if (inv.overrideAmount != null) amount = inv.overrideAmount;
-        if (inv.partialPayment != null) amount = Math.max(0, amount - inv.partialPayment);
+        const amount = resolveInvoiceForecastAmount(inv);
         if (amount <= 0) continue;
 
         const { date: expectedDate, confidence } = computeExpectedPaymentDate(inv, today, paymentCurve);
@@ -371,8 +382,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
         if (bill.status !== "open") continue;
         if (bill.markedPaid) continue;
 
-        let amount = bill.amountOpen;
-        if (bill.overrideAmount != null) amount = bill.overrideAmount;
+        const amount = resolveBillForecastAmount(bill);
         if (amount <= 0) continue;
 
         let billDueDate: Date;

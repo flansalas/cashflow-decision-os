@@ -366,5 +366,26 @@ export async function assembleForecastData(companyId: string) {
 
     const organicForecast = computeForecast(organicInput);
 
-    return { input, forecastResult, organicForecast, baseline, overrides, invoices, bills, recurring, cashSnapshot, cashAdjustments, companyNotes, cashFlowCategories, cashFlowEntries, assumptions };
+    return { 
+        input, 
+        forecastResult, 
+        organicForecast, 
+        baseline, 
+        overrides, 
+        invoices, 
+        bills, 
+        recurring, 
+        cashSnapshot, 
+        cashAdjustments, 
+        companyNotes, 
+        cashFlowCategories, 
+        cashFlowEntries, 
+        assumptions,
+        // Raw context for presentation layers (do not use for economics recalculation)
+        invoicesRaw,
+        billsRaw,
+        customerProfiles,
+        vendorProfiles,
+        customerPaymentObs,
+    };
 }
