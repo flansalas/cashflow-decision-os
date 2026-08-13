@@ -2,15 +2,10 @@
 // Assembles all data for the Survival Dashboard
 
 import { NextRequest, NextResponse } from "next/server";
-import { waitUntil } from "@vercel/functions";
 import prisma from "@/db/prisma";
-import { computeForecast, type ForecastInput, type ForecastInvoice, type ForecastBill, type ForecastRecurring } from "@/services/forecast";
 import { detectAnomalies, computeConfidence, computeDataQualityGate, type QAInput } from "@/services/qa";
 import { generateActions } from "@/services/actions";
-import { computeBaseline, type BankTxForBaseline, type RecurringPatternForBaseline, type BaselineResult } from "@/services/baseline";
 import { computeVarianceMultipliers } from "@/services/variance";
-import { computeCOGSCorrelation } from "@/services/cogs-correlation";
-import { computeTypicalDelayWeeks } from "@/services/payment-memory";
 import { computeExpectedPaymentDate, parsePaymentCurve, getMonday, addDays } from "@/services/forecast";
 import { assembleForecastData } from "@/services/forecast-assembly";
 import { resolveTenant } from "@/lib/tenant";
@@ -22,75 +17,82 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
     try {
         const tenantId = await resolveTenant(req);
-        let company = null;
-        
-        if (tenantId) {
-            company = await prisma.company.findUnique({ where: { id: tenantId } });
-        }
+        if (!tenantId) return NextResponse.json({ error: "Missing or invalid company" }, { status: 401 });
 
+        const requestedCompanyId = req.nextUrl.searchParams.get("companyId");
+        if (requestedCompanyId && requestedCompanyId !== tenantId) {
+            let isAuthorized = false;
+            if (requestedCompanyId.startsWith("org_")) {
+                const company = await prisma.company.findUnique({
+                    where: { clerkOrgId: requestedCompanyId },
+                    select: { id: true }
+                });
+                if (company?.id === tenantId) {
+                    isAuthorized = true;
+                }
+            }
+            if (!isAuthorized) {
+                return NextResponse.json({ error: "Forbidden: cross-tenant access denied" }, { status: 403 });
+            }
+        }
+        
+        const cid = tenantId;
+
+        const company = await prisma.company.findUnique({ where: { id: cid } });
         if (!company) {
             return NextResponse.json({ error: "Company not found" }, { status: 404 });
         }
 
-        const cid = company.id;
-
-        // ── Load all data in parallel ──────────────────────────────────
-        const [
+        // ── Canonical Forecast Assembly ──────────────────────────────────
+        // (Replacing duplicate dashboard assembly logic and migrating legacy data)
+        const {
+            input: forecastInput,
+            forecastResult: forecast,
+            organicForecast,
+            baseline,
+            invoices,
+            bills,
             cashSnapshot,
             cashAdjustments,
             invoicesRaw,
             billsRaw,
-            customerProfiles,
-            vendorProfiles,
-            assumptionRaw,
-            recurringPatternsRaw,
+            assumptions,
             overrides,
-            bankTxs,
+            recurring: recurringPatternsRaw,
+        } = await assembleForecastData(cid);
+
+        if (!cashSnapshot) {
+            return NextResponse.json({ error: "No cash snapshot found. Complete onboarding first." }, { status: 400 });
+        }
+
+        if (isNaN(new Date(cashSnapshot.asOfDate).getTime())) {
+            console.error("Dashboard API error: Invalid asOfDate in CashSnapshot", cashSnapshot.asOfDate);
+            return NextResponse.json({ error: "Invalid snapshot date. Please re-run onboarding." }, { status: 400 });
+        }
+
+        const currentWeekStart = getMonday(new Date(cashSnapshot.asOfDate));
+
+        // ── Load additional display data in parallel ──────────────────────────────────
+        const [
             companyNotes,
             cashFlowCategories,
-            cashFlowEntries,
             varianceLedger,
-            customerPaymentObs,
             cachedBaseline,
+            latestBankUpload,
+            latestArUpload,
+            latestApUpload,
+            activePlan,
         ] = await Promise.all([
-            prisma.cashSnapshot.findFirst({ where: { companyId: cid }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] }),
-            prisma.cashAdjustment.findMany({ where: { companyId: cid } }),
-            prisma.receivableInvoice.findMany({ where: { companyId: cid } }),
-            prisma.payableBill.findMany({ where: { companyId: cid } }),
-            prisma.customerProfile.findMany({ where: { companyId: cid } }),
-            prisma.vendorProfile.findMany({ where: { companyId: cid } }),
-            prisma.assumption.findFirst({ where: { companyId: cid } }),
-            // Only active patterns — matches what baseline-snapshot.ts uses (status consistency fix)
-            prisma.recurringPattern.findMany({ where: { companyId: cid, status: "active" } }),
-            prisma.override.findMany({ where: { companyId: cid, status: "active" }, orderBy: { createdAt: "desc" } }),
-            // Load ALL bank txs (no 365-day cap) — matches baseline-snapshot.ts behaviour (date filter consistency fix)
-            prisma.bankTransaction.findMany({
-                where: { companyId: cid },
-                select: { amount: true, txDate: true, description: true, direction: true },
-            }),
-            // CompanyNotes for flags (cash mismatch, etc.)
             prisma.companyNote.findMany({ where: { companyId: cid } }),
             prisma.cashFlowCategory.findMany({ where: { companyId: cid }, orderBy: [{ direction: "asc" }, { sortOrder: "asc" }, { name: "asc" }] }),
-            prisma.cashFlowEntry.findMany({ where: { companyId: cid }, include: { category: true } }),
             prisma.baselineVarianceLedger.findMany({
                 where: { companyId: cid },
                 orderBy: { weekStart: "desc" },
-                take: 8, // 8-week recency-weighted variance window
-            }),
-            prisma.customerPaymentObservation.findMany({
-                where: { companyId: cid },
-                select: { customerName: true, daysEarlyOrLate: true },
+                take: 8,
             }),
             prisma.baselineSnapshot.findUnique({
                 where: { companyId: cid }
             }),
-        ]);
-
-        const [
-            latestBankUpload,
-            latestArUpload,
-            latestApUpload,
-        ] = await Promise.all([
             prisma.importBatch.findFirst({
                 where: { companyId: cid, importType: "bank" },
                 orderBy: { uploadedAt: "desc" },
@@ -103,39 +105,11 @@ export async function GET(req: NextRequest) {
                 where: { companyId: cid, importType: "ap" },
                 orderBy: { uploadedAt: "desc" },
             }),
+            prisma.executionPlan.findFirst({
+                where: { companyId: cid, weekStart: currentWeekStart, status: "approved" },
+                orderBy: { version: 'desc' }
+            })
         ]);
-
-        const currentWeekStart = getMonday(cashSnapshot ? new Date(cashSnapshot.asOfDate) : new Date());
-
-        // Legacy Migration: Auto-migrate CashFlowEntry to CashAdjustment
-        if (cashFlowEntries.length > 0) {
-            console.log(`Migrating ${cashFlowEntries.length} legacy CashFlowEntry items to CashAdjustment...`);
-            for (const e of cashFlowEntries) {
-                await prisma.cashAdjustment.create({
-                    data: {
-                        companyId: e.companyId,
-                        type: e.category.name,
-                        amount: e.category.direction === "outflow" ? -Math.abs(e.amount) : Math.abs(e.amount),
-                        note: e.label || e.note || e.category.name,
-                        effectiveDate: e.targetDate,
-                        status: "active",
-                        origin: "user",
-                    }
-                });
-            }
-            await prisma.cashFlowEntry.deleteMany({ where: { companyId: cid } });
-            
-            // Re-fetch cashAdjustments since we just modified them
-            const updatedAdjustments = await prisma.cashAdjustment.findMany({ where: { companyId: cid } });
-            cashAdjustments.length = 0;
-            cashAdjustments.push(...updatedAdjustments);
-            cashFlowEntries.length = 0; // Clear them out so they aren't double-counted
-        }
-
-        const activePlan = await prisma.executionPlan.findFirst({
-            where: { companyId: cid, weekStart: currentWeekStart, status: "approved" },
-            orderBy: { version: 'desc' }
-        });
 
         let postApprovalChanges: any[] = [];
         let planForecast = null;
@@ -143,7 +117,7 @@ export async function GET(req: NextRequest) {
         if (activePlan) {
             try {
                 if (activePlan.forecastStateJson) {
-                    planForecast = JSON.parse(activePlan.forecastStateJson);
+                    planForecast = JSON.parse(activePlan.forecastStateJson as string);
                 }
             } catch (e) {
                 console.error("Failed to parse forecastStateJson for active plan", e);
@@ -156,7 +130,7 @@ export async function GET(req: NextRequest) {
             postApprovalChanges = rawChanges.map(c => {
                 let details = {};
                 try {
-                    details = JSON.parse(c.diffJson);
+                    details = JSON.parse(c.diffJson as string);
                 } catch { }
                 return {
                     id: c.id,
@@ -165,40 +139,6 @@ export async function GET(req: NextRequest) {
                 };
             });
         }
-
-        if (!cashSnapshot) {
-            return NextResponse.json({ error: "No cash snapshot found. Complete onboarding first." }, { status: 400 });
-        }
-
-        // Validate asOfDate
-        if (isNaN(new Date(cashSnapshot.asOfDate).getTime())) {
-            console.error("Dashboard API error: Invalid asOfDate in CashSnapshot", cashSnapshot.asOfDate);
-            return NextResponse.json({ error: "Invalid snapshot date. Please re-run onboarding." }, { status: 400 });
-        }
-
-        const assumptions = assumptionRaw ?? {
-            bufferMin: 10000,
-            fixedWeeklyOutflow: 0,
-            payrollCadence: "biweekly",
-            payrollAllInAmount: null,
-            payrollNextDate: null,
-            rentMonthlyAmount: null,
-            rentDayOfMonth: null,
-            paymentCurveJson: '{"current":0,"1-14":1,"15-30":2,"31-60":3,"61+":4}',
-            highRiskAgingDays: 61,
-            projectionSafetyMargin: 1.0,
-        };
-
-        // ── Canonical Forecast Assembly ──────────────────────────────────
-        // (Replacing duplicate dashboard assembly logic)
-        const {
-            input: forecastInput,
-            forecastResult: forecast,
-            organicForecast,
-            baseline,
-            invoices,
-            bills
-        } = await assembleForecastData(cid);
 
         const overridesByTarget = new Map<string, typeof overrides>();
         for (const ov of overrides) {
@@ -209,7 +149,7 @@ export async function GET(req: NextRequest) {
         }
         const visibility = buildManagerialVisibility(
             overrides.filter(override => override.type === "exclude").map(override => ({
-                targetId: override.targetId,
+                targetId: override.targetId!,
                 targetType: override.targetType,
             })),
         );
@@ -222,11 +162,8 @@ export async function GET(req: NextRequest) {
         let varianceMultiplier = multipliers.outflow;
         let varianceMultiplierIn = multipliers.inflow;
 
-        const cogsCorrelation = computeCOGSCorrelation(baseline.weeklyBuckets);
-        // DEBUG: log baseline stats so we can verify projection activation
         console.log("[baseline-debug]", {
             companyId: cid,
-            bankTxCount: bankTxs.length,
             hasSufficientHistory: baseline.hasSufficientHistory,
             weeksAnalyzed: baseline.weeksAnalyzed,
             variableInflowWeekly: baseline.variableInflowWeekly,
@@ -236,8 +173,6 @@ export async function GET(req: NextRequest) {
             baselineConfidenceTier: baseline.baselineConfidenceTier,
             note: baseline.note,
         });
-
-
 
         // ── QA / Anomalies / Confidence ────────────────────────────────
         const payrollPattern = recurringPatternsRaw.find(
@@ -250,8 +185,8 @@ export async function GET(req: NextRequest) {
                 customerName: i.customerName,
                 invoiceNo: i.invoiceNo,
                 amountOpen: i.amountOpen,
-                invoiceDate: i.invoiceDate,
-                dueDate: i.dueDate,
+                invoiceDate: i.invoiceDate ? new Date(i.invoiceDate) : null,
+                dueDate: i.dueDate ? new Date(i.dueDate) : null,
                 daysPastDue: i.daysPastDue,
             })),
             bills: managerialBillsRaw.map(b => ({
@@ -259,16 +194,16 @@ export async function GET(req: NextRequest) {
                 vendorName: b.vendorName,
                 billNo: b.billNo,
                 amountOpen: b.amountOpen,
-                billDate: b.billDate,
-                dueDate: b.dueDate,
+                billDate: b.billDate ? new Date(b.billDate) : null,
+                dueDate: b.dueDate ? new Date(b.dueDate) : null,
             })),
             assumptions: {
                 payrollAllInAmount: assumptions.payrollAllInAmount,
-                payrollNextDate: assumptions.payrollNextDate,
+                payrollNextDate: assumptions.payrollNextDate ? new Date(assumptions.payrollNextDate) : null,
             },
             payrollPatternDetected: !!payrollPattern,
             payrollPatternConfidence: payrollPattern ? payrollPattern.confidence as "high" | "med" | "low" : null,
-            hasBankData: bankTxs.length > 0,
+            hasBankData: baseline.hasSufficientHistory, // Proxied for QA checks
             arRefreshDate: (() => {
                 const note = companyNotes.find(n => n.noteText.startsWith("ar_refresh_at:"));
                 if (!note) return null;
@@ -296,7 +231,6 @@ export async function GET(req: NextRequest) {
             })(),
             cashMismatchUnreconciled: companyNotes.some(n => n.noteText === "cash_mismatch_unreconciled"),
         };
-
 
         const anomalies = detectAnomalies(qaInput);
         const confidence = computeConfidence(qaInput, anomalies);
@@ -329,10 +263,8 @@ export async function GET(req: NextRequest) {
                 : null;
 
         // ── Backlog detection ──────────────────────────────────────────
-        // «Past-due» = effective date is before this week's Monday AND no future override is active.
-        // These items are silently dropped from the 13-week forecast, so we surface them here.
-        const today = new Date(); // Use real server time for backlog, not potentially-stale snapshot date
-        const currentMonday = getMonday(today);
+        const today = new Date();
+        const currentMondayActual = getMonday(today);
         const paymentCurve = parsePaymentCurve(assumptions.paymentCurveJson);
 
         const overdueAP = managerialBillsRaw
@@ -342,20 +274,18 @@ export async function GET(req: NextRequest) {
                 const paid = ovs.some(o => o.type === "mark_paid");
                 const excluded = ovs.some(o => o.type === "exclude");
                 if (paid || excluded) return false;
-                // If there is a future override, it's already scheduled — not a backlog item
                 const futureOverride = ovs.find(o =>
                     (o.type === "delay_due_date" || o.type === "set_bill_due_date") &&
                     o.effectiveDate != null &&
-                    new Date(o.effectiveDate) >= currentMonday
+                    new Date(o.effectiveDate) >= currentMondayActual
                 );
                 if (futureOverride) return false;
-                // Determine effective due date
                 const dueDate = bill.dueDate
                     ? new Date(bill.dueDate)
                     : bill.billDate
                         ? addDays(new Date(bill.billDate), 30)
                         : null;
-                return dueDate != null && dueDate < currentMonday;
+                return dueDate != null && dueDate < currentMondayActual;
             })
             .map(bill => ({
                 id: bill.id,
@@ -374,21 +304,19 @@ export async function GET(req: NextRequest) {
                 const paid = ovs.some(o => o.type === "mark_paid");
                 const excluded = ovs.some(o => o.type === "exclude");
                 if (paid || excluded) return false;
-                // If there is a future override (explicit schedule), it's already in the grid
                 const futureOverride = ovs.find(o =>
                     o.type === "set_expected_payment_date" &&
                     o.effectiveDate != null &&
-                    new Date(o.effectiveDate) >= currentMonday
+                    new Date(o.effectiveDate) >= currentMondayActual
                 );
                 if (futureOverride) return false;
-                // Compute expected payment date
                 const forecastInv = {
                     id: inv.id,
                     customerName: inv.customerName,
                     invoiceNo: inv.invoiceNo,
                     amountOpen: inv.amountOpen,
-                    invoiceDate: inv.invoiceDate,
-                    dueDate: inv.dueDate,
+                    invoiceDate: inv.invoiceDate ? new Date(inv.invoiceDate) : null,
+                    dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
                     daysPastDue: inv.daysPastDue,
                     status: inv.status,
                     metaJson: inv.metaJson,
@@ -399,8 +327,8 @@ export async function GET(req: NextRequest) {
                     markedPaid: false,
                     partialPayment: null,
                 };
-                const { date: expectedDate } = computeExpectedPaymentDate(forecastInv, today, paymentCurve);
-                return expectedDate < currentMonday;
+                const { date: expectedDate } = computeExpectedPaymentDate(forecastInv as any, today, paymentCurve);
+                return expectedDate < currentMondayActual;
             })
             .map(inv => ({
                 id: inv.id,
@@ -429,7 +357,7 @@ export async function GET(req: NextRequest) {
         }
 
         // ── All recurring patterns (for Commitments Panel) ─────────────
-        const allCommitments = recurringPatternsRaw.map(rp => ({
+        const allCommitments: any[] = recurringPatternsRaw.map(rp => ({
             id: rp.id,
             displayName: rp.displayName,
             category: rp.category,
@@ -443,7 +371,6 @@ export async function GET(req: NextRequest) {
             direction: rp.direction,
         }));
 
-        // Inject assumed payroll if no detected payroll pattern is included
         const hasPayrollPattern = recurringPatternsRaw.some(rp => rp.category === "payroll" && rp.isIncluded);
         if (!hasPayrollPattern && assumptions.payrollAllInAmount && assumptions.payrollNextDate) {
             allCommitments.push({
@@ -471,7 +398,6 @@ export async function GET(req: NextRequest) {
             businessCashState = "threatened";
         }
 
-        // ── Response ───────────────────────────────────────────────────
         return NextResponse.json({
             company: { id: company.id, name: company.name, isDemo: company.isDemo },
             businessCashState,
