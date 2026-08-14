@@ -132,7 +132,9 @@ export function buildCanonicalPayload(opts: {
         },
         baselineReference: {
             hasBankBaseline: opts.baselineReference?.hasBankBaseline ?? null,
-            confidence: opts.baselineReference?.confidence ?? null
+            confidence: opts.baselineReference?.confidence ?? null,
+            baselineSourceStateHash: opts.baselineReference?.baselineSourceStateHash ?? null,
+            baselineSemanticVersion: opts.baselineReference?.baselineSemanticVersion ?? null
         },
         forecastAssemblyVersion: 'assembly-v1',
         forecastEngineVersion: 'forecast-v1',

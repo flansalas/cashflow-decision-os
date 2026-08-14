@@ -498,7 +498,7 @@ export async function POST(req: NextRequest) {
                 tx,
                 companyId,
                 snapshot.id,
-                null, // appCommitHash omitted for now, could be passed from env
+                process.env.VERCEL_GIT_COMMIT_SHA || process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null,
                 "server_canonical_v1"
             );
         } catch (e) {

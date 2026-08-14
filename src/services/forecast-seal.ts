@@ -44,6 +44,13 @@ function buildComponentProvenance(assembly: any, comp: any) {
                 sourceDate = raw.nextExpectedDate;
                 sourceStatus = raw.status;
             }
+        } else if (comp.sourceType === "manual") {
+            const raw = assembly.input?.cashFlowEntries?.find((c:any) => c.sourceId === comp.sourceId);
+            if (raw) {
+                sourceAmount = raw.amount;
+                sourceDate = raw.targetDate;
+                sourceStatus = raw.direction;
+            }
         }
     }
 
@@ -59,7 +66,8 @@ function buildComponentProvenance(assembly: any, comp: any) {
             status: sourceStatus
         },
         effectiveState: {
-            amount: comp.amount
+            amount: comp.amount,
+            effectiveDateAtForecast: comp.metadata?.effectiveDateAtForecast
         },
         managerialState: {
             confidence: comp.confidence
@@ -72,7 +80,13 @@ function buildComponentProvenance(assembly: any, comp: any) {
         })),
         reconciliations: reconciliationLinks.map((l: any) => ({
             id: l.id,
-            amount: l.amount
+            sourceType: l.sourceType,
+            sourceId: l.sourceId,
+            targetType: l.targetType,
+            targetId: l.targetId,
+            matchedAmount: l.matchedAmount,
+            deductFrom: l.deductFrom,
+            status: l.status
         })),
         deductionAmount: deduction,
         baselineProvenance: isBaseline ? {
@@ -204,6 +218,24 @@ export async function createForecastVersion(
         }
     }
 
+    let baselineSourceStateHash: string | null = null;
+    let baselineSemanticVersion: string | null = null;
+    if (assembly.baseline) {
+        const semanticState = {
+            hasSufficientHistory: assembly.baseline.hasSufficientHistory,
+            baselineConfidenceTier: assembly.baseline.baselineConfidenceTier,
+            variableInflowWeekly: assembly.baseline.variableInflowWeekly,
+            variableOutflowWeekly: assembly.baseline.variableOutflowWeekly,
+            variableInflowBand: assembly.baseline.variableInflowBand,
+            variableOutflowBand: assembly.baseline.variableOutflowBand,
+            inflowCadence: assembly.baseline.inflowCadence,
+            outflowCadence: assembly.baseline.outflowCadence,
+            weeklyBuckets: assembly.baseline.weeklyBuckets
+        };
+        baselineSourceStateHash = computeCanonicalHash(canonicalJsonSerialize(semanticState));
+        baselineSemanticVersion = "assembly-v1";
+    }
+
     // 6. Build Canonical Payload
     const canonicalPayload = buildCanonicalPayload({
         companyId,
@@ -211,7 +243,12 @@ export async function createForecastVersion(
         cashSnapshotAsOfDate: snapshot.asOfDate,
         adjustedOpeningCash: forecastResult.weeks[0].startCash,
         assumptions: assembly.input.assumptions,
-        baselineReference: { hasBankBaseline: assembly.input.hasBankBaseline, confidence: assembly.input.baselineConfidenceTier },
+        baselineReference: {
+            hasBankBaseline: assembly.input.hasBankBaseline,
+            confidence: assembly.input.baselineConfidenceTier,
+            baselineSourceStateHash,
+            baselineSemanticVersion
+        },
         forecastWeeks: forecastResult.weeks,
         components,
         appCommitHash
@@ -314,26 +351,20 @@ export async function createForecastVersion(
         const crypto = require("crypto");
 
         // Extract M1 predictions from weeks
-        const m1PreAiInflows = forecastResult.weeks.map((w: any) => w.breakdown.inflows.find((i: any) => i.sourceType === "baseline")?.metadata?.stage2PreAi || 0);
-        const m1PreAiOutflows = forecastResult.weeks.map((w: any) => w.breakdown.outflows.find((o: any) => o.sourceType === "baseline")?.metadata?.stage2PreAi || 0);
+        const m1PreAiInflows = forecastResult.weeks.map((w: any) => w.baselineTrace.inflow.stage2PreAi);
+        const m1PreAiOutflows = forecastResult.weeks.map((w: any) => w.baselineTrace.outflow.stage2PreAi);
 
-        const m1PostAiInflows = forecastResult.weeks.map((w: any) => {
-            const c = w.breakdown.inflows.find((i: any) => i.sourceType === "baseline");
-            return c?.metadata?.stage3PostAi || c?.metadata?.stage2PreAi || 0;
-        });
-        const m1PostAiOutflows = forecastResult.weeks.map((w: any) => {
-            const c = w.breakdown.outflows.find((o: any) => o.sourceType === "baseline");
-            return c?.metadata?.stage3PostAi || c?.metadata?.stage2PreAi || 0;
-        });
+        const m1PostAiInflows = forecastResult.weeks.map((w: any) => w.baselineTrace.inflow.final);
+        const m1PostAiOutflows = forecastResult.weeks.map((w: any) => w.baselineTrace.outflow.final);
 
-        const m1RawInflows = forecastResult.weeks.map((w: any) => w.breakdown.inflows.find((i: any) => i.sourceType === "baseline")?.metadata?.stage1Raw || 0);
-        const m1RawOutflows = forecastResult.weeks.map((w: any) => w.breakdown.outflows.find((o: any) => o.sourceType === "baseline")?.metadata?.stage1Raw || 0);
+        const m1RawInflows = forecastResult.weeks.map((w: any) => w.baselineTrace.inflow.stage1Raw);
+        const m1RawOutflows = forecastResult.weeks.map((w: any) => w.baselineTrace.outflow.stage1Raw);
 
-        const m1ExplicitDeductionInflows = forecastResult.weeks.map((w: any) => w.breakdown.inflows.find((i: any) => i.sourceType === "baseline")?.metadata?.explicitDeduction || 0);
-        const m1ExplicitDeductionOutflows = forecastResult.weeks.map((w: any) => w.breakdown.outflows.find((o: any) => o.sourceType === "baseline")?.metadata?.explicitDeduction || 0);
+        const m1ExplicitDeductionInflows = forecastResult.weeks.map((w: any) => w.baselineTrace.inflow.explicitDeduction);
+        const m1ExplicitDeductionOutflows = forecastResult.weeks.map((w: any) => w.baselineTrace.outflow.explicitDeduction);
 
-        const m1AiFactorInflows = forecastResult.weeks.map((w: any) => w.breakdown.inflows.find((i: any) => i.sourceType === "baseline")?.metadata?.aiFactor || null);
-        const m1AiFactorOutflows = forecastResult.weeks.map((w: any) => w.breakdown.outflows.find((o: any) => o.sourceType === "baseline")?.metadata?.aiFactor || null);
+        const m1AiFactorInflows = forecastResult.weeks.map((w: any) => w.baselineTrace.inflow.aiFactor);
+        const m1AiFactorOutflows = forecastResult.weeks.map((w: any) => w.baselineTrace.outflow.aiFactor);
 
         await tx.baselineSnapshotHistory.create({
             data: {

@@ -156,6 +156,22 @@ export interface ForecastWeekResult {
     confidenceScore: number;
     breakdown: WeekBreakdown;
     worstCaseDriver: string | null; // label of the largest expected→worst delta contributor
+    baselineTrace: {
+        inflow: {
+            stage1Raw: number;
+            explicitDeduction: number;
+            stage2PreAi: number;
+            aiFactor: number | null;
+            final: number;
+        };
+        outflow: {
+            stage1Raw: number;
+            explicitDeduction: number;
+            stage2PreAi: number;
+            aiFactor: number | null;
+            final: number;
+        };
+    };
 }
 
 export interface ForecastResult {
@@ -325,10 +341,10 @@ export function computeForecast(input: ForecastInput): ForecastResult {
     const weeks: ForecastWeekResult[] = [];
 
     // Pre-allocate maps for all 13 weeks
-    const invoicesByWeek = new Map<number, Array<{ invoice: ForecastInvoice; amount: number; confidence: ConfidenceLevel; committed: boolean }>>();
-    const billsByWeek = new Map<number, Array<{ bill: ForecastBill; amount: number }>>();
-    const recurringByWeek = new Map<number, Array<RecurrenceInstance>>();
-    const recurringInflowsByWeek = new Map<number, Array<RecurrenceInstance>>();
+    const invoicesByWeek = new Map<number, Array<{ invoice: ForecastInvoice; amount: number; confidence: ConfidenceLevel; committed: boolean; date: Date }>>();
+    const billsByWeek = new Map<number, Array<{ bill: ForecastBill; amount: number; date: Date }>>();
+    const recurringByWeek = new Map<number, Array<any>>();
+    const recurringInflowsByWeek = new Map<number, Array<any>>();
     for (let w = 0; w < 13; w++) {
         invoicesByWeek.set(w, []);
         billsByWeek.set(w, []);
@@ -370,6 +386,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                     amount,
                     confidence,
                     committed: confidence === "high",
+                    date: expectedDate,
                 });
                 break;
             }
@@ -400,7 +417,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             const weekStart = addWeeks(currentMonday, w);
             const weekEnd = addDays(weekStart, 6);
             if (isInWeek(billDueDate, weekStart, weekEnd) || (w === 0 && billDueDate < weekStart)) {
-                billsByWeek.get(w)!.push({ bill, amount });
+                billsByWeek.get(w)!.push({ bill, amount, date: billDueDate });
                 break;
             }
         }
@@ -445,7 +462,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                     // Skip this occurrence if it has been rescheduled away
                     const weekStartISO = isNaN(weekStart.getTime()) ? "0000-00-00" : weekStart.toISOString().slice(0, 10);
                     if (!skipSet.has(weekStartISO)) {
-                        recurringByWeek.get(w)!.push({ pattern: rec, amount: rec.typicalAmount });
+                        recurringByWeek.get(w)!.push({ pattern: rec, amount: rec.typicalAmount, date: new Date(d) });
                     }
                     break;
                 }
@@ -489,7 +506,8 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                     pattern: syntheticPattern, 
                     amount: oto.amount, 
                     rescheduled: true,
-                    meta: { sourceWeekStart: oto.sourceWeekStart }
+                    meta: { sourceWeekStart: oto.sourceWeekStart },
+                    date: new Date(oto.weekStart)
                 });
                 break;
             }
@@ -532,7 +550,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 const weekStart = addWeeks(currentMonday, w);
                 const weekEnd = addDays(weekStart, 6);
                 if (isInWeek(d, weekStart, weekEnd)) {
-                    recurringByWeek.get(w)!.push({ pattern: payrollPattern, amount });
+                    recurringByWeek.get(w)!.push({ pattern: payrollPattern, amount, date: new Date(d) });
                     break;
                 }
             }
@@ -582,7 +600,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 const weekStart = addWeeks(currentMonday, w);
                 const weekEnd = addDays(weekStart, 6);
                 if (isInWeek(d, weekStart, weekEnd)) {
-                    recurringByWeek.get(w)!.push({ pattern: rentPattern, amount });
+                    recurringByWeek.get(w)!.push({ pattern: rentPattern, amount, date: new Date(d) });
                     break;
                 }
             }
@@ -624,7 +642,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 const weekStart = addWeeks(currentMonday, w);
                 const weekEnd = addDays(weekStart, 6);
                 if (isInWeek(d, weekStart, weekEnd)) {
-                    recurringInflowsByWeek.get(w)!.push({ pattern: rec, amount: rec.typicalAmount });
+                    recurringInflowsByWeek.get(w)!.push({ pattern: rec, amount: rec.typicalAmount, date: new Date(d) });
                     break;
                 }
             }
@@ -704,7 +722,8 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                     sourceAmountAtForecast: item.invoice.amountOpen,
                     sourceDateAtForecast: item.invoice.dueDate,
                     sourceStatusAtForecast: item.invoice.status,
-                    overrideId: null // We'll add this if we have it in the future
+                    overrideId: null, // We'll add this if we have it in the future
+                    effectiveDateAtForecast: item.date.toISOString(),
                 }
             });
         }
@@ -727,6 +746,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                     ...(item.meta || {}),
                     sourceAmountAtForecast: item.pattern.typicalAmount,
                     sourceDateAtForecast: item.pattern.nextExpectedDate,
+                    effectiveDateAtForecast: item.date.toISOString(),
                 }
             });
         }
@@ -746,7 +766,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 sourceId: entry.sourceId,
                 confidence: "high",
                 section: `Cat: ${entry.categoryName}`,
-                metadata: { categoryName: entry.categoryName, hasActiveConfirmedReconciliation: entry.hasActiveConfirmedReconciliation, hasOperatingReconciliation: entry.hasOperatingReconciliation }
+                metadata: { categoryName: entry.categoryName, hasActiveConfirmedReconciliation: entry.hasActiveConfirmedReconciliation, hasOperatingReconciliation: entry.hasOperatingReconciliation, effectiveDateAtForecast: new Date(entry.targetDate).toISOString() }
             });
         }
 
@@ -837,7 +857,8 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                         stage1Raw: stage1Raw,
                         explicitDeduction: explicitDeduction,
                         stage2PreAi: stage2PreAi,
-                        aiFactor: aiFactor
+                        aiFactor: aiFactor,
+                        effectiveDateAtForecast: weekStart.toISOString()
                     }
                 });
             }
@@ -879,6 +900,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                     sourceDateAtForecast: item.bill.dueDate,
                     sourceStatusAtForecast: item.bill.status,
                     expenseClass: item.bill.expenseClass,
+                    effectiveDateAtForecast: item.date.toISOString(),
                 }
             });
         }
@@ -904,6 +926,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                     ...(item.meta || {}),
                     sourceAmountAtForecast: item.pattern.typicalAmount,
                     sourceDateAtForecast: item.pattern.nextExpectedDate,
+                    effectiveDateAtForecast: item.date.toISOString(),
                 }
             });
         }
@@ -941,6 +964,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 sourceType: "assumption",
                 confidence: "med",
                 section: "Fixed Weekly Assumption",
+                metadata: { effectiveDateAtForecast: weekStart.toISOString() }
             });
         }
 
@@ -1031,7 +1055,8 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                         stage1Raw: stage1RawOut,
                         explicitDeduction: explicitDeductionOut,
                         stage2PreAi: stage2PreAiOut,
-                        aiFactor: aiOutFactor
+                        aiFactor: aiOutFactor,
+                        effectiveDateAtForecast: weekStart.toISOString()
                     }
                 });
             }
@@ -1087,6 +1112,23 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             }
         }
 
+        const baselineTrace = {
+            inflow: {
+                stage1Raw: input.hasBankBaseline && input.baselineInflowWeekly > 0 ? input.baselineInflowWeekly * inflowMultiplier : 0,
+                explicitDeduction: input.hasBankBaseline && input.baselineInflowWeekly > 0 ? (input.baselineInflowWeekly * inflowMultiplier) * Math.min(1.0, scheduledInflowSum / input.baselineInflowWeekly) : 0,
+                stage2PreAi: input.hasBankBaseline && input.baselineInflowWeekly > 0 ? (input.baselineInflowWeekly * inflowMultiplier) * (1 - Math.min(1.0, scheduledInflowSum / input.baselineInflowWeekly)) : 0,
+                aiFactor: input.aiInflowFactors?.[w] ?? null,
+                final: inflowGap
+            },
+            outflow: {
+                stage1Raw: input.hasBankBaseline && input.variableOutflowWeekly > 0 ? input.variableOutflowWeekly * outflowMultiplier : 0,
+                explicitDeduction: input.hasBankBaseline && input.variableOutflowWeekly > 0 ? (input.variableOutflowWeekly * outflowMultiplier) * Math.min(1.0, scheduledVariableOutflowSum / input.variableOutflowWeekly) : 0,
+                stage2PreAi: input.hasBankBaseline && input.variableOutflowWeekly > 0 ? (input.variableOutflowWeekly * outflowMultiplier) * (1 - Math.min(1.0, scheduledVariableOutflowSum / input.variableOutflowWeekly)) : 0,
+                aiFactor: input.aiOutflowFactors?.[w] ?? null,
+                final: outflowGap
+            }
+        };
+
         weeks.push({
             weekNumber: w + 1,
             weekStart,
@@ -1105,6 +1147,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             confidenceScore: weekConfidence,
             breakdown: { inflows: inflowBreakdown, outflows: outflowBreakdown },
             worstCaseDriver,
+            baselineTrace,
         });
 
         // Track metrics
