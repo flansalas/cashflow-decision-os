@@ -10,7 +10,7 @@ describe("Shared Baseline Preprocessing", () => {
         // Generate daily transactions for a 60-week period (well over 52 weeks)
         for (let i = 0; i < 420; i++) {
             const d = new Date(asOfDate);
-            d.setDate(d.getDate() - i);
+            d.setUTCDate(d.getUTCDate() - i);
             txs.push({
                 date: d,
                 amount: i % 2 === 0 ? 100 : -50,

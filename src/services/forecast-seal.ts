@@ -82,12 +82,16 @@ export async function createForecastVersion(
                 label: inflow.label || "",
                 projectedAmountCents: Math.round(inflow.amount * 100),
                 confidenceTier: inflow.confidence || "none",
+                sourceAmountAtForecast: inflow.metadata?.sourceAmountAtForecast ?? null,
+                sourceDateAtForecast: inflow.metadata?.sourceDateAtForecast ? new Date(inflow.metadata.sourceDateAtForecast) : null,
+                sourceStatusAtForecast: inflow.metadata?.sourceStatusAtForecast ?? null,
+                overrideId: inflow.metadata?.overrideId ?? null,
+                isUserOverridden: inflow.type === "overridden",
                 sourceStateJson: canonicalJsonSerialize({
                     ...inflow.metadata,
                     amount: inflow.amount
                 }),
-                sourceStateHash: computeCanonicalHash(canonicalJsonSerialize({ ...inflow.metadata, amount: inflow.amount })),
-                isUserOverridden: inflow.type === "overridden"
+                sourceStateHash: computeCanonicalHash(canonicalJsonSerialize({ ...inflow.metadata, amount: inflow.amount }))
             });
         }
         for (const outflow of week.breakdown.outflows) {
@@ -100,12 +104,16 @@ export async function createForecastVersion(
                 label: outflow.label || "",
                 projectedAmountCents: Math.round(outflow.amount * 100),
                 confidenceTier: outflow.confidence || "none",
+                sourceAmountAtForecast: outflow.metadata?.sourceAmountAtForecast ?? null,
+                sourceDateAtForecast: outflow.metadata?.sourceDateAtForecast ? new Date(outflow.metadata.sourceDateAtForecast) : null,
+                sourceStatusAtForecast: outflow.metadata?.sourceStatusAtForecast ?? null,
+                overrideId: outflow.metadata?.overrideId ?? null,
+                isUserOverridden: outflow.type === "overridden",
                 sourceStateJson: canonicalJsonSerialize({
                     ...outflow.metadata,
                     amount: outflow.amount
                 }),
-                sourceStateHash: computeCanonicalHash(canonicalJsonSerialize({ ...outflow.metadata, amount: outflow.amount })),
-                isUserOverridden: outflow.type === "overridden"
+                sourceStateHash: computeCanonicalHash(canonicalJsonSerialize({ ...outflow.metadata, amount: outflow.amount }))
             });
         }
     }
@@ -130,26 +138,27 @@ export async function createForecastVersion(
     }
 
     // 7. Idempotency Check
+    // Concurrency lock: Advisory lock on company string to prevent race condition
+    const lockId = String(companyId).split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0);
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockId})`;
+
     const existing = await tx.forecastCheckpoint.findFirst({
-        where: { companyId, forecastVersionHash }
+        where: { companyId, forecastVersionHash, sealedAt: { not: null } }
     });
+    if (existing) {
+        return existing;
+    }
     if (existing) {
         return existing;
     }
 
     // 8. Seal Checkpoint (create)
-    const breakdownJson = JSON.stringify({ weeks: forecastResult.weeks });
+    const breakdownJson = JSON.stringify(forecastResult.weeks[0].breakdown);
     const sealedAt = new Date();
     
-    // Sum W1-W13 expected flows
-    let inflowsExpected = 0;
-    let outflowsExpected = 0;
-    for (const w of forecastResult.weeks) {
-        inflowsExpected += Math.round(w.inflowsExpected * 100);
-        outflowsExpected += Math.round(w.outflowsExpected * 100);
-    }
-    inflowsExpected = inflowsExpected / 100;
-    outflowsExpected = outflowsExpected / 100;
+    // W1-compatible checkpoint header
+    const inflowsExpected = forecastResult.weeks[0].inflowsExpected;
+    const outflowsExpected = forecastResult.weeks[0].outflowsExpected;
     
 
     const checkpoint = await tx.forecastCheckpoint.create({
@@ -161,7 +170,7 @@ export async function createForecastVersion(
             generatedAt,
             weekStart: forecastResult.weeks[0].weekStart,
             weekEnd: forecastResult.weeks[forecastResult.weeks.length - 1].weekEnd,
-            endCashExpected: forecastResult.weeks[forecastResult.weeks.length - 1].endCashExpected,
+            endCashExpected: forecastResult.weeks[0].endCashExpected,
             inflowsExpected,
             outflowsExpected,
             breakdownJson,
@@ -207,6 +216,10 @@ export async function createForecastVersion(
                 sourceId: c.sourceId,
                 projectedAmount: c.projectedAmountCents / 100, // DB stores standard Float amount
                 confidenceTier: c.confidenceTier,
+                sourceAmountAtForecast: c.sourceAmountAtForecast,
+                sourceDateAtForecast: c.sourceDateAtForecast,
+                sourceStatusAtForecast: c.sourceStatusAtForecast,
+                overrideId: c.overrideId,
                 sourceStateJson: c.sourceStateJson,
                 sourceStateHash: c.sourceStateHash,
                 isUserOverridden: c.isUserOverridden
@@ -264,7 +277,7 @@ export async function createForecastVersion(
                 
                 m1PreAiResidualJson: JSON.stringify({ inflow: m1PreAiInflows, outflow: m1PreAiOutflows }),
                 m1PostAiResidualJson: JSON.stringify({ inflow: m1PostAiInflows, outflow: m1PostAiOutflows }),
-                m4PreAiResidualJson: JSON.stringify({ inflow: m1PreAiInflows, outflow: m1PreAiOutflows }),
+
                 m1RawBaselineJson: JSON.stringify({ inflow: m1RawInflows, outflow: m1RawOutflows }),
                 
                 rawAiResponseJson: "{}",
@@ -276,6 +289,13 @@ export async function createForecastVersion(
         });
     }
 
+    // 11.5 Get prior sealed version for lineage
+    const priorSealed = await tx.forecastCheckpoint.findFirst({
+        where: { companyId, sealedAt: { not: null } },
+        orderBy: { sealedAt: 'desc' }
+    });
+    const priorVersionHash = priorSealed?.forecastVersionHash || null;
+
     // 12. Create ChangeLog event
     await tx.changeLog.create({
         data: {
@@ -283,13 +303,14 @@ export async function createForecastVersion(
             action: "CREATE_FORECAST_VERSION",
             source: "system",
             inputText: `Sealed forecast version ${forecastVersionHash.substring(0, 8)}`,
+            forecastVersionHashBefore: priorVersionHash,
+            forecastVersionHashAfter: forecastVersionHash,
             diffJson: JSON.stringify({
                 forecastVersionHash,
                 checkpointId: checkpoint.id,
                 generatedAt: generatedAt.toISOString(),
                 sealedAt: sealedAt.toISOString()
-            }),
-            forecastVersionHashAfter: forecastVersionHash
+            })
         }
     });
 

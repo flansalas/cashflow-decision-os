@@ -14,6 +14,7 @@ import * as crypto from "crypto";
 import { generateShadowEvaluation } from "@/services/shadow-evaluation";
 import { snapshotAccountFreshness } from "@/services/attribution-checkpoint";
 import { verifyBankCoverage } from "@/services/bank-coverage";
+import { createForecastVersion } from "@/services/forecast-seal";
 
 /**
  * Rolls a date forward by the given cadence until it is >= the asOfDate.
@@ -487,7 +488,25 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        return { snapshot, changeLogId: changeLog.id, checkpoint, autoMissChangeLogId };
+        // ── ForecastCheckpoint (SEALED) ─────────────────────
+        // Create the immutable sealed forecast version for this checkin.
+        // The server re-assembles the W1-W13 forecast based on the new cash snapshot
+        // and current database state, ensuring canonical truth.
+        let sealedCheckpoint = null;
+        try {
+            sealedCheckpoint = await createForecastVersion(
+                tx,
+                companyId,
+                snapshot.id,
+                null, // appCommitHash omitted for now, could be passed from env
+                "server_canonical_v1"
+            );
+        } catch (e) {
+            console.error("[CashCheckin] Failed to create sealed forecast version:", e);
+            throw new Error("Failed to create sealed forecast version: " + (e as Error).message);
+        }
+
+        return { snapshot, changeLogId: changeLog.id, checkpoint, sealedCheckpoint, autoMissChangeLogId };
         }); // End of transaction
 
         // Trigger variance sync after transaction completes

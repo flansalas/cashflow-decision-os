@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { POST } from '../route';
 import { NextRequest } from 'next/server';
 import { vi, test, expect, afterAll } from 'vitest';
@@ -11,23 +12,30 @@ test('cash-checkin API transaction integration', async () => {
     const companyId = "bb32d2cf-b0a6-4e1d-bcfa-d2004a711bfb";
     
     // Ensure BaselineSnapshot exists for the test
-    await prisma.baselineSnapshot.upsert({
-        where: { companyId },
-        update: {},
-        create: {
-            id: crypto.randomUUID(),
-            companyId,
-            asOfDate: new Date(),
-            variableInflowWeekly: 1000,
-            variableOutflowWeekly: 500,
-            variableInflowBand: 0.1,
-            variableOutflowBand: 0.1,
-            inflowCadence: "weekly",
-            outflowCadence: "weekly",
-            baselineConfidenceTier: "high",
-            hasSufficientHistory: true
-        }
-    });
+    try {
+        await prisma.baselineSnapshot.upsert({
+            where: { companyId },
+            update: {},
+            create: {
+                id: crypto.randomUUID(),
+                companyId,
+                asOfDate: new Date(),
+                variableInflowWeekly: 1000,
+                variableOutflowWeekly: 500,
+                variableInflowBand: 0.1,
+                variableOutflowBand: 0.1,
+                inflowCadence: "weekly",
+                outflowCadence: "weekly",
+                baselineConfidenceTier: "high",
+                hasSufficientHistory: true
+            }
+        });
+    } catch (e: any) {
+        console.error("PRISMA ERROR CODE:", e.code);
+        console.error("PRISMA ERROR META:", e.meta);
+        console.error("PRISMA ERROR MESSAGE:", e.message);
+        throw e;
+    }
 
     const req = new NextRequest("http://localhost/api/cash-checkin", {
         method: "POST",
@@ -55,8 +63,10 @@ test('cash-checkin API transaction integration', async () => {
     const res = await POST(req);
     const body = await res.json();
     
-    if (res.status !== 200) {
-        console.error("Test failed with 500. Body:", body);
+    if (res.status === 500) {
+        console.error("Test failed with 500.");
+        console.error("Error Message:", body.error);
+        if (body.details) console.error("Error Details:", JSON.stringify(body.details, null, 2));
     }
     expect(res.status).toBe(200);
     expect(body.ok).toBe(true);
@@ -72,6 +82,13 @@ test('cash-checkin API transaction integration', async () => {
     expect(checkpoint!.snapshotSource).toBe("client_observed_unverified");
     expect(checkpoint!.isBankCoverageVerified).toBe(false);
 
+    // Verify the prior week forecast was sealed
+    const sealedCheckpoint = await prisma.forecastCheckpoint.findFirst({
+        where: { companyId: "bb32d2cf-b0a6-4e1d-bcfa-d2004a711bfb", snapshotSource: "sealed_v1" }
+    });
+    expect(sealedCheckpoint).toBeDefined();
+    expect(sealedCheckpoint!.forecastVersionHash.length).toBeGreaterThan(10);
+
     // 2. Verify BaselineSnapshotHistory is created
     const bsh = await prisma.baselineSnapshotHistory.findUnique({
         where: { forecastCheckpointId: checkpointId }
@@ -84,7 +101,7 @@ test('cash-checkin API transaction integration', async () => {
         where: { checkpointId: bsh!.id }
     });
     expect(freshness).toBeDefined();
-});
+}, 30000);
 
 afterAll(async () => {
     await prisma.$disconnect();

@@ -118,8 +118,22 @@ export function buildCanonicalPayload(opts: {
         cashSnapshotBalanceCents: toCents(opts.cashSnapshotBalance),
         cashSnapshotAsOfDate: opts.cashSnapshotAsOfDate.toISOString(),
         adjustedOpeningCashCents: toCents(opts.adjustedOpeningCash),
-        assumptions: opts.assumptions,
-        baselineReference: opts.baselineReference,
+        assumptions: {
+            bufferMin: opts.assumptions?.bufferMin ?? null,
+            fixedWeeklyOutflow: opts.assumptions?.fixedWeeklyOutflow ?? null,
+            payrollCadence: opts.assumptions?.payrollCadence ?? null,
+            payrollAllInAmount: opts.assumptions?.payrollAllInAmount ?? null,
+            payrollNextDate: toUTCISO(opts.assumptions?.payrollNextDate),
+            rentMonthlyAmount: opts.assumptions?.rentMonthlyAmount ?? null,
+            rentDayOfMonth: opts.assumptions?.rentDayOfMonth ?? null,
+            paymentCurveJson: opts.assumptions?.paymentCurveJson ?? null,
+            highRiskAgingDays: opts.assumptions?.highRiskAgingDays ?? null,
+            projectionSafetyMargin: opts.assumptions?.projectionSafetyMargin ?? null
+        },
+        baselineReference: {
+            hasBankBaseline: opts.baselineReference?.hasBankBaseline ?? null,
+            confidence: opts.baselineReference?.confidence ?? null
+        },
         forecastAssemblyVersion: 'assembly-v1',
         forecastEngineVersion: 'forecast-v1',
         appCommitHash: opts.appCommitHash,

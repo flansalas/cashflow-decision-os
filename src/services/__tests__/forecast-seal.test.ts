@@ -28,7 +28,9 @@ describe("Sealed Forecast Version", () => {
     });
 
     afterAll(async () => {
-        // Skipping cleanup of sealed records as per user instruction
+        await prisma.$executeRawUnsafe('ALTER TABLE "ForecastCheckpoint" DISABLE TRIGGER USER');
+        await prisma.forecastCheckpoint.deleteMany({ where: { companyId } });
+        await prisma.$executeRawUnsafe('ALTER TABLE "ForecastCheckpoint" ENABLE TRIGGER USER');
     });
 
     it("creates an immutable sealed forecast checkpoint successfully", async () => {

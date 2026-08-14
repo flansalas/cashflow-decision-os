@@ -15,6 +15,11 @@ export async function generateShadowEvaluation(checkpointId: string, companyId: 
         throw new Error(`Checkpoint ${checkpointId} not found`);
     }
 
+    if (checkpoint.sealedAt) {
+        console.log(`[Shadow Orchestrator] Checkpoint ${checkpointId} is sealed. Shadow evaluation cannot mutate BaselineSnapshotHistory. Skipping.`);
+        return;
+    }
+
     // 1. Get the 13-week M1 arrays from the checkpoint's breakdownJson
     const m1Breakdown = checkpoint.breakdownJson ? JSON.parse(checkpoint.breakdownJson) : null;
     let m1RawBaselineInflow = new Array(13).fill(0);

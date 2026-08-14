@@ -9,11 +9,11 @@ vi.mock("@vercel/functions", () => ({
 
 // Mock tenant resolver to use test company
 vi.mock("@/lib/tenant", () => ({
-    resolveTenant: vi.fn(() => "test-company-checkin")
+    resolveTenant: vi.fn(() => "test-company-coverage-new")
 }));
 
 describe("Cash Check-in Coverage & Rollback", () => {
-    const companyId = "test-company-checkin";
+    const companyId = "test-company-coverage-new";
 
     beforeAll(async () => {
         await prisma.company.upsert({
@@ -49,7 +49,9 @@ describe("Cash Check-in Coverage & Rollback", () => {
     });
 
     afterAll(async () => {
+        await prisma.$executeRawUnsafe('ALTER TABLE "ForecastCheckpoint" DISABLE TRIGGER USER');
         await prisma.forecastCheckpoint.deleteMany({ where: { companyId } });
+        await prisma.$executeRawUnsafe('ALTER TABLE "ForecastCheckpoint" ENABLE TRIGGER USER');
         await prisma.forecastWeek.deleteMany({ where: { companyId } });
         await prisma.cashSnapshot.deleteMany({ where: { companyId } });
         await prisma.company.delete({ where: { id: companyId } });

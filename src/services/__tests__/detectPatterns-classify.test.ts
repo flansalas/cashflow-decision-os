@@ -337,7 +337,7 @@ describe("Grouped Member Segmented Pattern Recognition (Tests A-H)", () => {
     it("A. Member segment matching detected identically → ambiguous_overlap", () => {
         const result = classifyDetectedPattern(
             { merchantKey: "alpha van", displayName: "Alpha Van", typicalAmount: 500, cadence: "monthly" },
-            [{ id: "1", merchantKey: "alpha van, beta truck, gamma equipment", displayName: "Alpha Van, Beta Truck, Gamma Equipment", typicalAmount: 1500, cadence: "monthly", direction: "outflow", category: "operating", isIncluded: true, isCritical: false }]
+            [{ id: "1", merchantKey: "alpha van, beta truck, gamma equipment", displayName: "Alpha Van, Beta Truck, Gamma Equipment", typicalAmount: 1500, cadence: "monthly", direction: "outflow", category: "operating", isIncluded: true }]
         );
         expect(result.classification).toBe("ambiguous_overlap");
     });
@@ -345,7 +345,7 @@ describe("Grouped Member Segmented Pattern Recognition (Tests A-H)", () => {
     it("B. Strong distinctive token shared with one member segment → ambiguous_overlap", () => {
         const result = classifyDetectedPattern(
             { merchantKey: "bank payment gamma f450", displayName: "Bank Payment Gamma F450", typicalAmount: 600, cadence: "monthly" },
-            [{ id: "2", merchantKey: "alpha van, beta truck, gamma f450", displayName: "Alpha Van, Beta Truck, Gamma F450", typicalAmount: 1600, cadence: "monthly", direction: "outflow", category: "operating", isIncluded: true, isCritical: false }]
+            [{ id: "2", merchantKey: "alpha van, beta truck, gamma f450", displayName: "Alpha Van, Beta Truck, Gamma F450", typicalAmount: 1600, cadence: "monthly", direction: "outflow", category: "operating", isIncluded: true }]
         );
         expect(result.classification).toBe("ambiguous_overlap");
     });
@@ -353,7 +353,7 @@ describe("Grouped Member Segmented Pattern Recognition (Tests A-H)", () => {
     it("C. Cross-member token combination without individual segment match → genuinely_new", () => {
         const result = classifyDetectedPattern(
             { merchantKey: "alpha truck", displayName: "Alpha Truck", typicalAmount: 500, cadence: "monthly" },
-            [{ id: "3", merchantKey: "alpha van, beta truck", displayName: "Alpha Van, Beta Truck", typicalAmount: 1000, cadence: "monthly", direction: "outflow", category: "operating", isIncluded: true, isCritical: false }]
+            [{ id: "3", merchantKey: "alpha van, beta truck", displayName: "Alpha Van, Beta Truck", typicalAmount: 1000, cadence: "monthly", direction: "outflow", category: "operating", isIncluded: true }]
         );
         expect(result.classification).toBe("genuinely_new");
     });
@@ -361,7 +361,7 @@ describe("Grouped Member Segmented Pattern Recognition (Tests A-H)", () => {
     it("D. Completely different identifier in detected → genuinely_new", () => {
         const result = classifyDetectedPattern(
             { merchantKey: "delta equipment", displayName: "Delta Equipment", typicalAmount: 400, cadence: "monthly" },
-            [{ id: "4", merchantKey: "alpha equipment, beta truck", displayName: "Alpha Equipment, Beta Truck", typicalAmount: 900, cadence: "monthly", direction: "outflow", category: "operating", isIncluded: true, isCritical: false }]
+            [{ id: "4", merchantKey: "alpha equipment, beta truck", displayName: "Alpha Equipment, Beta Truck", typicalAmount: 900, cadence: "monthly", direction: "outflow", category: "operating", isIncluded: true }]
         );
         expect(result.classification).toBe("genuinely_new");
     });
@@ -369,7 +369,7 @@ describe("Grouped Member Segmented Pattern Recognition (Tests A-H)", () => {
     it("E. Distinctive identifier F450 matched → ambiguous_overlap", () => {
         const result = classifyDetectedPattern(
             { merchantKey: "omega f450", displayName: "Omega F450", typicalAmount: 550, cadence: "monthly" },
-            [{ id: "5", merchantKey: "alpha van, beta f450", displayName: "Alpha Van, Beta F450", typicalAmount: 1050, cadence: "monthly", direction: "outflow", category: "operating", isIncluded: true, isCritical: false }]
+            [{ id: "5", merchantKey: "alpha van, beta f450", displayName: "Alpha Van, Beta F450", typicalAmount: 1050, cadence: "monthly", direction: "outflow", category: "operating", isIncluded: true }]
         );
         expect(result.classification).toBe("ambiguous_overlap");
     });

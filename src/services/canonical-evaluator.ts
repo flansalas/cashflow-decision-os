@@ -25,10 +25,10 @@ export async function evaluateMaturedCheckpoints(companyId?: string) {
 
         // Parse M1 and M4 Evidence
         const m1PreAi = parseResidualForecastSeries(bsh.m1PreAiResidualJson);
-        const m4PreAi = parseResidualForecastSeries(bsh.m4PreAiResidualJson);
+        const m4PreAi = bsh.m4PreAiResidualJson ? parseResidualForecastSeries(bsh.m4PreAiResidualJson) : null;
         const m1PostAi = parseResidualForecastSeries(bsh.m1PostAiResidualJson);
 
-        if (!m1PreAi || !m4PreAi || !m1PostAi) {
+        if (!m1PreAi || !m1PostAi) {
             throw new Error(`Evaluation failed for Checkpoint ${cp.id}: missing or malformed prediction JSON`);
         }
 
@@ -93,34 +93,36 @@ export async function evaluateMaturedCheckpoints(companyId?: string) {
             });
 
             // Inflow - M4 Stage 2 Pre AI
-            await saveObservation({
-                checkpointId: cp.id,
-                companyId: cp.companyId,
-                maturedWeekStart: hStart,
-                horizonWeeks: horizon,
-                direction: "inflow",
-                model: "m4",
-                stage: "stage2",
-                predictionAmount: m4PreAi.inflow[horizon - 1],
-                canonicalActual: canonicalActualInflow,
-                accountCompleteness,
-                evaluationValidity
-            });
-            
-            // Outflow - M4 Stage 2 Pre AI
-            await saveObservation({
-                checkpointId: cp.id,
-                companyId: cp.companyId,
-                maturedWeekStart: hStart,
-                horizonWeeks: horizon,
-                direction: "outflow",
-                model: "m4",
-                stage: "stage2",
-                predictionAmount: m4PreAi.outflow[horizon - 1],
-                canonicalActual: canonicalActualOutflow,
-                accountCompleteness,
-                evaluationValidity
-            });
+            if (m4PreAi) {
+                await saveObservation({
+                    checkpointId: cp.id,
+                    companyId: cp.companyId,
+                    maturedWeekStart: hStart,
+                    horizonWeeks: horizon,
+                    direction: "inflow",
+                    model: "m4",
+                    stage: "stage2",
+                    predictionAmount: m4PreAi.inflow[horizon - 1],
+                    canonicalActual: canonicalActualInflow,
+                    accountCompleteness,
+                    evaluationValidity
+                });
+                
+                // Outflow - M4 Stage 2 Pre AI
+                await saveObservation({
+                    checkpointId: cp.id,
+                    companyId: cp.companyId,
+                    maturedWeekStart: hStart,
+                    horizonWeeks: horizon,
+                    direction: "outflow",
+                    model: "m4",
+                    stage: "stage2",
+                    predictionAmount: m4PreAi.outflow[horizon - 1],
+                    canonicalActual: canonicalActualOutflow,
+                    accountCompleteness,
+                    evaluationValidity
+                });
+            }
 
             // Inflow - M1 Stage 3 Post AI
             await saveObservation({

@@ -3,6 +3,56 @@ import { POST } from "../route";
 import { NextRequest } from "next/server";
 import prisma from "@/db/prisma";
 
+const { createMockTx, mockPrisma } = vi.hoisted(() => {
+    const createMockTx = (createManySpy = vi.fn()) => {
+        const baseMock = {
+            $transaction: vi.fn(async (cb) => {
+                return cb(createMockTx(createManySpy));
+            }),
+            $executeRaw: vi.fn(),
+            cashAdjustment: { deleteMany: vi.fn(), createMany: createManySpy, findMany: vi.fn().mockResolvedValue([]) },
+            baselineSnapshotHistory: { create: vi.fn().mockResolvedValue({ id: "history-id" }), upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue(null) },
+            forecastCheckpoint: { create: vi.fn().mockResolvedValue({ id: "checkpoint-id" }), update: vi.fn(), findFirst: vi.fn().mockResolvedValue(null), findUnique: vi.fn().mockResolvedValue({ id: "checkpoint-id", forecastVersionHash: "hash", weeks: [] }), findMany: vi.fn().mockResolvedValue([]) },
+            forecastWeek: { findFirst: vi.fn().mockResolvedValue({ id: "mock-id", weekStart: new Date(), weekNumber: 1 }), createMany: vi.fn() },
+            forecastComponentSnapshot: { createMany: vi.fn() },
+            changeLog: { create: vi.fn().mockResolvedValue({ id: "mock-log-id" }), update: vi.fn() },
+            accountFreshnessStatus: { updateMany: vi.fn() },
+            recurringPattern: { findMany: vi.fn().mockResolvedValue([]) },
+            scenarioItem: { deleteMany: vi.fn(), updateMany: vi.fn() },
+            executionPlan: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
+            assumption: { findFirst: vi.fn().mockResolvedValue(null) },
+            baselineSnapshot: { findUnique: vi.fn().mockResolvedValue({ id: "baseline-id" }), create: vi.fn() },
+            cashSnapshot: { create: vi.fn().mockResolvedValue({ id: "snapshot" }), findFirst: vi.fn().mockResolvedValue({ id: "snapshot-id", bankBalance: 1000, asOfDate: new Date() }), findUnique: vi.fn().mockResolvedValue({ id: "snapshot", bankBalance: 1000, asOfDate: new Date() }) },
+            bankTransaction: { findMany: vi.fn().mockResolvedValue([]) },
+            bankAccount: { findMany: vi.fn().mockResolvedValue([{ id: "acc1", transactions: [] }]) },
+            bankImportManifestAccount: { findFirst: vi.fn().mockResolvedValue({ importSuccess: true }) },
+            receivableInvoice: { findMany: vi.fn().mockResolvedValue([]) },
+            payableBill: { findMany: vi.fn().mockResolvedValue([]) },
+            customerProfile: { findMany: vi.fn().mockResolvedValue([]) },
+            vendorProfile: { findMany: vi.fn().mockResolvedValue([]) },
+            override: { findMany: vi.fn().mockResolvedValue([]) },
+            companyNote: { findMany: vi.fn().mockResolvedValue([]) },
+            cashFlowCategory: { findMany: vi.fn().mockResolvedValue([]) },
+            cashFlowEntry: { findMany: vi.fn().mockResolvedValue([]) },
+            baselineVarianceLedger: { findMany: vi.fn().mockResolvedValue([]), deleteMany: vi.fn(), createMany: vi.fn() },
+            customerPaymentObservation: { findMany: vi.fn().mockResolvedValue([]) },
+            reconciliationLink: { findMany: vi.fn().mockResolvedValue([]) }
+        };
+        return baseMock; // NO PROXY! JUST EXPLICIT MOCKS
+    };
+    return { createMockTx, mockPrisma: createMockTx() };
+});
+
+vi.mock("@/db/prisma", () => {
+    return {
+        __esModule: true,
+        default: mockPrisma
+    };
+});
+
+
+
+
 vi.mock("@vercel/functions", () => ({
     waitUntil: vi.fn()
 }));
@@ -11,54 +61,8 @@ vi.mock("@/lib/tenant", () => ({
     resolveTenant: vi.fn(() => "test-checkin-recon")
 }));
 
-vi.mock("@/db/prisma", () => ({
-    default: {
-        $transaction: vi.fn(async (cb) => {
-            return cb({
-                cashAdjustment: {
-                    deleteMany: vi.fn(),
-                    createMany: vi.fn()
-                },
-                baselineSnapshotHistory: {
-                    create: vi.fn().mockResolvedValue({ id: "history-id" })
-                },
-                forecastCheckpoint: {
-                    update: vi.fn()
-                },
-                accountFreshnessStatus: {
-                    updateMany: vi.fn()
-                },
-                recurringPattern: {
-                    findMany: vi.fn().mockResolvedValue([])
-                },
-                cashSnapshot: {
-                    create: vi.fn().mockResolvedValue({ id: "snapshot" }),
-                    findFirst: vi.fn().mockResolvedValue(null)
-                },
-                forecastWeek: {
-                    findFirst: vi.fn().mockResolvedValue(null)
-                }
-            });
-        }),
-        baselineSnapshot: {
-            findFirst: vi.fn().mockResolvedValue({ id: "baseline-id" }),
-            create: vi.fn()
-        },
-        forecastCheckpoint: {
-            create: vi.fn().mockResolvedValue({ id: "checkpoint-id" })
-        },
-        cashSnapshot: {
-            create: vi.fn().mockResolvedValue({ id: "snapshot-id" }),
-            findFirst: vi.fn().mockResolvedValue({ id: "prev-snapshot-id" })
-        },
-        forecastWeek: {
-            findFirst: vi.fn().mockResolvedValue(null)
-        },
-        $queryRaw: vi.fn().mockResolvedValue([])
-    }
-}));
-
 describe("Cash Check-in Reconciliation Filtering", () => {
+
     const companyId = "test-checkin-recon";
 
     beforeEach(() => {
@@ -99,13 +103,7 @@ describe("Cash Check-in Reconciliation Filtering", () => {
 
     it("1. AR/backlog cannot become CashAdjustment", async () => {
         const createManySpy = vi.fn();
-        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb({
-            cashAdjustment: { deleteMany: vi.fn(), createMany: createManySpy },
-            baselineSnapshotHistory: { create: vi.fn().mockResolvedValue({ id: "h" }) },
-            forecastCheckpoint: { update: vi.fn() },
-            accountFreshnessStatus: { updateMany: vi.fn() },
-            recurringPattern: { findMany: vi.fn().mockResolvedValue([]) }
-        }));
+        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb(createMockTx(createManySpy)));
 
         const req = mockRequest([{ type: "Accounts Receivable", amount: 100, note: "Invoice" }]);
         await POST(req);
@@ -114,13 +112,7 @@ describe("Cash Check-in Reconciliation Filtering", () => {
 
     it("2. AP/backlog cannot become CashAdjustment", async () => {
         const createManySpy = vi.fn();
-        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb({
-            cashAdjustment: { deleteMany: vi.fn(), createMany: createManySpy },
-            baselineSnapshotHistory: { create: vi.fn().mockResolvedValue({ id: "h" }) },
-            forecastCheckpoint: { update: vi.fn() },
-            accountFreshnessStatus: { updateMany: vi.fn() },
-            recurringPattern: { findMany: vi.fn().mockResolvedValue([]) }
-        }));
+        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb(createMockTx(createManySpy)));
 
         const req = mockRequest([{ type: "Accounts Payable", amount: -100, note: "Bill" }]);
         await POST(req);
@@ -129,13 +121,7 @@ describe("Cash Check-in Reconciliation Filtering", () => {
 
     it("3. Leaving AR/AP in backlog changes no starting-cash adjustment", async () => {
         const createManySpy = vi.fn();
-        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb({
-            cashAdjustment: { deleteMany: vi.fn(), createMany: createManySpy },
-            baselineSnapshotHistory: { create: vi.fn().mockResolvedValue({ id: "h" }) },
-            forecastCheckpoint: { update: vi.fn() },
-            accountFreshnessStatus: { updateMany: vi.fn() },
-            recurringPattern: { findMany: vi.fn().mockResolvedValue([]) }
-        }));
+        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb(createMockTx(createManySpy)));
 
         const req = mockRequest([
             { type: "AR", amount: 100 },
@@ -147,13 +133,7 @@ describe("Cash Check-in Reconciliation Filtering", () => {
 
     it("4. Rescheduling AR/AP changes timing only (ignored for starting cash)", async () => {
         const createManySpy = vi.fn();
-        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb({
-            cashAdjustment: { deleteMany: vi.fn(), createMany: createManySpy },
-            baselineSnapshotHistory: { create: vi.fn().mockResolvedValue({ id: "h" }) },
-            forecastCheckpoint: { update: vi.fn() },
-            accountFreshnessStatus: { updateMany: vi.fn() },
-            recurringPattern: { findMany: vi.fn().mockResolvedValue([]) }
-        }));
+        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb(createMockTx(createManySpy)));
 
         const req = mockRequest([{ type: "invoice", amount: 500 }]);
         await POST(req);
@@ -162,13 +142,7 @@ describe("Cash Check-in Reconciliation Filtering", () => {
 
     it("5. Outstanding check can reduce starting cash", async () => {
         const createManySpy = vi.fn();
-        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb({
-            cashAdjustment: { deleteMany: vi.fn(), createMany: createManySpy },
-            baselineSnapshotHistory: { create: vi.fn().mockResolvedValue({ id: "h" }) },
-            forecastCheckpoint: { update: vi.fn() },
-            accountFreshnessStatus: { updateMany: vi.fn() },
-            recurringPattern: { findMany: vi.fn().mockResolvedValue([]) }
-        }));
+        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb(createMockTx(createManySpy)));
 
         const req = mockRequest([{ type: "uncleared_check", amount: -500, note: "Check 123" }]);
         await POST(req);
@@ -179,13 +153,7 @@ describe("Cash Check-in Reconciliation Filtering", () => {
 
     it("6. Deposit in transit can increase starting cash", async () => {
         const createManySpy = vi.fn();
-        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb({
-            cashAdjustment: { deleteMany: vi.fn(), createMany: createManySpy },
-            baselineSnapshotHistory: { create: vi.fn().mockResolvedValue({ id: "h" }) },
-            forecastCheckpoint: { update: vi.fn() },
-            accountFreshnessStatus: { updateMany: vi.fn() },
-            recurringPattern: { findMany: vi.fn().mockResolvedValue([]) }
-        }));
+        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb(createMockTx(createManySpy)));
 
         const req = mockRequest([{ type: "pending_deposit", amount: 1000, note: "Stripe" }]);
         await POST(req);
@@ -196,13 +164,7 @@ describe("Cash Check-in Reconciliation Filtering", () => {
 
     it("7. Generic non-bank financial items are rejected from starting-cash adjustments", async () => {
         const createManySpy = vi.fn();
-        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb({
-            cashAdjustment: { deleteMany: vi.fn(), createMany: createManySpy },
-            baselineSnapshotHistory: { create: vi.fn().mockResolvedValue({ id: "h" }) },
-            forecastCheckpoint: { update: vi.fn() },
-            accountFreshnessStatus: { updateMany: vi.fn() },
-            recurringPattern: { findMany: vi.fn().mockResolvedValue([]) }
-        }));
+        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb(createMockTx(createManySpy)));
 
         const req = mockRequest([{ type: "Expected Inflow", amount: 1000 }, { type: "Recurring", amount: -500 }]);
         await POST(req);
@@ -221,13 +183,7 @@ describe("Cash Check-in Reconciliation Filtering", () => {
 
     it("9. Existing valid bank reconciliation adjustments remain supported", async () => {
         const createManySpy = vi.fn();
-        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb({
-            cashAdjustment: { deleteMany: vi.fn(), createMany: createManySpy },
-            baselineSnapshotHistory: { create: vi.fn().mockResolvedValue({ id: "h" }) },
-            forecastCheckpoint: { update: vi.fn() },
-            accountFreshnessStatus: { updateMany: vi.fn() },
-            recurringPattern: { findMany: vi.fn().mockResolvedValue([]) }
-        }));
+        (prisma.$transaction as any).mockImplementationOnce(async (cb: any) => cb(createMockTx(createManySpy)));
 
         const req = mockRequest([
             { type: "other", amount: -50, note: "Bank Fee" },
