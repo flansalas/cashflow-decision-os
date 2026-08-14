@@ -946,7 +946,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 sourceId: entry.sourceId,
                 confidence: "high",
                 section: `Cat: ${entry.categoryName}`,
-                metadata: { categoryName: entry.categoryName, hasActiveConfirmedReconciliation: entry.hasActiveConfirmedReconciliation, hasOperatingReconciliation: entry.hasOperatingReconciliation }
+                metadata: { categoryName: entry.categoryName, hasActiveConfirmedReconciliation: entry.hasActiveConfirmedReconciliation, hasOperatingReconciliation: entry.hasOperatingReconciliation, effectiveDateAtForecast: new Date(entry.targetDate).toISOString() }
             });
         }
 
@@ -1117,14 +1117,14 @@ export function computeForecast(input: ForecastInput): ForecastResult {
                 stage1Raw: input.hasBankBaseline && input.baselineInflowWeekly > 0 ? input.baselineInflowWeekly * inflowMultiplier : 0,
                 explicitDeduction: input.hasBankBaseline && input.baselineInflowWeekly > 0 ? (input.baselineInflowWeekly * inflowMultiplier) * Math.min(1.0, scheduledInflowSum / input.baselineInflowWeekly) : 0,
                 stage2PreAi: input.hasBankBaseline && input.baselineInflowWeekly > 0 ? (input.baselineInflowWeekly * inflowMultiplier) * (1 - Math.min(1.0, scheduledInflowSum / input.baselineInflowWeekly)) : 0,
-                aiFactor: input.aiInflowFactors?.[w] ?? null,
+                aiFactor: input.aiInflowFactors?.[w] ?? 1.0,
                 final: inflowGap
             },
             outflow: {
                 stage1Raw: input.hasBankBaseline && input.variableOutflowWeekly > 0 ? input.variableOutflowWeekly * outflowMultiplier : 0,
                 explicitDeduction: input.hasBankBaseline && input.variableOutflowWeekly > 0 ? (input.variableOutflowWeekly * outflowMultiplier) * Math.min(1.0, scheduledVariableOutflowSum / input.variableOutflowWeekly) : 0,
                 stage2PreAi: input.hasBankBaseline && input.variableOutflowWeekly > 0 ? (input.variableOutflowWeekly * outflowMultiplier) * (1 - Math.min(1.0, scheduledVariableOutflowSum / input.variableOutflowWeekly)) : 0,
-                aiFactor: input.aiOutflowFactors?.[w] ?? null,
+                aiFactor: input.aiOutflowFactors?.[w] ?? 1.0,
                 final: outflowGap
             }
         };
