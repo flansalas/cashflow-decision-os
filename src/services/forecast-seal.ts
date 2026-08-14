@@ -1,42 +1,140 @@
 import { Prisma } from "@prisma/client";
 import { assembleForecastData } from "./forecast-assembly";
-import { computeForecast } from "./forecast";
-import { 
-    buildCanonicalPayload, 
-    computeCanonicalHash, 
+import {
+    buildCanonicalPayload,
+    computeCanonicalHash,
     canonicalJsonSerialize,
     FORECAST_SCHEMA_VERSION,
     HASH_ALGORITHM
 } from "./canonical-hash";
 
-/**
- * Creates a sealed ForecastCheckpoint artifact representing the definitive 
- * immutable W1-W13 economic belief state at a specific point in time.
- * 
- * Must be executed INSIDE the rollover transaction, AFTER the rollover state 
- * (new cash snapshot, deductions) has been applied.
- */
+function buildComponentProvenance(assembly: any, comp: any) {
+    const isBaseline = comp.sourceType === 'baseline';
+    let sourceAmount = null, sourceDate = null, sourceStatus = null;
+    let overrides = [];
+    let reconciliationLinks = [];
+    let deduction = 0;
+
+    if (comp.sourceId) {
+        overrides = assembly.overridesByTarget.get(comp.sourceId) || [];
+        overrides = [...overrides].sort((a, b) => a.id.localeCompare(b.id));
+
+        const targetLinks = assembly.reconciliationLinks.filter((l: any) => l.targetId === comp.sourceId || l.sourceId === comp.sourceId);
+        reconciliationLinks = [...targetLinks].sort((a, b) => a.id.localeCompare(b.id));
+        deduction = assembly.deductions.get(comp.sourceId) || 0;
+
+        if (comp.sourceType === "invoice") {
+            const raw = assembly.invoicesRaw.find((i:any) => i.id === comp.sourceId);
+            if (raw) {
+                sourceAmount = raw.amountOpen;
+                sourceDate = raw.dueDate;
+                sourceStatus = raw.status;
+            }
+        } else if (comp.sourceType === "bill") {
+            const raw = assembly.billsRaw.find((b:any) => b.id === comp.sourceId);
+            if (raw) {
+                sourceAmount = raw.amountOpen;
+                sourceDate = raw.dueDate;
+                sourceStatus = raw.status;
+            }
+        } else if (comp.sourceType === "recurring") {
+            const raw = assembly.recurringPatternsRaw.find((r:any) => r.id === comp.sourceId);
+            if (raw) {
+                sourceAmount = raw.typicalAmount;
+                sourceDate = raw.nextExpectedDate;
+                sourceStatus = raw.status;
+            }
+        }
+    }
+
+    const sourceStateObject = {
+        semanticSourceIdentity: {
+            sourceType: comp.sourceType,
+            sourceId: comp.sourceId,
+            label: comp.label
+        },
+        originalState: {
+            amount: sourceAmount,
+            date: sourceDate,
+            status: sourceStatus
+        },
+        effectiveState: {
+            amount: comp.amount
+        },
+        managerialState: {
+            confidence: comp.confidence
+        },
+        overrides: overrides.map((o: any) => ({
+            id: o.id,
+            type: o.type,
+            amount: o.amount,
+            effectiveDate: o.effectiveDate
+        })),
+        reconciliations: reconciliationLinks.map((l: any) => ({
+            id: l.id,
+            amount: l.amount
+        })),
+        deductionAmount: deduction,
+        baselineProvenance: isBaseline ? {
+            stage1Raw: comp.metadata?.stage1Raw,
+            explicitDeduction: comp.metadata?.explicitDeduction,
+            stage2PreAi: comp.metadata?.stage2PreAi,
+            aiFactor: comp.metadata?.aiFactor,
+            stage3PostAi: comp.metadata?.stage3PostAi,
+            finalAmount: comp.amount
+        } : undefined
+    };
+
+    const sourceStateJson = canonicalJsonSerialize(sourceStateObject);
+
+    let overrideIdToStore = null;
+    if (overrides.length === 1) {
+        overrideIdToStore = overrides[0].id;
+    } else if (overrides.length > 1) {
+        // No explicit repository convention yet for primary, fallback to null.
+        overrideIdToStore = null;
+    }
+
+    return {
+        sourceAmountAtForecast: sourceAmount,
+        sourceDateAtForecast: sourceDate ? new Date(sourceDate) : null,
+        sourceStatusAtForecast: sourceStatus,
+        overrideId: overrideIdToStore,
+        isUserOverridden: overrides.length > 0 || comp.type === "overridden",
+        sourceStateJson,
+        sourceStateHash: computeCanonicalHash(sourceStateJson)
+    };
+}
+
 export async function createForecastVersion(
     tx: Prisma.TransactionClient,
     companyId: string,
     cashSnapshotId: string,
     appCommitHash: string | null = null,
-    snapshotSource: string = "sealed_v1"
+    snapshotSource: string = "server_canonical_v1"
 ) {
     const generatedAt = new Date();
-    
+
     // 1. Fetch current cash snapshot
     const snapshot = await tx.cashSnapshot.findUnique({
         where: { id: cashSnapshotId }
     });
     if (!snapshot) throw new Error("CashSnapshot not found");
+    if (snapshot.companyId !== companyId) throw new Error("CashSnapshot Company mismatch");
 
     // 2. Fetch baseline snapshot (for preserving baseline state)
     // 3. Assemble inputs using transaction-isolated state
     const assembly = await assembleForecastData(companyId, tx);
 
-    // 4. Compute deterministic 13-week forecast
-    const forecastResult = computeForecast(assembly.input);
+    if (assembly.cashSnapshot.id !== cashSnapshotId) {
+        throw new Error("Assembly CashSnapshot ID mismatch");
+    }
+    if (assembly.cashSnapshot.companyId !== companyId) {
+        throw new Error("Assembly CashSnapshot Company mismatch");
+    }
+
+    // 4. Determine deterministic 13-week forecast
+    const forecastResult = assembly.forecastResult;
 
     // 13-Week Gate
     if (forecastResult.weeks.length !== 13) {
@@ -44,7 +142,11 @@ export async function createForecastVersion(
     }
     const weekMap = new Set<string>();
     let expectedNextTime = forecastResult.weeks[0].weekStart.getTime();
-    for (const w of forecastResult.weeks) {
+    for (let i = 0; i < forecastResult.weeks.length; i++) {
+        const w = forecastResult.weeks[i];
+        if (w.weekNumber !== i + 1) {
+            throw new Error(`Forecast week sequence is invalid. Expected weekNumber ${i + 1}, got ${w.weekNumber}.`);
+        }
         if (weekMap.has(w.weekNumber.toString())) throw new Error("Duplicate week detected.");
         weekMap.add(w.weekNumber.toString());
         const diffMs = w.weekStart.getTime() - expectedNextTime;
@@ -70,9 +172,10 @@ export async function createForecastVersion(
 
     // 5. Build component mapping for provenance and serialization
     const components: any[] = [];
-    
+
     for (const week of forecastResult.weeks) {
         for (const inflow of week.breakdown.inflows) {
+            const prov = buildComponentProvenance(assembly, inflow);
             components.push({
                 direction: "inflow",
                 sourceType: inflow.sourceType,
@@ -82,19 +185,11 @@ export async function createForecastVersion(
                 label: inflow.label || "",
                 projectedAmountCents: Math.round(inflow.amount * 100),
                 confidenceTier: inflow.confidence || "none",
-                sourceAmountAtForecast: inflow.metadata?.sourceAmountAtForecast ?? null,
-                sourceDateAtForecast: inflow.metadata?.sourceDateAtForecast ? new Date(inflow.metadata.sourceDateAtForecast) : null,
-                sourceStatusAtForecast: inflow.metadata?.sourceStatusAtForecast ?? null,
-                overrideId: inflow.metadata?.overrideId ?? null,
-                isUserOverridden: inflow.type === "overridden",
-                sourceStateJson: canonicalJsonSerialize({
-                    ...inflow.metadata,
-                    amount: inflow.amount
-                }),
-                sourceStateHash: computeCanonicalHash(canonicalJsonSerialize({ ...inflow.metadata, amount: inflow.amount }))
+                ...prov
             });
         }
         for (const outflow of week.breakdown.outflows) {
+            const prov = buildComponentProvenance(assembly, outflow);
             components.push({
                 direction: "outflow",
                 sourceType: outflow.sourceType,
@@ -104,16 +199,7 @@ export async function createForecastVersion(
                 label: outflow.label || "",
                 projectedAmountCents: Math.round(outflow.amount * 100),
                 confidenceTier: outflow.confidence || "none",
-                sourceAmountAtForecast: outflow.metadata?.sourceAmountAtForecast ?? null,
-                sourceDateAtForecast: outflow.metadata?.sourceDateAtForecast ? new Date(outflow.metadata.sourceDateAtForecast) : null,
-                sourceStatusAtForecast: outflow.metadata?.sourceStatusAtForecast ?? null,
-                overrideId: outflow.metadata?.overrideId ?? null,
-                isUserOverridden: outflow.type === "overridden",
-                sourceStateJson: canonicalJsonSerialize({
-                    ...outflow.metadata,
-                    amount: outflow.amount
-                }),
-                sourceStateHash: computeCanonicalHash(canonicalJsonSerialize({ ...outflow.metadata, amount: outflow.amount }))
+                ...prov
             });
         }
     }
@@ -139,7 +225,7 @@ export async function createForecastVersion(
 
     // 7. Idempotency Check
     // Concurrency lock: Advisory lock on company string to prevent race condition
-    const lockId = String(companyId).split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0);
+    const lockId = String(companyId).split("").reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0);
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockId})`;
 
     const existing = await tx.forecastCheckpoint.findFirst({
@@ -148,18 +234,14 @@ export async function createForecastVersion(
     if (existing) {
         return existing;
     }
-    if (existing) {
-        return existing;
-    }
 
     // 8. Seal Checkpoint (create)
     const breakdownJson = JSON.stringify(forecastResult.weeks[0].breakdown);
     const sealedAt = new Date();
-    
+
     // W1-compatible checkpoint header
     const inflowsExpected = forecastResult.weeks[0].inflowsExpected;
     const outflowsExpected = forecastResult.weeks[0].outflowsExpected;
-    
 
     const checkpoint = await tx.forecastCheckpoint.create({
         data: {
@@ -169,7 +251,7 @@ export async function createForecastVersion(
             forecastVersionHash,
             generatedAt,
             weekStart: forecastResult.weeks[0].weekStart,
-            weekEnd: forecastResult.weeks[forecastResult.weeks.length - 1].weekEnd,
+            weekEnd: forecastResult.weeks[0].weekEnd,
             endCashExpected: forecastResult.weeks[0].endCashExpected,
             inflowsExpected,
             outflowsExpected,
@@ -182,7 +264,7 @@ export async function createForecastVersion(
 
     // 9. Create ForecastWeeks
     await tx.forecastWeek.createMany({
-        data: forecastResult.weeks.map(w => ({
+        data: forecastResult.weeks.map((w: any) => ({
             companyId,
             forecastVersionHash,
             forecastCheckpointId: checkpoint.id,
@@ -228,61 +310,61 @@ export async function createForecastVersion(
     }
 
     // 11. Create BaselineSnapshotHistory
-    // 11. Create BaselineSnapshotHistory
     if (assembly.baseline) {
-        const crypto = require('crypto');
-        
+        const crypto = require("crypto");
+
         // Extract M1 predictions from weeks
-        const m1PreAiInflows = forecastResult.weeks.map((w: any) => {
-            const c = w.breakdown.inflows.find((i: any) => i.sourceType === 'baseline');
-            return c?.metadata?.stage2PreAi || 0;
-        });
-        const m1PreAiOutflows = forecastResult.weeks.map((w: any) => {
-            const c = w.breakdown.outflows.find((o: any) => o.sourceType === 'baseline');
-            return c?.metadata?.stage2PreAi || 0;
-        });
+        const m1PreAiInflows = forecastResult.weeks.map((w: any) => w.breakdown.inflows.find((i: any) => i.sourceType === "baseline")?.metadata?.stage2PreAi || 0);
+        const m1PreAiOutflows = forecastResult.weeks.map((w: any) => w.breakdown.outflows.find((o: any) => o.sourceType === "baseline")?.metadata?.stage2PreAi || 0);
+
         const m1PostAiInflows = forecastResult.weeks.map((w: any) => {
-            const c = w.breakdown.inflows.find((i: any) => i.sourceType === 'baseline');
+            const c = w.breakdown.inflows.find((i: any) => i.sourceType === "baseline");
             return c?.metadata?.stage3PostAi || c?.metadata?.stage2PreAi || 0;
         });
         const m1PostAiOutflows = forecastResult.weeks.map((w: any) => {
-            const c = w.breakdown.outflows.find((o: any) => o.sourceType === 'baseline');
+            const c = w.breakdown.outflows.find((o: any) => o.sourceType === "baseline");
             return c?.metadata?.stage3PostAi || c?.metadata?.stage2PreAi || 0;
         });
-        const m1RawInflows = forecastResult.weeks.map((w: any) => {
-            const c = w.breakdown.inflows.find((i: any) => i.sourceType === 'baseline');
-            return c?.metadata?.stage1Raw || 0;
-        });
-        const m1RawOutflows = forecastResult.weeks.map((w: any) => {
-            const c = w.breakdown.outflows.find((o: any) => o.sourceType === 'baseline');
-            return c?.metadata?.stage1Raw || 0;
-        });
-        
+
+        const m1RawInflows = forecastResult.weeks.map((w: any) => w.breakdown.inflows.find((i: any) => i.sourceType === "baseline")?.metadata?.stage1Raw || 0);
+        const m1RawOutflows = forecastResult.weeks.map((w: any) => w.breakdown.outflows.find((o: any) => o.sourceType === "baseline")?.metadata?.stage1Raw || 0);
+
+        const m1ExplicitDeductionInflows = forecastResult.weeks.map((w: any) => w.breakdown.inflows.find((i: any) => i.sourceType === "baseline")?.metadata?.explicitDeduction || 0);
+        const m1ExplicitDeductionOutflows = forecastResult.weeks.map((w: any) => w.breakdown.outflows.find((o: any) => o.sourceType === "baseline")?.metadata?.explicitDeduction || 0);
+
+        const m1AiFactorInflows = forecastResult.weeks.map((w: any) => w.breakdown.inflows.find((i: any) => i.sourceType === "baseline")?.metadata?.aiFactor || null);
+        const m1AiFactorOutflows = forecastResult.weeks.map((w: any) => w.breakdown.outflows.find((o: any) => o.sourceType === "baseline")?.metadata?.aiFactor || null);
+
         await tx.baselineSnapshotHistory.create({
             data: {
                 id: crypto.randomUUID(),
                 forecastCheckpointId: checkpoint.id,
                 companyId,
                 asOfDate: snapshot.asOfDate,
-                
+
                 variableInflowWeekly: assembly.baseline.variableInflowWeekly || 0,
                 variableOutflowWeekly: assembly.baseline.variableOutflowWeekly || 0,
-                
+
                 explicitInflowJson: JSON.stringify(assembly.baseline.weeklyBuckets || []),
                 explicitOutflowJson: JSON.stringify(assembly.baseline.weeklyBuckets || []),
-                evidenceStateJson: JSON.stringify(assembly.baseline.weeklyBuckets || []),
-                
+                evidenceStateJson: JSON.stringify({
+                    bankBalance: snapshot.bankBalance,
+                    adjustmentsTotal: assembly.input.adjustmentsTotal
+                }),
+
                 promptVersionHash: "assembly-v1",
                 modelIdentifier: "assembly-v1",
-                
+
                 m1PreAiResidualJson: JSON.stringify({ inflow: m1PreAiInflows, outflow: m1PreAiOutflows }),
                 m1PostAiResidualJson: JSON.stringify({ inflow: m1PostAiInflows, outflow: m1PostAiOutflows }),
-
                 m1RawBaselineJson: JSON.stringify({ inflow: m1RawInflows, outflow: m1RawOutflows }),
-                
+
+                m1ExplicitDeductionJson: JSON.stringify({ inflow: m1ExplicitDeductionInflows, outflow: m1ExplicitDeductionOutflows }),
+                m1AiFactorJson: JSON.stringify({ inflow: m1AiFactorInflows, outflow: m1AiFactorOutflows }),
+
                 rawAiResponseJson: "{}",
                 reasoningLog: "",
-                
+
                 fallbackStatus: "none",
                 dataQualityStatus: assembly.baseline.baselineConfidenceTier === "none" || assembly.baseline.baselineConfidenceTier === "low" ? "low_confidence" : "valid",
             }
@@ -292,7 +374,7 @@ export async function createForecastVersion(
     // 11.5 Get prior sealed version for lineage
     const priorSealed = await tx.forecastCheckpoint.findFirst({
         where: { companyId, sealedAt: { not: null } },
-        orderBy: { sealedAt: 'desc' }
+        orderBy: { sealedAt: "desc" }
     });
     const priorVersionHash = priorSealed?.forecastVersionHash || null;
 
@@ -308,6 +390,12 @@ export async function createForecastVersion(
             diffJson: JSON.stringify({
                 forecastVersionHash,
                 checkpointId: checkpoint.id,
+                cashSnapshotId,
+                schemaVersion: FORECAST_SCHEMA_VERSION,
+                hashAlgorithm: HASH_ALGORITHM,
+                source: snapshotSource,
+                w1Start: forecastResult.weeks[0].weekStart.toISOString(),
+                w13End: forecastResult.weeks[forecastResult.weeks.length - 1].weekEnd.toISOString(),
                 generatedAt: generatedAt.toISOString(),
                 sealedAt: sealedAt.toISOString()
             })

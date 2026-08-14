@@ -84,10 +84,10 @@ test('cash-checkin API transaction integration', async () => {
 
     // Verify the prior week forecast was sealed
     const sealedCheckpoint = await prisma.forecastCheckpoint.findFirst({
-        where: { companyId: "bb32d2cf-b0a6-4e1d-bcfa-d2004a711bfb", snapshotSource: "sealed_v1" }
+        where: { companyId: "bb32d2cf-b0a6-4e1d-bcfa-d2004a711bfb", snapshotSource: "server_canonical_v1" }
     });
     expect(sealedCheckpoint).toBeDefined();
-    expect(sealedCheckpoint!.forecastVersionHash.length).toBeGreaterThan(10);
+    expect(sealedCheckpoint?.forecastVersionHash?.length).toBeGreaterThan(10);
 
     // 2. Verify BaselineSnapshotHistory is created
     const bsh = await prisma.baselineSnapshotHistory.findUnique({

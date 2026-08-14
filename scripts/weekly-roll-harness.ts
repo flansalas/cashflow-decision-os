@@ -264,7 +264,7 @@ async function rollback(opts: any) {
     recordsToDelete.snapshot = snapshot;
 
     // --- ORPHAN PREVENTION ---
-    const checkpoint = await prisma.forecastCheckpoint.findUnique({ where: { cashSnapshotId: snapshotId } });
+    const checkpoint = await prisma.forecastCheckpoint.findFirst({ where: { cashSnapshotId: snapshotId } });
     if (checkpoint) {
         const relatedLedgers = await prisma.baselineVarianceLedger.findMany({
             where: { companyId, weekStart: checkpoint.weekStart }

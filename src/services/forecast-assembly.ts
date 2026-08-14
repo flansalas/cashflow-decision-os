@@ -384,11 +384,16 @@ export async function assembleForecastData(companyId: string, db: any = prisma) 
         cashFlowCategories, 
         cashFlowEntries, 
         assumptions,
-        // Raw context for presentation layers (do not use for economics recalculation)
+        // Raw context for presentation layers and sealing provenance
         invoicesRaw,
         billsRaw,
         customerProfiles,
         vendorProfiles,
         customerPaymentObs,
+        // Provenance Evidence
+        overridesByTarget,
+        deductions,
+        reconciliationLinks,
+        recurringPatternsRaw
     };
 }
