@@ -439,6 +439,7 @@ model ForecastCheckpoint {
   forecastWeeks                 ForecastWeek[]                  @relation("CheckpointWeeks")
   ForecastEvaluationObservation ForecastEvaluationObservation[]
   forecastEvaluationRuns        ForecastEvaluationRun[]
+  executionPlans                ExecutionPlan[]
 
   @@index([companyId, forecastVersionHash])
   @@index([cashSnapshotId])
@@ -461,23 +462,28 @@ model BaselineVarianceLedger {
 }
 
 model ExecutionPlan {
-  id                 String       @id @default(uuid())
-  companyId          String
-  weekStart          DateTime
-  status             String       @default("approved")
-  version            Int          @default(1)
-  createdAt          DateTime     @default(now())
-  supersededAt       DateTime?
-  supersededByPlanId String?
-  actualEndingCash   Float?
-  approvedBy         String?
-  forecastStateJson  String?
-  reviewedAt         DateTime?
-  revisionReason     String?
-  actionItems        ActionItem[]
-  company            Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id                   String              @id @default(uuid())
+  companyId            String
+  weekStart            DateTime
+  status               String              @default("approved")
+  version              Int                 @default(1)
+  createdAt            DateTime            @default(now())
+  supersededAt         DateTime?
+  supersededByPlanId   String?
+  actualEndingCash     Float?
+  approvedBy           String?
+  approvedAt           DateTime?
+  forecastStateJson    String?
+  reviewedAt           DateTime?
+  revisionReason       String?
+  forecastCheckpointId String?
+  actionItems          ActionItem[]
+  company              Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  forecastCheckpoint   ForecastCheckpoint? @relation(fields: [forecastCheckpointId], references: [id], onDelete: Restrict)
 
   @@index([companyId, weekStart])
+  @@index([companyId, weekStart, status])
+  @@index([forecastCheckpointId])
 }
 
 model CustomerPaymentObservation {

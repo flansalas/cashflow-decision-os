@@ -118,7 +118,7 @@ describe('Forward Evidence Collection', () => {
         });
 
         it('7. Missing or malformed prediction JSON produces an explicit failure', async () => {
-            vi.mocked(prisma.forecastCheckpoint.findMany).mockResolvedValue([createMockCheckpoint({ m4PreAiResidualJson: null })] as any);
+            vi.mocked(prisma.forecastCheckpoint.findMany).mockResolvedValue([createMockCheckpoint({ m1PreAiResidualJson: null })] as any);
 
             await expect(evaluateMaturedCheckpoints('company-1')).rejects.toThrow('Evaluation failed for Checkpoint cp-1: missing or malformed prediction JSON');
             

@@ -58,6 +58,7 @@ interface Props {
     }>;
     forecastStateJson?: any;
     onPlanApproved?: () => void;
+    onRevisePlan?: () => void;
     onPrintPlan?: () => void;
     freshness?: {
         bankBalanceAsOf: string | null;
@@ -95,7 +96,7 @@ export function HeaderTruthBar({
     payroll, payrollPromptNeeded, adjustments, onUpdateBalanceClick, onBalanceUpdated,
     expectedRunOutWeek, worstCaseRunOutWeek, inflow30, outflow30, isCompact, companyName, isCompanyDemo,
     onDrillIn, lowestExpected, lowestWorst, zoneBoundary, expectedEndingCash,
-    executionPlan, postApprovalChanges = [], forecastStateJson, onPlanApproved, onPrintPlan, freshness, managementImpact
+    executionPlan, postApprovalChanges = [], forecastStateJson, onPlanApproved, onPrintPlan, onRevisePlan, freshness, managementImpact
 }: Props) {
     const [showAdj, setShowAdj] = useState(false);
     const [showReasons, setShowReasons] = useState(false);
@@ -149,27 +150,10 @@ export function HeaderTruthBar({
         }
     };
 
-    const handleApprovePlan = async () => {
-        setIsApproving(true);
-        try {
-            const res = await fetch("/api/execution-plan", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    companyId,
-                    weekStart: forecastStateJson?.weeks?.[0]?.weekStart,
-                    forecastStateJson
-                }),
-            });
-            if (res.ok) {
-                setApprovalSuccess(true);
-                onPlanApproved?.();
-            }
-        } finally {
-            setIsApproving(false);
-        }
+        const handleApprovePlan = async () => {
+        if (onRevisePlan) onRevisePlan();
+        else if (onPrintPlan) onPrintPlan();
     };
-
     const handleRemoveTempAdj = (id: string) => {
         setTempAdjustments(prev => prev.filter(a => a.id !== id));
     };

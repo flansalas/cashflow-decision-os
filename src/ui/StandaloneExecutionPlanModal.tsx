@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { ExecutionPlanModal } from "./ExecutionPlanModal";
 
-export function StandaloneExecutionPlanModal({ companyId, onClose }: { companyId: string, onClose: () => void }) {
+export function StandaloneExecutionPlanModal({ companyId, onClose, initialMode = 'approved' }: { companyId: string, onClose: () => void, initialMode?: 'select' | 'approved' | 'live' }) {
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -42,6 +42,7 @@ export function StandaloneExecutionPlanModal({ companyId, onClose }: { companyId
             breakdown={data.forecast?.weeks?.[0]?.breakdown}
             onClose={onClose}
             executionPlan={data.executionPlan}
+            initialMode={initialMode}
             forecastStateJson={data.forecast}
             onApprove={() => {
                 window.location.reload();

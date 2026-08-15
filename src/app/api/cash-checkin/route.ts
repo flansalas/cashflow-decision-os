@@ -257,8 +257,7 @@ export async function POST(req: NextRequest) {
             } else if (priorWeekForecast?.weekStart) {
                 // Fallback: find the latest plan for the rolled week
                 const plans = await tx.executionPlan.findMany({
-                    where: { companyId, weekStart: new Date(priorWeekForecast.weekStart) },
-                    orderBy: { version: 'desc' },
+                    where: { companyId, weekStart: new Date(priorWeekForecast.weekStart), status: 'approved' },
                     take: 1
                 });
                 if (plans.length > 0) {

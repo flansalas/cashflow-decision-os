@@ -22,7 +22,7 @@ const { createMockTx, mockPrisma } = vi.hoisted(() => {
             executionPlan: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
             assumption: { findFirst: vi.fn().mockResolvedValue(null) },
             baselineSnapshot: { findUnique: vi.fn().mockResolvedValue({ id: "baseline-id" }), create: vi.fn() },
-            cashSnapshot: { create: vi.fn().mockResolvedValue({ id: "snapshot" }), findFirst: vi.fn().mockResolvedValue({ id: "snapshot-id", bankBalance: 1000, asOfDate: new Date() }), findUnique: vi.fn().mockResolvedValue({ id: "snapshot", bankBalance: 1000, asOfDate: new Date() }) },
+            cashSnapshot: { create: vi.fn().mockResolvedValue({ id: "snapshot" }), findFirst: vi.fn().mockResolvedValue({ id: "snapshot-id", bankBalance: 1000, asOfDate: new Date(), companyId: "test-checkin-recon" }), findUnique: vi.fn().mockResolvedValue({ id: "snapshot", bankBalance: 1000, asOfDate: new Date(), companyId: "test-checkin-recon" }) },
             bankTransaction: { findMany: vi.fn().mockResolvedValue([]) },
             bankAccount: { findMany: vi.fn().mockResolvedValue([{ id: "acc1", transactions: [] }]) },
             bankImportManifestAccount: { findFirst: vi.fn().mockResolvedValue({ importSuccess: true }) },
