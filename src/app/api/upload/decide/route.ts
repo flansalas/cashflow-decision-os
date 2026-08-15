@@ -34,6 +34,11 @@ export async function PATCH(req: NextRequest) {
                     where: { companyId: tenantId, importBatchId: batchId, conflictType: "new", validationStatus: "valid", userDecision: null },
                     data: { userDecision: "accept_insert", reviewedBy: userId, reviewedAt: new Date() }
                 });
+            } else if (action === "accept_changed_existing") {
+                await prisma.stagedImportRow.updateMany({
+                    where: { companyId: tenantId, importBatchId: batchId, conflictType: "changed_existing", userDecision: null },
+                    data: { userDecision: "accept_update", reviewedBy: userId, reviewedAt: new Date() }
+                });
             } else {
                 return NextResponse.json({ error: "Invalid bulk action" }, { status: 400 });
             }

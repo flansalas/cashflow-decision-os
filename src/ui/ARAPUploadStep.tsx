@@ -393,8 +393,14 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
                 setPhase("review");
             } else {
                 // Auto-apply both batches if clean
-                if (res.ar?.batchId) await fetch("/api/upload/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importBatchId: res.ar.batchId }) });
-                if (res.ap?.batchId) await fetch("/api/upload/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importBatchId: res.ap.batchId }) });
+                if (res.ar?.batchId) {
+                    const r = await fetch("/api/upload/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importBatchId: res.ar.batchId }) });
+                    if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || "Failed to apply AR batch"); }
+                }
+                if (res.ap?.batchId) {
+                    const r = await fetch("/api/upload/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importBatchId: res.ap.batchId }) });
+                    if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || "Failed to apply AP batch"); }
+                }
                 setPhase("done");
             }
         } catch (e: unknown) {
@@ -408,8 +414,20 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
         setSubmitting(true);
         setSubmitError(null);
         try {
-            if (batchIdAR) await fetch("/api/upload/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importBatchId: batchIdAR }) });
-            if (batchIdAP) await fetch("/api/upload/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importBatchId: batchIdAP }) });
+            if (batchIdAR) {
+                const dec = await fetch("/api/upload/decide", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batchId: batchIdAR, action: "accept_changed_existing", bulkAction: true }) });
+                if (!dec.ok) { const err = await dec.json().catch(() => ({})); throw new Error(err.error || "Failed to record AR review decisions"); }
+
+                const app = await fetch("/api/upload/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importBatchId: batchIdAR }) });
+                if (!app.ok) { const err = await app.json().catch(() => ({})); throw new Error(err.error || "Failed to apply AR batch"); }
+            }
+            if (batchIdAP) {
+                const dec = await fetch("/api/upload/decide", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batchId: batchIdAP, action: "accept_changed_existing", bulkAction: true }) });
+                if (!dec.ok) { const err = await dec.json().catch(() => ({})); throw new Error(err.error || "Failed to record AP review decisions"); }
+
+                const app = await fetch("/api/upload/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importBatchId: batchIdAP }) });
+                if (!app.ok) { const err = await app.json().catch(() => ({})); throw new Error(err.error || "Failed to apply AP batch"); }
+            }
             setPhase("done");
         } catch (e: unknown) {
             setSubmitError((e as Error).message);
