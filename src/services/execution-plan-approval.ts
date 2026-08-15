@@ -1,239 +1,190 @@
 import prisma from "@/db/prisma";
-
-export interface ApproveActionItemPayload {
-  ownerName: string;
-  dueDate: string | Date;
-  amountImpact: number;
-  constraintWeekStart: string | Date;
-  type: string;
-  title: string;
-  description: string;
-  targetType: string;
-  targetId: string | null;
-  reasoningJson: any;
-  priority?: string;
-  impactCertainty?: string;
-}
-
-export interface ApproveExecutionPlanRequest {
-  companyId: string;
-  userId: string | null;
-  weekStart: string | Date;
-  forecastCheckpointId: string;
-  expectedCurrentPlanId?: string | null;
-  revisionReason?: string | null;
-  actions: ApproveActionItemPayload[];
-}
+import { Prisma } from "@prisma/client";
 
 export class ApprovalConflictError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ApprovalConflictError";
-  }
+    constructor(message: string) {
+        super(message);
+        this.name = 'ApprovalConflictError';
+    }
 }
 
 export class ApprovalValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ApprovalValidationError";
-  }
+    constructor(message: string) {
+        super(message);
+        this.name = 'ApprovalValidationError';
+    }
 }
 
-export async function approveExecutionPlan(req: ApproveExecutionPlanRequest) {
-  const { companyId, userId, weekStart, forecastCheckpointId, expectedCurrentPlanId, revisionReason, actions } = req;
-  const dateWeekStart = new Date(weekStart);
+interface ActionItemPayload {
+    type: string;
+    title: string;
+    description?: string;
+    amountImpact: number;
+    constraintWeekStart: string;
+    targetType?: string;
+    targetId?: string;
+    reasoningJson?: any;
+    ownerName: string;
+    dueDate: string;
+}
 
-  if (!forecastCheckpointId) {
-    throw new ApprovalValidationError("Missing forecastCheckpointId");
-  }
+export interface ApprovePlanOptions {
+    companyId: string;
+    weekStart: string;
+    forecastCheckpointId: string;
+    expectedCurrentPlanId?: string | null;
+    revisionReason?: string;
+    actions: ActionItemPayload[];
+    approvedBy?: string;
+}
 
-  // Validate actions
-  for (const a of actions) {
-    if (!a.ownerName || !a.dueDate || a.amountImpact == null || !a.constraintWeekStart || !a.type || !a.title || !a.description || !a.targetType || !a.reasoningJson) {
-      throw new ApprovalValidationError("Invalid action payload. Missing required fields.");
+export async function approveExecutionPlan(opts: ApprovePlanOptions) {
+    if (!opts.companyId) throw new ApprovalValidationError("Missing companyId");
+    if (!opts.weekStart) throw new ApprovalValidationError("Missing weekStart");
+    const parsedWeekStart = new Date(opts.weekStart);
+    if (isNaN(parsedWeekStart.getTime())) throw new ApprovalValidationError("Invalid weekStart date");
+    if (!opts.forecastCheckpointId) throw new ApprovalValidationError("Missing forecastCheckpointId");
+
+    if (!Array.isArray(opts.actions)) throw new ApprovalValidationError("actions must be an array");
+    for (const a of opts.actions) {
+        if (!a.type || !a.title || !a.ownerName || !a.dueDate) throw new ApprovalValidationError("Action missing required fields");
+        const parsedDue = new Date(a.dueDate);
+        if (isNaN(parsedDue.getTime())) throw new ApprovalValidationError("Invalid dueDate");
+        const parsedConstraint = new Date(a.constraintWeekStart);
+        if (isNaN(parsedConstraint.getTime())) throw new ApprovalValidationError("Invalid constraintWeekStart");
+        if (typeof a.amountImpact !== 'number' || !isFinite(a.amountImpact)) throw new ApprovalValidationError("Invalid amountImpact");
+        try {
+            if (a.reasoningJson) JSON.stringify(a.reasoningJson);
+        } catch {
+            throw new ApprovalValidationError("Invalid reasoningJson");
+        }
     }
-  }
 
-  return await prisma.$transaction(async (tx) => {
-    // 1. Acquire transaction-scoped advisory lock for companyId + weekStart
-    // We use hashtext to deterministically map the strings to a 32-bit int, and combine them for the 2-arg advisory lock.
-    const weekStr = dateWeekStart.toISOString();
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${companyId}), hashtext(${weekStr}));`;
-
-    // 2. Read and validate ForecastCheckpoint
-    const checkpoint = await tx.forecastCheckpoint.findFirst({
-      where: { id: forecastCheckpointId, companyId },
-      include: { forecastWeeks: { orderBy: { weekStart: 'asc' } } }
+    const checkpoint = await prisma.forecastCheckpoint.findFirst({
+        where: { id: opts.forecastCheckpointId, companyId: opts.companyId, sealedAt: { not: null } }
     });
-
     if (!checkpoint) {
-      throw new ApprovalValidationError("Checkpoint not found or belongs to another tenant.");
-    }
-    if (!checkpoint.sealedAt) {
-      throw new ApprovalValidationError("Checkpoint is not sealed.");
-    }
-    if (
-      !checkpoint.forecastVersionHash ||
-      !checkpoint.forecastSchemaVersion ||
-      !checkpoint.hashAlgorithm ||
-      !checkpoint.canonicalPayloadJson ||
-      !checkpoint.generatedAt
-    ) {
-      throw new ApprovalValidationError("Checkpoint is missing canonical identity fields.");
-    }
-    if (checkpoint.forecastWeeks.length !== 13) {
-      throw new ApprovalValidationError(`Checkpoint must have exactly 13 linked weeks. Found ${checkpoint.forecastWeeks.length}.`);
-    }
-    const w1 = checkpoint.forecastWeeks[0];
-    if (w1.weekStart.getTime() !== dateWeekStart.getTime()) {
-      throw new ApprovalValidationError("Checkpoint W1 weekStart does not match the requested plan weekStart.");
+        throw new ApprovalValidationError("Sealed checkpoint not found or invalid.");
     }
 
-    // 3. Inspect all current plans for the week
-    const allPlansForWeek = await tx.executionPlan.findMany({
-      where: { companyId, weekStart: dateWeekStart },
-      orderBy: { version: 'desc' },
-      include: { forecastCheckpoint: true }
-    });
+    const exactTimestamp = new Date();
 
-    // 4. Closed/Executed week protection
-    const hasExecuted = allPlansForWeek.some(p => p.status === 'executed');
-    if (hasExecuted) {
-      throw new ApprovalConflictError("Cannot approve a new plan for an already executed week.");
-    }
+    return await prisma.$transaction(async (tx) => {
+        // Advisory lock
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(
+            hashtext(${opts.companyId}),
+            hashtext(${parsedWeekStart.toISOString()})
+        )`;
 
-    // 5. Stale-plan validation & legacy duplicate check
-    const approvedPlans = allPlansForWeek.filter(p => p.status === 'approved');
-    if (approvedPlans.length > 1) {
-      throw new ApprovalConflictError("Legacy duplicate approved plans exist for this week. Requires manual disposition.");
-    }
+        const existingPlans = await tx.executionPlan.findMany({
+            where: { companyId: opts.companyId, weekStart: parsedWeekStart }
+        });
 
-    const currentApprovedPlan = approvedPlans.length === 1 ? approvedPlans[0] : null;
+        const currentApproved = existingPlans.filter(p => p.status === 'approved');
+        const executedExists = existingPlans.some(p => p.status === 'executed');
 
-    if (!currentApprovedPlan && expectedCurrentPlanId) {
-      throw new ApprovalConflictError("Stale browser state: expected an approved plan, but none exists currently.");
-    }
-    if (currentApprovedPlan) {
-      if (currentApprovedPlan.id !== expectedCurrentPlanId) {
-        throw new ApprovalConflictError("The approved plan changed since you loaded this page. Reload before approving another revision.");
-      }
-      if (!revisionReason || revisionReason.trim() === '') {
-        throw new ApprovalValidationError("A revisionReason is required when superseding an existing plan.");
-      }
-    }
-
-    // 6. Calculate next version: MAX(version) + 1
-    let maxVersion = 0;
-    for (const p of allPlansForWeek) {
-      if (p.version > maxVersion) maxVersion = p.version;
-    }
-    const newVersion = maxVersion + 1;
-
-    // 7. Create the new ExecutionPlan in a transient internal non-approved state
-    const draftPlan = await tx.executionPlan.create({
-      data: {
-        companyId,
-        weekStart: dateWeekStart,
-        version: newVersion,
-        status: "draft_internal",
-        forecastCheckpointId,
-        forecastStateJson: null, // removing trust in client json
-        revisionReason: currentApprovedPlan ? revisionReason : null,
-      }
-    });
-
-    // 8. Create ActionItems linked to the draft plan
-    if (actions.length > 0) {
-      await tx.actionItem.createMany({
-        data: actions.map(a => ({
-          companyId,
-          executionPlanId: draftPlan.id,
-          ownerName: a.ownerName,
-          dueDate: new Date(a.dueDate),
-          amountImpact: a.amountImpact,
-          constraintWeekStart: new Date(a.constraintWeekStart),
-          type: a.type,
-          title: a.title,
-          description: a.description,
-          targetType: a.targetType,
-          targetId: a.targetId || null,
-          reasoningJson: typeof a.reasoningJson === "string" ? a.reasoningJson : JSON.stringify(a.reasoningJson),
-          priority: a.priority || "p2",
-          impactCertainty: a.impactCertainty || "med",
-          status: "planned"
-        }))
-      });
-    }
-
-    // 9. Supersede the prior approved plan
-    if (currentApprovedPlan) {
-      await tx.executionPlan.update({
-        where: { id: currentApprovedPlan.id },
-        data: {
-          status: "superseded",
-          supersededAt: new Date(),
-          supersededByPlanId: draftPlan.id
+        if (executedExists) {
+            throw new ApprovalConflictError("Week is already executed.");
         }
-      });
-    }
 
-    // 10. Transition the new plan to approved and set authoritative times
-    const now = new Date();
-    const approvedPlan = await tx.executionPlan.update({
-      where: { id: draftPlan.id },
-      data: {
-        status: "approved",
-        approvedBy: userId,
-        approvedAt: now
-      },
-      include: { actionItems: true }
+        if (currentApproved.length > 1) {
+            throw new ApprovalConflictError("Legacy duplicate approved plans exist. Please contact support.");
+        }
+
+        const existingApproved = currentApproved[0] || null;
+
+        if (existingApproved) {
+            if (existingApproved.id !== opts.expectedCurrentPlanId) {
+                throw new ApprovalConflictError("Stale expectedCurrentPlanId. The approved plan was modified by another request.");
+            }
+            if (!opts.revisionReason) {
+                throw new ApprovalValidationError("revisionReason is required when revising an approved plan.");
+            }
+        }
+
+        const nextVersion = existingPlans.length > 0 ? Math.max(...existingPlans.map(p => p.version)) + 1 : 1;
+
+        if (existingApproved) {
+            await tx.executionPlan.update({
+                where: { id: existingApproved.id },
+                data: {
+                    status: 'superseded',
+                    supersededAt: exactTimestamp,
+                    supersededByPlanId: 'PENDING_NEW_ID'
+                }
+            });
+        }
+
+        // Use transient draft status to construct plan, then update to approved
+        const newPlanDraft = await tx.executionPlan.create({
+            data: {
+                companyId: opts.companyId,
+                weekStart: parsedWeekStart,
+                version: nextVersion,
+                status: 'draft',
+                approvedBy: opts.approvedBy || "System",
+                approvedAt: exactTimestamp,
+                revisionReason: opts.revisionReason,
+                forecastCheckpointId: opts.forecastCheckpointId,
+                actionItems: {
+                    create: opts.actions.map(a => ({
+                        companyId: opts.companyId,
+                        priority: "medium",
+                        impactCertainty: "high",
+                        type: a.type,
+                        title: a.title,
+                        description: a.description || "",
+                        amountImpact: a.amountImpact,
+                        constraintWeekStart: new Date(a.constraintWeekStart),
+                        targetType: a.targetType || "none",
+                        targetId: a.targetId || "none",
+                        reasoningJson: a.reasoningJson || {},
+                        ownerName: a.ownerName,
+                        dueDate: new Date(a.dueDate),
+                        status: 'pending'
+                    }))
+                }
+            }
+        });
+
+        if (existingApproved) {
+            await tx.executionPlan.update({
+                where: { id: existingApproved.id },
+                data: { supersededByPlanId: newPlanDraft.id }
+            });
+        }
+
+        let newPlan;
+        try {
+            newPlan = await tx.executionPlan.update({
+                where: { id: newPlanDraft.id },
+                data: { status: 'approved' }
+            });
+        } catch (e: any) {
+            if (e.code === 'P2002') {
+                throw new ApprovalConflictError("Approval uniqueness conflict.");
+            }
+            throw e;
+        }
+
+        await tx.changeLog.create({
+            data: {
+                companyId: opts.companyId,
+                source: 'ExecutionPlan',
+                action: existingApproved ? 'REVISED' : 'APPROVED',
+                inputText: newPlan.id,
+                timestamp: exactTimestamp,
+                userId: opts.approvedBy || "System",
+                forecastVersionHashAfter: "approved",
+                diffJson: JSON.stringify({
+                    supersededPlanId: existingApproved?.id,
+                    newPlanId: newPlan.id,
+                    version: newPlan.version,
+                    forecastCheckpointId: opts.forecastCheckpointId
+                })
+            }
+        });
+
+        return newPlan;
     });
-
-    // 11. Write ChangeLog in same transaction
-    if (currentApprovedPlan) {
-      await tx.changeLog.create({
-        data: {
-          companyId,
-          source: "user_ui",
-          action: "PLAN_REVISION",
-          inputText: revisionReason,
-          diffJson: JSON.stringify({ 
-            newPlanId: approvedPlan.id,
-            newPlanVersion: approvedPlan.version,
-            previousPlanId: currentApprovedPlan.id, 
-            previousPlanVersion: currentApprovedPlan.version,
-            previousForecastCheckpointId: currentApprovedPlan.forecastCheckpointId,
-            newForecastCheckpointId: approvedPlan.forecastCheckpointId,
-            supersededAt: now.toISOString()
-          }),
-          forecastVersionHashAfter: checkpoint.forecastVersionHash,
-          forecastVersionHashBefore: currentApprovedPlan.forecastCheckpoint?.forecastVersionHash ?? null,
-          userId: userId
-        }
-      });
-    } else {
-      await tx.changeLog.create({
-        data: {
-          companyId,
-          source: "user_ui",
-          action: "INITIAL_PLAN_APPROVAL",
-          inputText: "Approved initial weekly execution plan",
-          diffJson: JSON.stringify({ 
-            planId: approvedPlan.id, 
-            planVersion: approvedPlan.version,
-            weekStart: approvedPlan.weekStart.toISOString(),
-            forecastCheckpointId: approvedPlan.forecastCheckpointId,
-            forecastSchemaVersion: checkpoint.forecastSchemaVersion,
-            approvedBy: userId,
-            approvedAt: now.toISOString()
-          }),
-          forecastVersionHashAfter: checkpoint.forecastVersionHash,
-          forecastVersionHashBefore: null,
-          userId: userId
-        }
-      });
-    }
-
-    return approvedPlan;
-  });
 }

@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
         try {
             const plan = await approveExecutionPlan({
                 companyId: tenantId,
-                userId,
+                approvedBy: userId || undefined,
                 weekStart,
                 forecastCheckpointId,
                 expectedCurrentPlanId,

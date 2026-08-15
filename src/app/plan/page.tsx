@@ -226,6 +226,7 @@ function PlanContent() {
     const [forecastDiff, setForecastDiff] = useState<Map<number, number>>(new Map());
     const [isScrolled, setIsScrolled] = useState(false);
     const [showExecutionPlan, setShowExecutionPlan] = useState(false);
+    const [planModalMode, setPlanModalMode] = useState<'select' | 'approved'>('approved');
     const otherViewsRef = useRef<HTMLDetailsElement>(null);
     // Tracks the last time we fetched the dashboard — used to decide whether to
     // re-fetch when the user returns from the Ledger after moving items.
@@ -449,7 +450,8 @@ function PlanContent() {
                         postApprovalChanges={data.postApprovalChanges}
                         forecastStateJson={data.forecast}
                         onPlanApproved={() => fetchDashboard()}
-                        onPrintPlan={() => setShowExecutionPlan(true)}
+                        onPrintPlan={() => { setPlanModalMode('approved'); setShowExecutionPlan(true); }}
+                        onRevisePlan={() => { setPlanModalMode('select'); setShowExecutionPlan(true); }}
                         freshness={data.freshness}
                     />
                 </div>

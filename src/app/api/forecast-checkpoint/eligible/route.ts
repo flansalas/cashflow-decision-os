@@ -1,46 +1,43 @@
-export const dynamic = 'force-dynamic';
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
-import { resolveTenant } from "@/lib/tenant";
 
-export async function GET(req: NextRequest) {
-    try {
-        const tenantId = await resolveTenant(req);
-        if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(request: Request) {
+    const { orgId, userId } = await auth();
+    const companyId = orgId || userId;
+    if (!companyId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const url = new URL(req.url);
-        const weekStartStr = url.searchParams.get("weekStart");
-        if (!weekStartStr) {
-            return NextResponse.json({ error: "Missing weekStart" }, { status: 400 });
-        }
+    const { searchParams } = new URL(request.url);
+    const weekStartStr = searchParams.get('weekStart');
 
-        const dateWeekStart = new Date(weekStartStr);
+    if (!weekStartStr) return NextResponse.json({ error: "Missing weekStart" }, { status: 400 });
+    const weekStart = new Date(weekStartStr);
+    if (isNaN(weekStart.getTime())) return NextResponse.json({ error: "Invalid weekStart" }, { status: 400 });
 
-        // Fetch eligible sealed checkpoints
-        const checkpoints = await prisma.forecastCheckpoint.findMany({
-            where: {
-                companyId: tenantId,
-                weekStart: dateWeekStart,
-                sealedAt: { not: null },
-                forecastVersionHash: { not: null },
-                canonicalPayloadJson: { not: null }
-            },
-            orderBy: { sealedAt: 'desc' },
-            select: {
-                id: true,
-                forecastVersionHash: true,
-                sealedAt: true,
-                forecastSchemaVersion: true,
-                hashAlgorithm: true,
-                generatedAt: true,
-                snapshotSource: true
+    const checkpoints = await prisma.forecastCheckpoint.findMany({
+        where: {
+            companyId,
+            sealedAt: { not: null },
+            forecastVersionHash: { not: null },
+            canonicalPayloadJson: { not: null },
+            forecastSchemaVersion: { not: null },
+            hashAlgorithm: { not: null },
+            generatedAt: { not: null },
+        },
+        include: {
+            forecastWeeks: {
+                orderBy: { weekStart: 'asc' }
             }
-        });
+        },
+        orderBy: { sealedAt: 'desc' }
+    });
 
-        return NextResponse.json({ checkpoints });
+    // Enforce exactly 13 weeks and W1 match
+    const valid = checkpoints.filter(cp => {
+        if (cp.forecastWeeks.length !== 13) return false;
+        if (cp.forecastWeeks[0].weekStart.getTime() !== weekStart.getTime()) return false;
+        return true;
+    });
 
-    } catch (e: any) {
-        console.error("Eligible Checkpoints GET Error:", e);
-        return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 });
-    }
+    return NextResponse.json({ checkpoints: valid.map(cp => ({ id: cp.id, sealedAt: cp.sealedAt, forecastVersionHash: cp.forecastVersionHash })) });
 }

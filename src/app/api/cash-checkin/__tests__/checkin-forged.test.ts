@@ -4,12 +4,22 @@ import { NextRequest } from 'next/server';
 import { vi, test, expect, afterAll } from 'vitest';
 import prisma from '@/db/prisma';
 
-vi.mock('@/lib/tenant', () => ({
-    resolveTenant: vi.fn(async () => "bb32d2cf-b0a6-4e1d-bcfa-d2004a711bfb")
+const { testCompanyId } = vi.hoisted(() => ({
+    testCompanyId: require("crypto").randomUUID()
 }));
 
+vi.mock('@/lib/tenant', () => ({
+    resolveTenant: vi.fn(async () => testCompanyId)
+}));
+
+const companyId = testCompanyId;
+
 test('forged priorWeekForecast does not affect canonical sealed checkpoint', async () => {
-    const companyId = "bb32d2cf-b0a6-4e1d-bcfa-d2004a711bfb";
+    await prisma.company.upsert({
+        where: { id: companyId },
+        update: { name: "Forged Test Company" },
+        create: { id: companyId, name: "Forged Test Company", isDemo: true }
+    });
     
     try {
         await prisma.baselineSnapshot.upsert({
@@ -37,7 +47,7 @@ test('forged priorWeekForecast does not affect canonical sealed checkpoint', asy
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            companyId: "bb32d2cf-b0a6-4e1d-bcfa-d2004a711bfb",
+            companyId,
             bankBalance: 12345.67,
             asOfDate: new Date().toISOString(),
             adjustments: [],
@@ -82,12 +92,4 @@ test('forged priorWeekForecast does not affect canonical sealed checkpoint', asy
     expect(sealedCheckpoint!.forecastSchemaVersion).toBe(1);
 });
 
-afterAll(async () => {
-    const companyId = "bb32d2cf-b0a6-4e1d-bcfa-d2004a711bfb";
-    try {
-        await prisma.forecastCheckpoint.deleteMany({});
-    } catch(e) {}
-    await prisma.forecastWeek.deleteMany({ where: { companyId } });
-    await prisma.cashSnapshot.deleteMany({ where: { companyId } });
-    await prisma.company.deleteMany({ where: { id: companyId } });
-});
+// afterAll block removed because we use isolated randomUUID companyId.

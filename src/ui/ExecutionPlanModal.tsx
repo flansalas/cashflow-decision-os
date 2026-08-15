@@ -24,6 +24,7 @@ interface Props {
     companyId?: string;
     forecastStateJson?: any;
     onApprove?: () => void;
+    initialMode?: "select" | "approved" | "live";
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -231,17 +232,17 @@ function ItemRow({ item, isHold, originalDue }: RowProps) {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────
-export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakdown, onClose, executionPlan, companyId, forecastStateJson, onApprove }: Props) {
+export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakdown, onClose, executionPlan, companyId, forecastStateJson, onApprove, initialMode = "select" }: Props) {
     const [activeTab, setActiveTab] = useState<"all" | "ar" | "ap">("all");
     const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
-    const [mode, setMode] = useState<"select" | "approved" | "live">("select");
+    const [mode, setMode] = useState<"select" | "approved" | "live">(initialMode);
     const [isApproving, setIsApproving] = useState(false);
     const [eligibleCheckpoints, setEligibleCheckpoints] = useState<any[] | null>(null);
     const [selectedCheckpointId, setSelectedCheckpointId] = useState<string>("");
     const [revisionReason, setRevisionReason] = useState("");
     const [persistedPlanData, setPersistedPlanData] = useState<any>(null);
     const [defaultOwner, setDefaultOwner] = useState("");
-    
+
     useEffect(() => {
         if (!weeks?.[0]?.weekStart || mode !== "select") return;
         fetch(`/api/forecast-checkpoint/eligible?weekStart=${weeks[0].weekStart}`)
@@ -362,7 +363,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                 });
             }
 
-            
+
             const res = await fetch("/api/execution-plan", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -386,16 +387,16 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
         }
     };
 
-    
+
     const isLive = mode === "live" || mode === "select" || !persistedPlanData;
     const planForecast = persistedPlanData?.forecastCheckpoint?.canonicalPayloadJson ? JSON.parse(persistedPlanData.forecastCheckpoint.canonicalPayloadJson) : null;
 
     // Resolve which data to render
-    const activeWeeks = isLive ? weeks : persistedPlanData?.forecastCheckpoint?.forecastWeeks || weeks;
-    const activeInvoices = isLive ? invoices : planForecast?.invoices || invoices;
-    const activeBills = isLive ? bills : planForecast?.bills || bills;
-    const activeOpeningCash = isLive ? openingCash : planForecast?.input?.adjustedOpeningCash || openingCash;
-    const activeBreakdown = isLive ? breakdown : planForecast?.weeks?.[0]?.breakdown || breakdown;
+    const activeWeeks = isLive ? weeks : (persistedPlanData?.forecastCheckpoint?.forecastWeeks || weeks);
+    const activeInvoices = isLive ? invoices : (planForecast?.invoices || []);
+    const activeBills = isLive ? bills : (planForecast?.bills || []);
+    const activeOpeningCash = isLive ? openingCash : (planForecast?.input?.adjustedOpeningCash || openingCash);
+    const activeBreakdown = isLive ? breakdown : (planForecast?.weeks?.[0]?.breakdown || null);
 
 
     const toggleExclude = (id: string) => {
@@ -422,6 +423,55 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
         totalPay,
         totalAutoOutflows
     } = useMemo(() => {
+        if (!isLive && persistedPlanData && persistedPlanData.actions) {
+            const ap: GridItem[] = [];
+            const ar: GridItem[] = [];
+            const mOut: WeekBreakdownItem[] = [];
+            const mIn: WeekBreakdownItem[] = [];
+            const holds: { item: GridItem; originalDue: string | null }[] = [];
+            let tCollect = 0;
+            let tPay = 0;
+
+            for (const a of persistedPlanData.actions) {
+                if (a.type === 'pay_ap') {
+                    ap.push({
+                        id: a.targetId, kind: 'ap', label: a.title, vendorName: a.title, amountOpen: Math.abs(a.amountImpact),
+                        daysPastDue: 0, effectiveWeek: 1
+                    } as GridItem);
+                    tPay += Math.abs(a.amountImpact);
+                } else if (a.type === 'collect_ar') {
+                    ar.push({
+                        id: a.targetId, kind: 'ar', label: a.title, customerName: a.title, amountOpen: Math.abs(a.amountImpact),
+                        daysPastDue: 0, effectiveWeek: 1
+                    } as GridItem);
+                    tCollect += Math.abs(a.amountImpact);
+                } else if (a.type === 'manual_outflow') {
+                    mOut.push({ sourceId: a.targetId, sourceType: 'manual', label: a.title, amount: Math.abs(a.amountImpact) } as WeekBreakdownItem);
+                    tPay += Math.abs(a.amountImpact);
+                } else if (a.type === 'manual_inflow') {
+                    mIn.push({ sourceId: a.targetId, sourceType: 'manual', label: a.title, amount: Math.abs(a.amountImpact) } as WeekBreakdownItem);
+                    tCollect += Math.abs(a.amountImpact);
+                } else if (a.type === 'defer_ar' || a.type === 'defer_ap') {
+                    holds.push({
+                        item: { id: a.targetId, kind: a.type === 'defer_ar' ? 'ar' : 'ap', label: a.title, amountOpen: Math.abs(a.amountImpact) } as GridItem,
+                        originalDue: a.reasoningJson?.originalDue || null
+                    });
+                }
+            }
+
+            return {
+                approvedToPay: ap.sort((a,b)=>b.amountOpen - a.amountOpen),
+                collectionTargets: ar.sort((a,b)=>b.amountOpen - a.amountOpen),
+                holdItems: holds,
+                manualOutflows: mOut,
+                manualInflows: mIn,
+                automatedOutflows: [],
+                totalCollect: tCollect,
+                totalPay: tPay,
+                totalAutoOutflows: 0
+            };
+        }
+
         // Active Week 1 items
         const collectionTargets = activeInvoices
             .filter((i: GridItem) => i.effectiveWeek === 1)
@@ -489,7 +539,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
             totalPay: baseTotalPay + mPay,
             totalAutoOutflows: aPay
         };
-    }, [activeInvoices, activeBills, week1, activeBreakdown, excludedIds]);
+    }, [activeInvoices, activeBills, week1, activeBreakdown, excludedIds, isLive, persistedPlanData]);
 
     const showAR = activeTab === "all" || activeTab === "ar";
     const showAP = activeTab === "all" || activeTab === "ap";
@@ -514,7 +564,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                                         <>
                                             <div>
                                                 <div className="text-sm font-bold text-slate-800 mb-1">Bind to Forecast Checkpoint</div>
-                                                <select 
+                                                <select
                                                     value={selectedCheckpointId}
                                                     onChange={e => setSelectedCheckpointId(e.target.value)}
                                                     className="w-full text-sm p-2 border rounded border-slate-300"
@@ -528,7 +578,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                                             </div>
                                         </>
                                     )}
-                                    
+
                                     {executionPlan && (
                                         <div>
                                             <div className="text-sm font-bold text-slate-800 mb-1">Revision Reason</div>
@@ -559,9 +609,9 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                                         />
                                     </div>
                                 </div>
-                                <button 
-                                    onClick={() => handleApproveAndPrint()} 
-                                    disabled={isApproving || eligibleCheckpoints?.length === 0 || (!defaultOwner || !defaultDueDate) || Boolean(executionPlan && !revisionReason)} 
+                                <button
+                                    onClick={() => handleApproveAndPrint()}
+                                    disabled={isApproving || eligibleCheckpoints?.length === 0 || (!defaultOwner || !defaultDueDate) || Boolean(executionPlan && !revisionReason)}
                                     className="w-full text-left p-4 rounded-lg border border-indigo-200 bg-indigo-50 hover:border-indigo-500 hover:bg-indigo-100 transition-colors disabled:opacity-50"
                                 >
                                     <div className="font-bold text-indigo-900">{isApproving ? "Approving..." : (executionPlan ? "Approve & Print Revised Plan" : "Approve & Print Plan")}</div>
@@ -627,7 +677,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                         <Printer className="w-6 h-6 text-gray-400" />
                         <div>
                             <p className="text-sm font-bold text-white">
-                                
+
                                 {mode === "approved" ? `Approved Weekly Plan — Version ${executionPlan?.version}` : "Current Live Forecast — Not Approved"}
                             </p>
                             <p className="text-xs" style={{ color: "#64748b" }}>
@@ -715,8 +765,45 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                                 </div>
                             </div>
 
-                            {/* Summary band */}
-                            <div style={{
+                            {/* Identity Fields Required by Package 1C */}
+                            {!isLive && persistedPlanData ? (
+                                <div style={{ marginTop: "16px", padding: "12px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", fontSize: "10px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                                    <div><strong>Plan ID:</strong> {persistedPlanData.id}</div>
+                                    <div><strong>Status:</strong> <span style={{color: "#059669", fontWeight: "bold", textTransform: "uppercase"}}>{persistedPlanData.status}</span></div>
+                                    <div><strong>Version:</strong> {persistedPlanData.version}</div>
+                                    <div><strong>Week:</strong> {fmtDate(persistedPlanData.weekStart)}</div>
+                                    <div><strong>Approved At:</strong> {fmtDate(persistedPlanData.approvedAt)}</div>
+                                    <div><strong>Approved By:</strong> {persistedPlanData.approvedBy}</div>
+
+                                    {persistedPlanData.forecastCheckpoint ? (
+                                        <>
+                                            <div><strong>Checkpoint ID:</strong> {persistedPlanData.forecastCheckpointId}</div>
+                                            <div><strong>Sealed At:</strong> {fmtDate(persistedPlanData.forecastCheckpoint.sealedAt)}</div>
+                                            <div style={{gridColumn: "1 / -1", wordBreak: "break-all"}}><strong>Full Checkpoint Hash:</strong> {persistedPlanData.forecastCheckpoint.forecastVersionHash}</div>
+                                            <div><strong>Schema:</strong> v{persistedPlanData.forecastCheckpoint.forecastSchemaVersion}</div>
+                                            <div><strong>Algorithm:</strong> {persistedPlanData.forecastCheckpoint.hashAlgorithm}</div>
+                                        </>
+                                    ) : (
+                                        <div style={{gridColumn: "1 / -1", color: "#b45309", fontWeight: "bold", background: "#fef3c7", padding: "4px", borderRadius: "4px", border: "1px solid #fcd34d"}}>
+                                            LEGACY / UNBOUND — NOT DECISION-PROOF
+                                        </div>
+                                    )}
+
+                                    {persistedPlanData.supersededAt && (
+                                        <>
+                                            <div><strong>Superseded At:</strong> {fmtDate(persistedPlanData.supersededAt)}</div>
+                                            <div><strong>Superseded By Plan ID:</strong> {persistedPlanData.supersededByPlanId}</div>
+                                        </>
+                                    )}
+                                </div>
+                            ) : (
+                                <div style={{ marginTop: "16px", padding: "8px", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: "6px", fontSize: "11px", color: "#991b1b", fontWeight: "bold", textAlign: "center" }}>
+                                    LIVE FORECAST — NOT APPROVED
+                                </div>
+                            )}
+
+                        {/* Summary band */}
+                        <div style={{
                                 display: "grid",
                                 gridTemplateColumns: "repeat(5, 1fr)",
                                 gap: "10px",
