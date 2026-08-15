@@ -241,6 +241,34 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
     const [batchIdAR, setBatchIdAR] = useState<string | null>(null);
     const [batchIdAP, setBatchIdAP] = useState<string | null>(null);
 
+    const [reviewRows, setReviewRows] = useState<any[]>([]);
+    const [reviewDecisions, setReviewDecisions] = useState<Record<string, string>>({}); // row.id -> decision
+
+    // Fetch review rows when entering review phase
+    useEffect(() => {
+        if (phase === "review") {
+            const fetchRows = async () => {
+                const rows: any[] = [];
+                if (result.ar && result.ar.possibleMatchCount > 0 && batchIdAR) {
+                    const r = await fetch(`/api/upload/review?batchId=${batchIdAR}&filter=unresolved`).catch(() => null);
+                    if (r && r.ok) {
+                        const d = await r.json();
+                        rows.push(...d.rows.filter((x: any) => x.conflictType === "possible_match"));
+                    }
+                }
+                if (result.ap && result.ap.possibleMatchCount > 0 && batchIdAP) {
+                    const r = await fetch(`/api/upload/review?batchId=${batchIdAP}&filter=unresolved`).catch(() => null);
+                    if (r && r.ok) {
+                        const d = await r.json();
+                        rows.push(...d.rows.filter((x: any) => x.conflictType === "possible_match"));
+                    }
+                }
+                setReviewRows(rows);
+            };
+            fetchRows();
+        }
+    }, [phase, result, batchIdAR, batchIdAP]);
+
     // Load saved mappings on mount
     useEffect(() => {
         if (!companyId) return;
@@ -414,6 +442,24 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
         setSubmitting(true);
         setSubmitError(null);
         try {
+            for (const row of reviewRows) {
+                const dec = reviewDecisions[row.id];
+                if (!dec) throw new Error("Missing decision for possible match");
+                const r = await fetch("/api/upload/decide", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        rowId: row.id,
+                        decision: dec,
+                        linkedRecordId: dec === "link_and_review" ? row.matchedRecordId : undefined
+                    })
+                });
+                if (!r.ok) {
+                    const err = await r.json().catch(() => ({}));
+                    throw new Error(err.error || "Failed to record manual decision");
+                }
+            }
+
             if (batchIdAR) {
                 const dec = await fetch("/api/upload/decide", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batchId: batchIdAR, action: "accept_changed_existing", bulkAction: true }) });
                 if (!dec.ok) { const err = await dec.json().catch(() => ({})); throw new Error(err.error || "Failed to record AR review decisions"); }
@@ -649,6 +695,37 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
                                 </div>
                             </div>
                         )}
+
+                        {reviewRows.length > 0 && (
+                            <div className="space-y-3 mt-4">
+                                <h4 className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>Manual Resolutions</h4>
+                                {reviewRows.map(row => {
+                                    const c = row.candidates?.[0];
+                                    const amount = row.normalizedValues.amountOpen;
+                                    const isAr = row.normalizedValues.invoiceNo !== undefined;
+                                    const title = isAr ? `Invoice: ${row.normalizedValues.invoiceNo}` : `Bill: ${row.normalizedValues.billNo}`;
+                                    const newName = isAr ? row.normalizedValues.customerName : row.normalizedValues.vendorName;
+                                    const existName = isAr ? c?.customerName : c?.vendorName;
+
+                                    return (
+                                        <div key={row.id} className="p-4 border rounded-lg space-y-3" style={{ background: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}>
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <div className="font-medium text-sm text-slate-800">{title} - {fmt(amount)}</div>
+                                                    <div className="text-xs text-slate-500 mt-1">Uploaded: {newName}</div>
+                                                    <div className="text-xs text-amber-600 mt-0.5">Existing: {existName}</div>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => setReviewDecisions(prev => ({...prev, [row.id]: "link_and_review"}))} className={`px-3 py-1.5 text-xs rounded-md border ${reviewDecisions[row.id] === "link_and_review" ? "bg-amber-100 border-amber-300 text-amber-800 font-medium" : "bg-white border-slate-200 text-slate-600"}`}>Use existing match</button>
+                                                <button onClick={() => setReviewDecisions(prev => ({...prev, [row.id]: "treat_as_new"}))} className={`px-3 py-1.5 text-xs rounded-md border ${reviewDecisions[row.id] === "treat_as_new" ? "bg-blue-100 border-blue-300 text-blue-800 font-medium" : "bg-white border-slate-200 text-slate-600"}`}>Treat as new</button>
+                                                <button onClick={() => setReviewDecisions(prev => ({...prev, [row.id]: "skip"}))} className={`px-3 py-1.5 text-xs rounded-md border ${reviewDecisions[row.id] === "skip" ? "bg-slate-200 border-slate-300 text-slate-800 font-medium" : "bg-white border-slate-200 text-slate-600"}`}>Skip</button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
 
                     {submitError && (
@@ -658,7 +735,7 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
                     )}
 
                     <button
-                        disabled={submitting}
+                        disabled={submitting || reviewRows.length > Object.keys(reviewDecisions).length}
                         onClick={handleApplyReviewed}
                         className="w-full py-3 text-white font-semibold rounded-xl transition-all text-sm shadow-lg shadow-emerald-100"
                         style={{ background: "var(--color-positive)" }}

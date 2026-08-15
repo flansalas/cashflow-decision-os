@@ -136,9 +136,24 @@ describe("Package 2A - AR/AP Upload UI Flow", () => {
             if (url.includes("/mapping")) return { ok: true, json: async () => ({ found: false }) };
             if (url.includes("/api/upload/ar")) {
                 return {
+                    ok: true, json: async () => ({
+                        ok: true, batchId: "batch_ar_pm", staged: 1, newCount: 0, dupeCount: 0, changedCount: 0, possibleMatchCount: 1, invalidCount: 0, reviewStatus: "staged"
+                    })
+                };
+            }
+            if (url.includes("/api/upload/review")) {
+                return {
                     ok: true,
                     json: async () => ({
-                        ok: true, batchId: "batch_ar_pm", staged: 1, newCount: 0, dupeCount: 0, changedCount: 0, possibleMatchCount: 1, invalidCount: 0, reviewStatus: "staged"
+                        rows: [
+                            {
+                                id: "pm_row_1",
+                                conflictType: "possible_match",
+                                matchedRecordId: "ar_exist_1",
+                                normalizedValues: { invoiceNo: "INV-100", customerName: "New Corp", amountOpen: 500 },
+                                candidates: [{ id: "ar_exist_1", invoiceNo: "INV-100", customerName: "Old Corp", amountOpen: 500 }]
+                            }
+                        ]
                     })
                 };
             }
@@ -146,31 +161,52 @@ describe("Package 2A - AR/AP Upload UI Flow", () => {
                 return { ok: true, json: async () => ({ ok: true }) };
             }
             if (url.includes("/api/upload/apply")) {
-                // Reject apply if unresolved
-                return { ok: false, json: async () => ({ error: "Batch has unresolved rows" }) };
+                return { ok: true, json: async () => ({ ok: true }) };
             }
             return { ok: true, json: async () => ({}) };
         });
 
         fireEvent.click(screen.getByText(/Confirm & Import/i));
 
-        // Wait for Review Phase
+        // Wait for Review Phase and possible matches to load
         await waitFor(() => expect(screen.getByText(/Approve & Apply/i)).toBeDefined());
+        await waitFor(() => expect(screen.getByText(/Invoice: INV-100/i)).toBeDefined());
         expect(screen.getByText(/1 possible matches require manual resolution/i)).toBeDefined();
 
-        // Click Apply, it should fail due to unresolved match
-        fireEvent.click(screen.getByText(/Approve & Apply/i));
-        await waitFor(() => expect(screen.getByText(/Batch has unresolved rows/i)).toBeDefined());
+        // Apply button should be disabled because the row is unresolved
+        const applyBtn = screen.getByText(/Approve & Apply/i).closest("button");
+        expect(applyBtn?.disabled).toBe(true);
 
-        // Simulate explicit valid decision in another tab (apply now succeeds)
+        // Click Use existing match
+        fireEvent.click(screen.getByText(/Use existing match/i));
+
+        // Now Apply button should be enabled
+        expect(applyBtn?.disabled).toBe(false);
+
+        // Click Apply
+        mockFetch.mockClear();
+
+        // Mock apply again because we cleared mockFetch
         mockFetch.mockImplementation(async (url: string) => {
-            if (url.includes("/api/upload/decide")) return { ok: true, json: async () => ({ ok: true }) };
-            if (url.includes("/api/upload/apply")) return { ok: true, json: async () => ({ ok: true }) };
+            if (url.includes("/api/upload/decide") || url.includes("/api/upload/apply")) {
+                return { ok: true, json: async () => ({ ok: true }) };
+            }
             return { ok: true, json: async () => ({}) };
         });
 
-        // Click Apply again
         fireEvent.click(screen.getByText(/Approve & Apply/i));
+
+        // Assert decide was called with link_and_review
+        await waitFor(() => {
+            const decideCalls = mockFetch.mock.calls.filter(c => c[0].includes("/api/upload/decide"));
+            expect(decideCalls.length).toBeGreaterThan(0);
+            const rowDecision = JSON.parse(decideCalls[0][1].body);
+            expect(rowDecision).toMatchObject({
+                rowId: "pm_row_1",
+                decision: "link_and_review",
+                linkedRecordId: "ar_exist_1"
+            });
+        });
 
         // Should reach Done Phase
         await waitFor(() => expect(screen.getByText(/Import Complete/i)).toBeDefined());
