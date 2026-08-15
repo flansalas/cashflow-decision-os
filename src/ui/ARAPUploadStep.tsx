@@ -50,8 +50,8 @@ const emptyFile = (): FileState => ({
 });
 
 interface ImportResult {
-    ar?: { staged: number; newCount: number; changedCount: number; batchId: string; };
-    ap?: { staged: number; newCount: number; changedCount: number; batchId: string; };
+    ar?: { staged: number; newCount: number; changedCount: number; possibleMatchCount: number; batchId: string; };
+    ap?: { staged: number; newCount: number; changedCount: number; possibleMatchCount: number; batchId: string; };
 }
 
 function fmt(n: number) {
@@ -370,7 +370,7 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
                 });
                 const d = await r.json();
                 if (!r.ok) throw new Error(d.error ?? "AR stage failed");
-                res.ar = { staged: d.staged, newCount: d.newCount, changedCount: d.changedCount, batchId: d.batchId };
+                res.ar = { staged: d.staged, newCount: d.newCount, changedCount: d.changedCount, possibleMatchCount: d.possibleMatchCount ?? 0, batchId: d.batchId };
                 setBatchIdAR(d.batchId);
             }
 
@@ -382,13 +382,13 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
                 });
                 const d = await r.json();
                 if (!r.ok) throw new Error(d.error ?? "AP stage failed");
-                res.ap = { staged: d.staged, newCount: d.newCount, changedCount: d.changedCount, batchId: d.batchId };
+                res.ap = { staged: d.staged, newCount: d.newCount, changedCount: d.changedCount, possibleMatchCount: d.possibleMatchCount ?? 0, batchId: d.batchId };
                 setBatchIdAP(d.batchId);
             }
 
             setResult(res);
             // If there are conflicts that need review, go to review. Otherwise, auto-apply.
-            const needsReview = (res.ar?.changedCount ?? 0) > 0 || (res.ap?.changedCount ?? 0) > 0;
+            const needsReview = (res.ar?.changedCount ?? 0) > 0 || (res.ap?.changedCount ?? 0) > 0 || (res.ar?.possibleMatchCount ?? 0) > 0 || (res.ap?.possibleMatchCount ?? 0) > 0;
             if (needsReview) {
                 setPhase("review");
             } else {
@@ -631,16 +631,22 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
                     </div>
 
                     <div className="space-y-3">
-                        {result.ar && result.ar.changedCount > 0 && (
+                        {result.ar && (result.ar.changedCount > 0 || result.ar.possibleMatchCount > 0) && (
                             <div className="flex justify-between items-center rounded-lg px-4 py-3 border" style={{ background: "var(--bg-raised)", borderColor: "var(--border-subtle)" }}>
                                 <span className="text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}><Inbox className="w-4 h-4" /> AR Invoices</span>
-                                <span className="text-sm font-medium" style={{ color: "var(--color-warning)" }}>{result.ar.changedCount} updates to review</span>
+                                <div className="text-right">
+                                    {result.ar.changedCount > 0 && <span className="text-sm font-medium block" style={{ color: "var(--color-warning)" }}>{result.ar.changedCount} updates to review</span>}
+                                    {result.ar.possibleMatchCount > 0 && <span className="text-sm font-medium block" style={{ color: "var(--color-error)" }}>{result.ar.possibleMatchCount} possible matches require manual resolution</span>}
+                                </div>
                             </div>
                         )}
-                        {result.ap && result.ap.changedCount > 0 && (
+                        {result.ap && (result.ap.changedCount > 0 || result.ap.possibleMatchCount > 0) && (
                             <div className="flex justify-between items-center rounded-lg px-4 py-3 border" style={{ background: "var(--bg-raised)", borderColor: "var(--border-subtle)" }}>
                                 <span className="text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}><Upload className="w-4 h-4" /> AP Bills</span>
-                                <span className="text-sm font-medium" style={{ color: "var(--color-warning)" }}>{result.ap.changedCount} updates to review</span>
+                                <div className="text-right">
+                                    {result.ap.changedCount > 0 && <span className="text-sm font-medium block" style={{ color: "var(--color-warning)" }}>{result.ap.changedCount} updates to review</span>}
+                                    {result.ap.possibleMatchCount > 0 && <span className="text-sm font-medium block" style={{ color: "var(--color-error)" }}>{result.ap.possibleMatchCount} possible matches require manual resolution</span>}
+                                </div>
                             </div>
                         )}
                     </div>

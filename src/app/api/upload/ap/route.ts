@@ -93,11 +93,19 @@ export async function POST(req: NextRequest) {
             where: { companyId },
         });
 
-        // Build natural-key lookup map
+        // Build natural-key lookup map and billNo lookup for possible matches
         const existingByKey = new Map<string, typeof existingRecords[0]>();
+        const existingByBillNo = new Map<string, typeof existingRecords[0][]>();
         for (const rec of existingRecords) {
             const key = `${(rec.billNo || "").toLowerCase()}|||${(rec.vendorName || "").toLowerCase()}`;
             existingByKey.set(key, rec);
+
+            const bNo = (rec.billNo || "").toLowerCase();
+            if (bNo) {
+                const arr = existingByBillNo.get(bNo) || [];
+                arr.push(rec);
+                existingByBillNo.set(bNo, arr);
+            }
         }
 
         // Classify each row
@@ -115,6 +123,7 @@ export async function POST(req: NextRequest) {
         let newCount = 0;
         let dupeCount = 0;
         let changedCount = 0;
+        let possibleMatchCount = 0;
         let invalidCount = 0;
 
         for (let i = 0; i < rows.length; i++) {
@@ -144,17 +153,37 @@ export async function POST(req: NextRequest) {
             const existing = existingByKey.get(key);
 
             if (!existing) {
-                newCount++;
-                stagedRowsData.push({
-                    conflictType: "new",
-                    proposedAction: "insert",
-                    matchedRecordId: null,
-                    normalizedDataJson: JSON.stringify(row),
-                    validationErrorsJson: null,
-                    fieldDifferencesJson: null,
-                    sourceRowNumber: i + 1,
-                    userDecision: "accept_insert", // auto-accept new rows
-                });
+                const bNo = (row.billNo || "").toLowerCase().trim();
+                const candidates = existingByBillNo.get(bNo) || [];
+                const possibleMatch = candidates.find(c =>
+                    Math.abs((c.amountOpen ?? 0) - row.amountOpen) < 0.01
+                );
+
+                if (possibleMatch) {
+                    possibleMatchCount++;
+                    stagedRowsData.push({
+                        conflictType: "possible_match",
+                        proposedAction: "review",
+                        matchedRecordId: possibleMatch.id,
+                        normalizedDataJson: JSON.stringify(row),
+                        validationErrorsJson: null,
+                        fieldDifferencesJson: null,
+                        sourceRowNumber: i + 1,
+                        userDecision: null,
+                    });
+                } else {
+                    newCount++;
+                    stagedRowsData.push({
+                        conflictType: "new",
+                        proposedAction: "insert",
+                        matchedRecordId: null,
+                        normalizedDataJson: JSON.stringify(row),
+                        validationErrorsJson: null,
+                        fieldDifferencesJson: null,
+                        sourceRowNumber: i + 1,
+                        userDecision: "accept_insert", // auto-accept new rows
+                    });
+                }
             } else if (rowsAreEqual(existing, row)) {
                 dupeCount++;
                 stagedRowsData.push({
@@ -184,7 +213,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Determine batch status
-        const hasUnresolved = changedCount > 0;
+        const hasUnresolved = changedCount > 0 || possibleMatchCount > 0;
         const status = hasUnresolved ? "staged" : "ready_to_apply";
 
         // Persist ImportBatch + StagedImportRows + MappingProfile atomically
@@ -249,8 +278,9 @@ export async function POST(req: NextRequest) {
             newCount,
             dupeCount,
             changedCount,
+            possibleMatchCount,
             invalidCount,
-            reviewStatus: status,
+            reviewStatus: newBatch.status
         });
     } catch (error) {
         console.error("AP upload error:", error);

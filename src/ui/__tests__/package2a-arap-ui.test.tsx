@@ -2,6 +2,33 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { ARAPUploadStep } from "../ARAPUploadStep";
+import { POST as arPost } from "@/app/api/upload/ar/route";
+import { POST as apPost } from "@/app/api/upload/ap/route";
+import { NextRequest } from "next/server";
+
+vi.mock('@clerk/nextjs/server', () => ({
+    auth: vi.fn().mockResolvedValue({ userId: 'test_user_123' })
+}));
+
+vi.mock('@/lib/tenant', () => ({
+    resolveTenant: vi.fn().mockResolvedValue('test_tenant_123')
+}));
+
+const mockPrisma = vi.hoisted(() => ({
+    receivableInvoice: { findMany: vi.fn().mockResolvedValue([]) },
+    payableBill: { findMany: vi.fn().mockResolvedValue([]) },
+    importBatch: { create: vi.fn().mockImplementation((args) => ({ id: "batch_1", ...args.data })) },
+    stagedImportRow: { createMany: vi.fn() },
+    mappingProfile: { upsert: vi.fn() },
+    companyNote: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn(), update: vi.fn() },
+    $transaction: vi.fn().mockImplementation(async (cb) => {
+        return await cb(mockPrisma);
+    })
+}));
+
+vi.mock('@/db/prisma', () => ({
+    default: mockPrisma
+}));
 
 vi.mock("lucide-react", () => ({
     Inbox: () => null,
@@ -46,10 +73,107 @@ describe("Package 2A - AR/AP Upload UI Flow", () => {
         cleanup();
     });
 
-    it("possible_match remains possible_match and is not silently inserted", () => {
-        // Validation of semantic rule: UI doesn't map possible_match.
-        // It's processed strictly by the backend logic in route.ts.
-        expect(true).toBe(true);
+    it("possible_match remains possible_match and is not silently inserted", async () => {
+        // 1. Backend: AR possible match is staged as possible_match, not new
+        mockPrisma.receivableInvoice.findMany.mockResolvedValueOnce([
+            { id: "ar_exist_1", companyId: "test_tenant_123", invoiceNo: "INV-100", customerName: "Old Corp", amountOpen: 500 }
+        ]);
+        const arReq = new NextRequest('http://localhost/api/upload/ar', {
+            method: 'POST',
+            body: JSON.stringify({
+                rows: [{ invoiceNo: "INV-100", customerName: "New Corp", amountOpen: 500 }],
+                mappingJson: {}
+            })
+        });
+        const arRes = await arPost(arReq);
+        expect(arRes.status).toBe(200);
+
+        expect(mockPrisma.stagedImportRow.createMany).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.arrayContaining([
+                expect.objectContaining({ conflictType: "possible_match", userDecision: null })
+            ])
+        }));
+
+        // 2. Backend: AP possible match is staged as possible_match, not new
+        mockPrisma.stagedImportRow.createMany.mockClear();
+        mockPrisma.payableBill.findMany.mockResolvedValueOnce([
+            { id: "ap_exist_1", companyId: "test_tenant_123", billNo: "BILL-200", vendorName: "Old Vendor", amountOpen: 1000 }
+        ]);
+        const apReq = new NextRequest('http://localhost/api/upload/ap', {
+            method: 'POST',
+            body: JSON.stringify({
+                rows: [{ billNo: "BILL-200", vendorName: "New Vendor", amountOpen: 1000 }],
+                mappingJson: {}
+            })
+        });
+        const apRes = await apPost(apReq);
+        expect(apRes.status).toBe(200);
+
+        expect(mockPrisma.stagedImportRow.createMany).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.arrayContaining([
+                expect.objectContaining({ conflictType: "possible_match", userDecision: null })
+            ])
+        }));
+
+        // 3. UI Flow: Does not apply while unresolved, succeeds after valid decision
+        const onDone = vi.fn();
+        const { container } = render(<ARAPUploadStep companyId="test_tenant_123" onDone={onDone} />);
+
+        const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+        const file = new File(["dummy"], "ar.csv", { type: "text/csv" });
+        fireEvent.change(fileInput, { target: { files: [file] } });
+
+        await waitFor(() => expect(screen.getByText(/Review Column Mapping/i)).toBeDefined());
+        fireEvent.click(screen.getByText(/Review Column Mapping/i));
+
+        await waitFor(() => expect(screen.getByText(/Preview Import/i)).toBeDefined());
+        fireEvent.click(screen.getByText(/Preview Import/i));
+
+        await waitFor(() => expect(screen.getByText(/Confirm & Import/i)).toBeDefined());
+
+        // Mock upload to return possible match
+        mockFetch.mockImplementation(async (url: string) => {
+            if (url.includes("/mapping")) return { ok: true, json: async () => ({ found: false }) };
+            if (url.includes("/api/upload/ar")) {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        ok: true, batchId: "batch_ar_pm", staged: 1, newCount: 0, dupeCount: 0, changedCount: 0, possibleMatchCount: 1, invalidCount: 0, reviewStatus: "staged"
+                    })
+                };
+            }
+            if (url.includes("/api/upload/decide")) {
+                return { ok: true, json: async () => ({ ok: true }) };
+            }
+            if (url.includes("/api/upload/apply")) {
+                // Reject apply if unresolved
+                return { ok: false, json: async () => ({ error: "Batch has unresolved rows" }) };
+            }
+            return { ok: true, json: async () => ({}) };
+        });
+
+        fireEvent.click(screen.getByText(/Confirm & Import/i));
+
+        // Wait for Review Phase
+        await waitFor(() => expect(screen.getByText(/Approve & Apply/i)).toBeDefined());
+        expect(screen.getByText(/1 possible matches require manual resolution/i)).toBeDefined();
+
+        // Click Apply, it should fail due to unresolved match
+        fireEvent.click(screen.getByText(/Approve & Apply/i));
+        await waitFor(() => expect(screen.getByText(/Batch has unresolved rows/i)).toBeDefined());
+
+        // Simulate explicit valid decision in another tab (apply now succeeds)
+        mockFetch.mockImplementation(async (url: string) => {
+            if (url.includes("/api/upload/decide")) return { ok: true, json: async () => ({ ok: true }) };
+            if (url.includes("/api/upload/apply")) return { ok: true, json: async () => ({ ok: true }) };
+            return { ok: true, json: async () => ({}) };
+        });
+
+        // Click Apply again
+        fireEvent.click(screen.getByText(/Approve & Apply/i));
+
+        // Should reach Done Phase
+        await waitFor(() => expect(screen.getByText(/Import Complete/i)).toBeDefined());
     });
 
     it("changed_existing -> explicit accept_update -> apply succeeds", async () => {
@@ -62,7 +186,7 @@ describe("Package 2A - AR/AP Upload UI Flow", () => {
 
         await waitFor(() => expect(screen.getByText(/Review Column Mapping/i)).toBeDefined());
         fireEvent.click(screen.getByText(/Review Column Mapping/i));
-        
+
         await waitFor(() => expect(screen.getByText(/Preview Import/i)).toBeDefined());
         fireEvent.click(screen.getByText(/Preview Import/i));
 
@@ -79,7 +203,7 @@ describe("Package 2A - AR/AP Upload UI Flow", () => {
                         staged: 1,
                         newCount: 0,
                         dupeCount: 0,
-                        changedCount: 1, 
+                        changedCount: 1,
                         invalidCount: 0,
                         reviewStatus: "staged"
                     })
@@ -124,7 +248,7 @@ describe("Package 2A - AR/AP Upload UI Flow", () => {
 
         await waitFor(() => expect(screen.getByText(/Review Column Mapping/i)).toBeDefined());
         fireEvent.click(screen.getByText(/Review Column Mapping/i));
-        
+
         await waitFor(() => expect(screen.getByText(/Preview Import/i)).toBeDefined());
         fireEvent.click(screen.getByText(/Preview Import/i));
 
@@ -141,7 +265,7 @@ describe("Package 2A - AR/AP Upload UI Flow", () => {
                         staged: 1,
                         newCount: 1,
                         dupeCount: 0,
-                        changedCount: 0, 
+                        changedCount: 0,
                         invalidCount: 0,
                         reviewStatus: "ready_to_apply"
                     })
@@ -170,7 +294,7 @@ describe("Package 2A - AR/AP Upload UI Flow", () => {
 
         await waitFor(() => expect(screen.getByText(/Review Column Mapping/i)).toBeDefined());
         fireEvent.click(screen.getByText(/Review Column Mapping/i));
-        
+
         await waitFor(() => expect(screen.getByText(/Preview Import/i)).toBeDefined());
         fireEvent.click(screen.getByText(/Preview Import/i));
 
@@ -187,7 +311,7 @@ describe("Package 2A - AR/AP Upload UI Flow", () => {
                         staged: 1,
                         newCount: 1,
                         dupeCount: 0,
-                        changedCount: 0, 
+                        changedCount: 0,
                         invalidCount: 0,
                         reviewStatus: "ready_to_apply"
                     })
@@ -202,7 +326,7 @@ describe("Package 2A - AR/AP Upload UI Flow", () => {
         fireEvent.click(screen.getByText(/Confirm & Import/i));
 
         await waitFor(() => expect(screen.getByText(/Import Complete/i)).toBeDefined());
-        
+
         const applyCall = mockFetch.mock.calls.find(c => c[0] === "/api/upload/apply" && JSON.parse(c[1].body).importBatchId === "ar_batch_3");
         expect(applyCall).toBeDefined();
     });
