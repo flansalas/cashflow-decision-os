@@ -22,7 +22,7 @@ interface Props {
     doneButtonText?: string;
 }
 
-type Phase = "upload" | "mapping" | "preview" | "done";
+type Phase = "upload" | "mapping" | "preview" | "review" | "done";
 
 interface FilteredInfo {
     rawTotal: number;
@@ -50,8 +50,8 @@ const emptyFile = (): FileState => ({
 });
 
 interface ImportResult {
-    ar?: { imported: number; updated: number; deleted: number; total: number; filteredOut?: number };
-    ap?: { imported: number; updated: number; deleted: number; total: number; filteredOut?: number };
+    ar?: { staged: number; newCount: number; changedCount: number; possibleMatchCount: number; batchId: string; };
+    ap?: { staged: number; newCount: number; changedCount: number; possibleMatchCount: number; batchId: string; };
 }
 
 function fmt(n: number) {
@@ -238,6 +238,36 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [result, setResult] = useState<ImportResult>({});
+    const [batchIdAR, setBatchIdAR] = useState<string | null>(null);
+    const [batchIdAP, setBatchIdAP] = useState<string | null>(null);
+
+    const [reviewRows, setReviewRows] = useState<any[]>([]);
+    const [reviewDecisions, setReviewDecisions] = useState<Record<string, string>>({}); // row.id -> decision
+
+    // Fetch review rows when entering review phase
+    useEffect(() => {
+        if (phase === "review") {
+            const fetchRows = async () => {
+                const rows: any[] = [];
+                if (result.ar && result.ar.possibleMatchCount > 0 && batchIdAR) {
+                    const r = await fetch(`/api/upload/review?batchId=${batchIdAR}&filter=unresolved`).catch(() => null);
+                    if (r && r.ok) {
+                        const d = await r.json();
+                        rows.push(...d.rows.filter((x: any) => x.conflictType === "possible_match"));
+                    }
+                }
+                if (result.ap && result.ap.possibleMatchCount > 0 && batchIdAP) {
+                    const r = await fetch(`/api/upload/review?batchId=${batchIdAP}&filter=unresolved`).catch(() => null);
+                    if (r && r.ok) {
+                        const d = await r.json();
+                        rows.push(...d.rows.filter((x: any) => x.conflictType === "possible_match"));
+                    }
+                }
+                setReviewRows(rows);
+            };
+            fetchRows();
+        }
+    }, [phase, result, batchIdAR, batchIdAP]);
 
     // Load saved mappings on mount
     useEffect(() => {
@@ -367,8 +397,9 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
                     body: JSON.stringify({ companyId, rows: arRows, mappingJson: ar.mapping }),
                 });
                 const d = await r.json();
-                if (!r.ok) throw new Error(d.error ?? "AR import failed");
-                res.ar = { imported: d.imported, updated: d.updated, deleted: d.deleted, total: d.total };
+                if (!r.ok) throw new Error(d.error ?? "AR stage failed");
+                res.ar = { staged: d.staged, newCount: d.newCount, changedCount: d.changedCount, possibleMatchCount: d.possibleMatchCount ?? 0, batchId: d.batchId };
+                setBatchIdAR(d.batchId);
             }
 
             if (apRows.length > 0) {
@@ -378,11 +409,71 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
                     body: JSON.stringify({ companyId, rows: apRows, mappingJson: ap.mapping }),
                 });
                 const d = await r.json();
-                if (!r.ok) throw new Error(d.error ?? "AP import failed");
-                res.ap = { imported: d.imported, updated: d.updated, deleted: d.deleted, total: d.total };
+                if (!r.ok) throw new Error(d.error ?? "AP stage failed");
+                res.ap = { staged: d.staged, newCount: d.newCount, changedCount: d.changedCount, possibleMatchCount: d.possibleMatchCount ?? 0, batchId: d.batchId };
+                setBatchIdAP(d.batchId);
             }
 
             setResult(res);
+            // If there are conflicts that need review, go to review. Otherwise, auto-apply.
+            const needsReview = (res.ar?.changedCount ?? 0) > 0 || (res.ap?.changedCount ?? 0) > 0 || (res.ar?.possibleMatchCount ?? 0) > 0 || (res.ap?.possibleMatchCount ?? 0) > 0;
+            if (needsReview) {
+                setPhase("review");
+            } else {
+                // Auto-apply both batches if clean
+                if (res.ar?.batchId) {
+                    const r = await fetch("/api/upload/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importBatchId: res.ar.batchId }) });
+                    if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || "Failed to apply AR batch"); }
+                }
+                if (res.ap?.batchId) {
+                    const r = await fetch("/api/upload/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importBatchId: res.ap.batchId }) });
+                    if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || "Failed to apply AP batch"); }
+                }
+                setPhase("done");
+            }
+        } catch (e: unknown) {
+            setSubmitError((e as Error).message);
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+    async function handleApplyReviewed() {
+        setSubmitting(true);
+        setSubmitError(null);
+        try {
+            for (const row of reviewRows) {
+                const dec = reviewDecisions[row.id];
+                if (!dec) throw new Error("Missing decision for possible match");
+                const r = await fetch("/api/upload/decide", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        rowId: row.id,
+                        decision: dec,
+                        linkedRecordId: dec === "link_and_review" ? row.matchedRecordId : undefined
+                    })
+                });
+                if (!r.ok) {
+                    const err = await r.json().catch(() => ({}));
+                    throw new Error(err.error || "Failed to record manual decision");
+                }
+            }
+
+            if (batchIdAR) {
+                const dec = await fetch("/api/upload/decide", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batchId: batchIdAR, action: "accept_changed_existing", bulkAction: true }) });
+                if (!dec.ok) { const err = await dec.json().catch(() => ({})); throw new Error(err.error || "Failed to record AR review decisions"); }
+
+                const app = await fetch("/api/upload/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importBatchId: batchIdAR }) });
+                if (!app.ok) { const err = await app.json().catch(() => ({})); throw new Error(err.error || "Failed to apply AR batch"); }
+            }
+            if (batchIdAP) {
+                const dec = await fetch("/api/upload/decide", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batchId: batchIdAP, action: "accept_changed_existing", bulkAction: true }) });
+                if (!dec.ok) { const err = await dec.json().catch(() => ({})); throw new Error(err.error || "Failed to record AP review decisions"); }
+
+                const app = await fetch("/api/upload/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importBatchId: batchIdAP }) });
+                if (!app.ok) { const err = await app.json().catch(() => ({})); throw new Error(err.error || "Failed to apply AP batch"); }
+            }
             setPhase("done");
         } catch (e: unknown) {
             setSubmitError((e as Error).message);
@@ -390,6 +481,7 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
             setSubmitting(false);
         }
     }
+
 
     const hasUploaded = ar.parsed || ap.parsed;
     const errors = phase === "mapping" ? mappingErrors() : [];
@@ -575,6 +667,84 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
                 </>
             )}
 
+                        {/* ── Phase: Review ── */}
+            {phase === "review" && (
+                <>
+                    <div className="text-center space-y-3 py-4">
+                        <div className="flex justify-center mb-2"><Search className="w-12 h-12 text-amber-500" /></div>
+                        <h3 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>Review Existing Invoices</h3>
+                        <p className="text-sm" style={{ color: "var(--text-muted)" }}>Some rows update existing invoices. Please confirm you want to apply these updates.</p>
+                    </div>
+
+                    <div className="space-y-3">
+                        {result.ar && (result.ar.changedCount > 0 || result.ar.possibleMatchCount > 0) && (
+                            <div className="flex justify-between items-center rounded-lg px-4 py-3 border" style={{ background: "var(--bg-raised)", borderColor: "var(--border-subtle)" }}>
+                                <span className="text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}><Inbox className="w-4 h-4" /> AR Invoices</span>
+                                <div className="text-right">
+                                    {result.ar.changedCount > 0 && <span className="text-sm font-medium block" style={{ color: "var(--color-warning)" }}>{result.ar.changedCount} updates to review</span>}
+                                    {result.ar.possibleMatchCount > 0 && <span className="text-sm font-medium block" style={{ color: "var(--color-error)" }}>{result.ar.possibleMatchCount} possible matches require manual resolution</span>}
+                                </div>
+                            </div>
+                        )}
+                        {result.ap && (result.ap.changedCount > 0 || result.ap.possibleMatchCount > 0) && (
+                            <div className="flex justify-between items-center rounded-lg px-4 py-3 border" style={{ background: "var(--bg-raised)", borderColor: "var(--border-subtle)" }}>
+                                <span className="text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}><Upload className="w-4 h-4" /> AP Bills</span>
+                                <div className="text-right">
+                                    {result.ap.changedCount > 0 && <span className="text-sm font-medium block" style={{ color: "var(--color-warning)" }}>{result.ap.changedCount} updates to review</span>}
+                                    {result.ap.possibleMatchCount > 0 && <span className="text-sm font-medium block" style={{ color: "var(--color-error)" }}>{result.ap.possibleMatchCount} possible matches require manual resolution</span>}
+                                </div>
+                            </div>
+                        )}
+
+                        {reviewRows.length > 0 && (
+                            <div className="space-y-3 mt-4">
+                                <h4 className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>Manual Resolutions</h4>
+                                {reviewRows.map(row => {
+                                    const c = row.candidates?.[0];
+                                    const amount = row.normalizedValues.amountOpen;
+                                    const isAr = row.normalizedValues.invoiceNo !== undefined;
+                                    const title = isAr ? `Invoice: ${row.normalizedValues.invoiceNo}` : `Bill: ${row.normalizedValues.billNo}`;
+                                    const newName = isAr ? row.normalizedValues.customerName : row.normalizedValues.vendorName;
+                                    const existName = isAr ? c?.customerName : c?.vendorName;
+
+                                    return (
+                                        <div key={row.id} className="p-4 border rounded-lg space-y-3" style={{ background: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}>
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <div className="font-medium text-sm text-slate-800">{title} - {fmt(amount)}</div>
+                                                    <div className="text-xs text-slate-500 mt-1">Uploaded: {newName}</div>
+                                                    <div className="text-xs text-amber-600 mt-0.5">Existing: {existName}</div>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => setReviewDecisions(prev => ({...prev, [row.id]: "link_and_review"}))} className={`px-3 py-1.5 text-xs rounded-md border ${reviewDecisions[row.id] === "link_and_review" ? "bg-amber-100 border-amber-300 text-amber-800 font-medium" : "bg-white border-slate-200 text-slate-600"}`}>Use existing match</button>
+                                                <button onClick={() => setReviewDecisions(prev => ({...prev, [row.id]: "treat_as_new"}))} className={`px-3 py-1.5 text-xs rounded-md border ${reviewDecisions[row.id] === "treat_as_new" ? "bg-blue-100 border-blue-300 text-blue-800 font-medium" : "bg-white border-slate-200 text-slate-600"}`}>Treat as new</button>
+                                                <button onClick={() => setReviewDecisions(prev => ({...prev, [row.id]: "skip"}))} className={`px-3 py-1.5 text-xs rounded-md border ${reviewDecisions[row.id] === "skip" ? "bg-slate-200 border-slate-300 text-slate-800 font-medium" : "bg-white border-slate-200 text-slate-600"}`}>Skip</button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {submitError && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
+                            {submitError}
+                        </div>
+                    )}
+
+                    <button
+                        disabled={submitting || reviewRows.length > Object.keys(reviewDecisions).length}
+                        onClick={handleApplyReviewed}
+                        className="w-full py-3 text-white font-semibold rounded-xl transition-all text-sm shadow-lg shadow-emerald-100"
+                        style={{ background: "var(--color-positive)" }}
+                    >
+                        {submitting ? "Applying..." : "Approve & Apply"} <ArrowRight className="w-4 h-4 ml-1 inline-block" />
+                    </button>
+                </>
+            )}
+
             {/* ── Phase: Done ── */}
             {phase === "done" && (
                 <>
@@ -589,26 +759,16 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
                             <span className="text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}><Inbox className="w-4 h-4" /> AR Invoices</span>
                             <div className="text-right">
                                 <span className="text-sm font-medium block" style={{ color: "var(--color-positive)" }}>
-                                    {result.ar ? `${result.ar.imported} new · ${result.ar.updated} updated` : "No data uploaded"}
+                                    {result.ar ? `${result.ar.staged} rows staged` : "No data uploaded"}
                                 </span>
-                                {result.ar && result.ar.deleted > 0 && (
-                                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                                        {result.ar.deleted} old records removed
-                                    </span>
-                                )}
                             </div>
                         </div>
                         <div className="flex justify-between items-center rounded-lg px-4 py-3 border" style={{ background: "var(--bg-raised)", borderColor: "var(--border-subtle)" }}>
                             <span className="text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}><Upload className="w-4 h-4" /> AP Bills</span>
                             <div className="text-right">
                                 <span className="text-sm font-medium block" style={{ color: "var(--color-positive)" }}>
-                                    {result.ap ? `${result.ap.imported} new · ${result.ap.updated} updated` : "No data uploaded"}
+                                    {result.ap ? `${result.ap.staged} rows staged` : "No data uploaded"}
                                 </span>
-                                {result.ap && result.ap.deleted > 0 && (
-                                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                                        {result.ap.deleted} old records removed
-                                    </span>
-                                )}
                             </div>
                         </div>
                     </div>

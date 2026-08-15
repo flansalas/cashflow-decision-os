@@ -48,9 +48,18 @@ export async function POST(req: NextRequest) {
         const toUpdate = patterns.filter(p => p.isUpdate && p.existingId);
         const toCreate = patterns.filter(p => !p.isUpdate);
 
-        // ── 1. Process Updates (exact id match — safe, no duplication risk) ──
+        // ── 1. Process Updates — verify ownership before mutating ────────────
+        // Foreign existingId is silently skipped to prevent cross-tenant mutation.
         let updated = 0;
         for (const p of toUpdate) {
+            const ownerCheck = await prisma.recurringPattern.findUnique({
+                where: { id: p.existingId! },
+                select: { companyId: true },
+            });
+            if (!ownerCheck || ownerCheck.companyId !== companyId) {
+                console.warn(`[patterns/save] Rejected foreign existingId: ${p.existingId} (owner: ${ownerCheck?.companyId ?? "not found"}, tenant: ${companyId})`);
+                continue;
+            }
             await prisma.recurringPattern.update({
                 where: { id: p.existingId! },
                 data: {
