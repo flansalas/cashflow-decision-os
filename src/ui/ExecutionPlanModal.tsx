@@ -242,6 +242,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
     const [revisionReason, setRevisionReason] = useState("");
     const [persistedPlanData, setPersistedPlanData] = useState<any>(null);
     const [defaultOwner, setDefaultOwner] = useState("");
+    const [pendingPrint, setPendingPrint] = useState(false);
 
     useEffect(() => {
         if (!weeks?.[0]?.weekStart || mode !== "select") return;
@@ -268,6 +269,13 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                 .catch(e => console.error(e));
         }
     }, [mode, executionPlan]);
+
+    useEffect(() => {
+        if (pendingPrint && mode === "approved" && persistedPlanData?.actionItems && persistedPlanData?.forecastCheckpoint?.forecastWeeks?.length === 13) {
+            setPendingPrint(false);
+            window.print();
+        }
+    }, [pendingPrint, mode, persistedPlanData]);
 
     const [defaultDueDate, setDefaultDueDate] = useState(() => {
         const d = new Date();
@@ -387,13 +395,16 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                         const detailData = await detailRes.json();
                         if (detailData.plan) {
                             setPersistedPlanData(detailData.plan);
+                            setMode("approved");
+                            setPendingPrint(true);
+                            return;
                         }
                     }
                 }
 
                 onApprove?.();
                 setMode("approved");
-                setTimeout(() => window.print(), 300);
+                // Do not print if we couldn't fetch valid persisted data
             }
         } finally {
             setIsApproving(false);
@@ -401,33 +412,15 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
     };
 
 
-    const isLive = mode === "live" || mode === "select" || !persistedPlanData;
+    const isLive = mode === "live" || mode === "select";
     const planForecast = persistedPlanData?.forecastCheckpoint?.canonicalPayloadJson ? JSON.parse(persistedPlanData.forecastCheckpoint.canonicalPayloadJson) : null;
 
     // Resolve which data to render
-    const activeWeeks = isLive ? weeks : persistedPlanData?.forecastCheckpoint?.ForecastWeeks;
-    const activeInvoices = isLive ? invoices : planForecast?.invoices;
-    const activeBills = isLive ? bills : planForecast?.bills;
-    const activeOpeningCash = isLive ? openingCash : planForecast?.input?.adjustedOpeningCash;
+    const activeWeeks = isLive ? weeks : persistedPlanData?.forecastCheckpoint?.forecastWeeks;
+    const activeInvoices = isLive ? invoices : planForecast?.invoices || [];
+    const activeBills = isLive ? bills : planForecast?.bills || [];
+    const activeOpeningCash = isLive ? openingCash : planForecast?.input?.adjustedOpeningCash || 0;
     const activeBreakdown = isLive ? breakdown : planForecast?.weeks?.[0]?.breakdown;
-
-    // Fail closed if approved mode lacks data
-    if (!isLive) {
-        if (!activeWeeks || activeWeeks.length !== 13 || !planForecast || !persistedPlanData?.actionItems) {
-            return (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm no-print">
-                    <div className="bg-white p-6 rounded text-rose-600 font-bold shadow-2xl max-w-lg">
-                        <h2 className="mb-2 text-lg">Error: Missing Approved Data</h2>
-                        <p className="text-sm font-normal">
-                            Cannot render approved plan. Missing required persisted data (Checkpoint, canonicalPayloadJson, ActionItems, or exactly 13 ForecastWeeks). Failing closed to prevent false representations.
-                        </p>
-                        <button onClick={onClose} className="mt-4 px-4 py-2 bg-slate-100 rounded text-slate-800 text-sm border hover:bg-slate-200">Close</button>
-                    </div>
-                </div>
-            );
-        }
-    }
-
 
     const toggleExclude = (id: string) => {
         setExcludedIds(prev => {
@@ -438,7 +431,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
         });
     };
 
-    const week1 = weeks[0];
+    const week1 = activeWeeks?.[0];
     const printDate = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
     // ── Data derivation ────────────────────────────────────────────────────
@@ -574,6 +567,23 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
     const showAR = activeTab === "all" || activeTab === "ar";
     const showAP = activeTab === "all" || activeTab === "ap";
     const hasActions = (approvedToPay.length + collectionTargets.length + manualOutflows.length + manualInflows.length + holdItems.length) > 0;
+
+    // Fail closed if approved mode lacks data AFTER all hooks
+    if (!isLive) {
+        if (!activeWeeks || activeWeeks.length !== 13 || !planForecast || !persistedPlanData?.actionItems) {
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm no-print">
+                    <div className="bg-white p-6 rounded text-rose-600 font-bold shadow-2xl max-w-lg">
+                        <h2 className="mb-2 text-lg">Error: Missing Approved Data</h2>
+                        <p className="text-sm font-normal">
+                            Cannot render approved plan. Missing required persisted data (Checkpoint, canonicalPayloadJson, ActionItems, or exactly 13 forecastWeeks). Failing closed to prevent false representations.
+                        </p>
+                        <button onClick={onClose} className="mt-4 px-4 py-2 bg-slate-100 rounded text-slate-800 text-sm border hover:bg-slate-200">Close</button>
+                    </div>
+                </div>
+            );
+        }
+    }
 
     if (mode === "select") {
         return (

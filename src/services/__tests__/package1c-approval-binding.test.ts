@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => {
     const mockTransaction = vi.fn(async (cb) => {
         return cb({
             $executeRaw: vi.fn(),
-            forecastCheckpoint: { findUnique: mockFindUniqueCheckpoint },
+            forecastCheckpoint: { findUnique: mockFindUniqueCheckpoint, findFirst: mockFindCheckpoint },
             executionPlan: {
                 findMany: mockFindExecutionPlans,
                 create: mockCreateExecutionPlan,
@@ -78,12 +78,12 @@ describe('Package 1C: Approval Binding and Concurrency', () => {
     describe('Checkpoint Validation', () => {
         it('rejects missing checkpoint', async () => {
             mocks.mockFindCheckpoint.mockResolvedValueOnce(null);
-            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint not found');
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint not found or belongs to another company');
         });
 
         it('rejects foreign tenant', async () => {
             mocks.mockFindCheckpoint.mockResolvedValueOnce(makeValidCheckpoint({ companyId: 'foreign_co' }));
-            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint belongs to another company');
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint not found or belongs to another company');
         });
 
         it('rejects unsealed checkpoint', async () => {
@@ -132,6 +132,20 @@ describe('Package 1C: Approval Binding and Concurrency', () => {
             cp.forecastWeeks[0].weekStart = new Date('2026-08-08T00:00:00Z');
             mocks.mockFindCheckpoint.mockResolvedValueOnce(cp);
             await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('First week of checkpoint does not match the requested plan weekStart');
+        });
+
+        it('rejects non-contiguous weeks', async () => {
+            const cp = makeValidCheckpoint();
+            // skip a week in the middle
+            cp.forecastWeeks[2].weekStart = new Date(cp.forecastWeeks[2].weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+            mocks.mockFindCheckpoint.mockResolvedValueOnce(cp);
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint weeks are not strictly contiguous by 7 days');
+        });
+
+        it('rejects foreign tenant due to tenant-scoped query', async () => {
+            // The query `where: { id, companyId }` will return null if it's a foreign tenant
+            mocks.mockFindCheckpoint.mockResolvedValueOnce(null);
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint not found or belongs to another company');
         });
 
         it('valid 13-week checkpoint succeeds', async () => {

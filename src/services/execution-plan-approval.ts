@@ -60,38 +60,6 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
         }
     }
 
-    const checkpoint = await prisma.forecastCheckpoint.findUnique({
-        where: { id: opts.forecastCheckpointId },
-        include: {
-            forecastWeeks: {
-                orderBy: { weekStart: 'asc' }
-            }
-        }
-    });
-
-    if (!checkpoint) throw new ApprovalValidationError("Checkpoint not found");
-    if (checkpoint.companyId !== opts.companyId) throw new ApprovalValidationError("Checkpoint belongs to another company");
-    if (!checkpoint.sealedAt) throw new ApprovalValidationError("Checkpoint is not sealed");
-    if (!checkpoint.generatedAt) throw new ApprovalValidationError("Checkpoint is missing generatedAt");
-    if (!checkpoint.forecastVersionHash) throw new ApprovalValidationError("Checkpoint is missing forecastVersionHash");
-    if (!checkpoint.canonicalPayloadJson) throw new ApprovalValidationError("Checkpoint is missing canonicalPayloadJson");
-    if (!checkpoint.forecastSchemaVersion) throw new ApprovalValidationError("Checkpoint is missing forecastSchemaVersion");
-    if (!checkpoint.hashAlgorithm) throw new ApprovalValidationError("Checkpoint is missing hashAlgorithm");
-
-    const weeks = checkpoint.forecastWeeks || [];
-    if (weeks.length !== 13) throw new ApprovalValidationError(`Checkpoint has ${weeks.length} weeks instead of exactly 13`);
-    
-    // Check contiguous ordering and first week
-    if (weeks[0].weekStart.getTime() !== parsedWeekStart.getTime()) {
-        throw new ApprovalValidationError("First week of checkpoint does not match the requested plan weekStart");
-    }
-    for (let i = 1; i < weeks.length; i++) {
-        const expectedNext = new Date(weeks[i-1].weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
-        if (weeks[i].weekStart.getTime() !== expectedNext.getTime()) {
-            throw new ApprovalValidationError("Checkpoint weeks are not strictly contiguous by 7 days");
-        }
-    }
-
     const exactTimestamp = new Date();
 
     return await prisma.$transaction(async (tx) => {
@@ -100,6 +68,38 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
             hashtext(${opts.companyId}),
             hashtext(${parsedWeekStart.toISOString()})
         )`;
+
+        const checkpoint = await tx.forecastCheckpoint.findFirst({
+            where: { id: opts.forecastCheckpointId, companyId: opts.companyId },
+            include: {
+                forecastWeeks: {
+                    orderBy: { weekStart: 'asc' }
+                }
+            }
+        });
+
+        if (!checkpoint) throw new ApprovalValidationError("Checkpoint not found or belongs to another company");
+        if (!checkpoint.sealedAt) throw new ApprovalValidationError("Checkpoint is not sealed");
+        if (!checkpoint.generatedAt) throw new ApprovalValidationError("Checkpoint is missing generatedAt");
+        if (!checkpoint.forecastVersionHash) throw new ApprovalValidationError("Checkpoint is missing forecastVersionHash");
+        if (!checkpoint.canonicalPayloadJson) throw new ApprovalValidationError("Checkpoint is missing canonicalPayloadJson");
+        if (!checkpoint.forecastSchemaVersion) throw new ApprovalValidationError("Checkpoint is missing forecastSchemaVersion");
+        if (!checkpoint.hashAlgorithm) throw new ApprovalValidationError("Checkpoint is missing hashAlgorithm");
+
+        const weeks = checkpoint.forecastWeeks || [];
+        if (weeks.length !== 13) throw new ApprovalValidationError(`Checkpoint has ${weeks.length} weeks instead of exactly 13`);
+
+        // Check contiguous ordering and first week
+        if (weeks[0].weekStart.getTime() !== parsedWeekStart.getTime()) {
+            throw new ApprovalValidationError("First week of checkpoint does not match the requested plan weekStart");
+        }
+        for (let i = 1; i < weeks.length; i++) {
+            const expectedNext = new Date(weeks[i-1].weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+            if (weeks[i].weekStart.getTime() !== expectedNext.getTime()) {
+                throw new ApprovalValidationError("Checkpoint weeks are not strictly contiguous by 7 days");
+            }
+        }
+
 
         const existingPlans = await tx.executionPlan.findMany({
             where: { companyId: opts.companyId, weekStart: parsedWeekStart }
@@ -166,10 +166,10 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
         if (existingApproved) {
             await tx.executionPlan.update({
                 where: { id: existingApproved.id },
-                data: { 
+                data: {
                     status: 'superseded',
                     supersededAt: exactTimestamp,
-                    supersededByPlanId: newPlanDraft.id 
+                    supersededByPlanId: newPlanDraft.id
                 }
             });
         }
