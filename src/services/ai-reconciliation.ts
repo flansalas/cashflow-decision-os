@@ -147,25 +147,12 @@ export async function proposeReconciliations(companyId: string) {
             const target = viableCandidates.find(c => c.id === aiEval.targetId);
             if (!target) continue;
 
-            // Check hard signals for auto-activation
-            const isExactAmount = target.amountOpen === entry.availableAmount;
-            const noCompetingCandidate = viableCandidates.length === 1;
-            const timingDiff = Math.abs(new Date((target as any).expectedDate || target.dueDate).getTime() - new Date(entry.targetDate).getTime()) / (1000 * 60 * 60 * 24);
-            const hasCompatibleTiming = timingDiff <= 14; // Must be very close for auto-match
-            const hasStrongIdentityMatch = aiEval.hasStrongIdentityMatch === true;
+            // AI may NEVER set economic authority (deductFrom).
+            // Human confirmation via the reconciliation UI is the sole path to activate a link.
+            // qualifiesForAuto logic has been removed to enforce this invariant.
+            const deductFrom = null;
 
-            const qualifiesForAuto = 
-                aiEval.confidence === "high" && 
-                isExactAmount && 
-                noCompetingCandidate && 
-                hasCompatibleTiming && 
-                hasStrongIdentityMatch;
-
-            // Determine activation and deductFrom
-            // Medium confidence OR failed hard signals -> pending
-            const deductFrom = qualifiesForAuto ? (aiEval.preferredTiming === "source" ? "target" : "source") : null;
-            
-            // Do not create if a pending link already exists for this pair
+            // Do not create if a link already exists for this pair
             const existingLink = await prisma.reconciliationLink.findFirst({
                 where: { companyId, sourceId: entry.id, targetId: target.id }
             });
@@ -182,7 +169,7 @@ export async function proposeReconciliations(companyId: string) {
                 entry.availableAmount
             );
 
-            // Persist the link
+            // Persist the link (always pending — deductFrom=null)
             await prisma.reconciliationLink.create({
                 data: {
                     id: uuidv4(),
@@ -193,7 +180,7 @@ export async function proposeReconciliations(companyId: string) {
                     targetId: target.id,
                     matchedAmount: entry.availableAmount,
                     deductFrom,
-                    confidence: qualifiesForAuto ? "high" : "medium",
+                    confidence: aiEval.confidence ?? "medium",
                     matchMethod: "ai",
                     explanation: aiEval.reasoning
                 }

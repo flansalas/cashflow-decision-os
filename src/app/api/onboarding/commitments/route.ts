@@ -1,8 +1,11 @@
 export const dynamic = 'force-dynamic';
 // POST /api/onboarding/commitments
 // Step 4: Save 0-5 recurring outflow commitments, advance onboardingStep to 4.
+// Tenant authority: derived exclusively from authenticated Clerk organization.
 
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { resolveTenant } from "@/lib/tenant";
 import prisma from "@/db/prisma";
 import { v4 as uuidv4 } from "uuid";
 
@@ -15,12 +18,22 @@ interface CommitmentInput {
 }
 
 export async function POST(req: NextRequest) {
-    const { companyId, commitments } = await req.json() as {
-        companyId: string;
+    const authResult = await auth();
+    if (!authResult?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const tenantId = await resolveTenant(req);
+    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { companyId: bodyCompanyId, commitments } = await req.json() as {
+        companyId?: string;
         commitments: CommitmentInput[];
     };
 
-    if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    if (bodyCompanyId && bodyCompanyId !== tenantId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const companyId = tenantId;
 
     const valid = (commitments ?? []).filter(
         c => c.name?.trim() && c.amount > 0 && c.nextDate

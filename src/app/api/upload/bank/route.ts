@@ -26,11 +26,7 @@ export async function POST(req: NextRequest) {
         fileHash?: string;
     };
 
-    let tenantId = await resolveTenant(req);
-    if (!tenantId && bodyCompanyId) {
-        const comp = await prisma.company.findUnique({ where: { id: bodyCompanyId }, select: { id: true } });
-        if (comp) tenantId = comp.id;
-    }
+    const tenantId = await resolveTenant(req);
     if (!tenantId) return NextResponse.json({ error: "Missing or invalid company" }, { status: 401 });
     const companyId = tenantId;
 
@@ -289,7 +285,62 @@ export async function POST(req: NextRequest) {
                 });
             }
 
-            return { newBatch, manifestRecord };
+            // ── Audit lineage: one bank batch → one apply authority → one audit trail ──
+            // Create ChangeLog + ImportApplication so /api/upload/apply cannot re-apply
+            // this already-applied batch (it guards on status==='applied' || application exists).
+            const insertedCount = finalTransactionData.length;
+            const skippedCount = rows.length - insertedCount;
+
+            const cl = await tx.changeLog.create({
+                data: {
+                    companyId,
+                    userId,
+                    source: "ImportBatch",
+                    action: "apply",
+                    inputText: newBatch.id,
+                    diffJson: JSON.stringify({ insertedCount, updatedCount: 0, skippedCount }),
+                    forecastVersionHashAfter: "pending"
+                }
+            });
+
+            await tx.importApplication.create({
+                data: {
+                    companyId,
+                    importBatchId: newBatch.id,
+                    importType: "bank",
+                    appliedBy: userId,
+                    insertedCount,
+                    updatedCount: 0,
+                    skippedCount,
+                    failedCount: invalidCount,
+                    changeLogId: cl.id
+                }
+            });
+
+            // Mark batch as applied and update row-level applyStatus
+            await tx.importBatch.update({
+                where: { id: newBatch.id },
+                data: { status: "applied" }
+            });
+
+            // Bulk updateMany: mark inserted rows
+            if (insertedCount > 0) {
+                await tx.stagedImportRow.updateMany({
+                    where: { importBatchId: newBatch.id, proposedAction: "insert" },
+                    data: { applyStatus: "inserted", appliedAt: new Date() }
+                });
+            }
+            // Mark skipped rows
+            await tx.stagedImportRow.updateMany({
+                where: { importBatchId: newBatch.id, proposedAction: "skip" },
+                data: { applyStatus: "skipped", appliedAt: new Date() }
+            });
+            await tx.stagedImportRow.updateMany({
+                where: { importBatchId: newBatch.id, proposedAction: "review" },
+                data: { applyStatus: "skipped", appliedAt: new Date() }
+            });
+
+            return { newBatch, manifestRecord, changeLogId: cl.id, insertedCount };
         });
 
         // Bust the baseline cache FIRST so the 24-hour guard doesn't block the rebuild.
@@ -318,7 +369,7 @@ export async function POST(req: NextRequest) {
             ok: true,
             status: batch.newBatch.status,
             batchId: batch.newBatch.id,
-            imported: validCount,
+            imported: batch.insertedCount,
             updated: 0,
             archived: 0,
             total: rows.length
