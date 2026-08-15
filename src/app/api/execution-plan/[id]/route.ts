@@ -12,8 +12,8 @@ export async function GET(
 
     const { id } = await context.params;
 
-    const plan = await prisma.executionPlan.findUnique({
-        where: { id },
+    const plan = await prisma.executionPlan.findFirst({
+        where: { id, companyId },
         include: {
             actionItems: true,
             forecastCheckpoint: {
@@ -26,7 +26,7 @@ export async function GET(
         }
     });
 
-    if (!plan || plan.companyId !== companyId) {
+    if (!plan) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 

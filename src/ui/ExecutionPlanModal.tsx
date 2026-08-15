@@ -378,9 +378,22 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
             });
 
             if (res.ok) {
+                const data = await res.json();
+                const planId = data.plan?.id || data.id;
+
+                if (planId) {
+                    const detailRes = await fetch(`/api/execution-plan/${planId}`);
+                    if (detailRes.ok) {
+                        const detailData = await detailRes.json();
+                        if (detailData.plan) {
+                            setPersistedPlanData(detailData.plan);
+                        }
+                    }
+                }
+
                 onApprove?.();
-                setMode("live");
-                setTimeout(() => window.print(), 100);
+                setMode("approved");
+                setTimeout(() => window.print(), 300);
             }
         } finally {
             setIsApproving(false);
@@ -392,11 +405,28 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
     const planForecast = persistedPlanData?.forecastCheckpoint?.canonicalPayloadJson ? JSON.parse(persistedPlanData.forecastCheckpoint.canonicalPayloadJson) : null;
 
     // Resolve which data to render
-    const activeWeeks = isLive ? weeks : (persistedPlanData?.forecastCheckpoint?.forecastWeeks || weeks);
-    const activeInvoices = isLive ? invoices : (planForecast?.invoices || []);
-    const activeBills = isLive ? bills : (planForecast?.bills || []);
-    const activeOpeningCash = isLive ? openingCash : (planForecast?.input?.adjustedOpeningCash || openingCash);
-    const activeBreakdown = isLive ? breakdown : (planForecast?.weeks?.[0]?.breakdown || null);
+    const activeWeeks = isLive ? weeks : persistedPlanData?.forecastCheckpoint?.ForecastWeeks;
+    const activeInvoices = isLive ? invoices : planForecast?.invoices;
+    const activeBills = isLive ? bills : planForecast?.bills;
+    const activeOpeningCash = isLive ? openingCash : planForecast?.input?.adjustedOpeningCash;
+    const activeBreakdown = isLive ? breakdown : planForecast?.weeks?.[0]?.breakdown;
+
+    // Fail closed if approved mode lacks data
+    if (!isLive) {
+        if (!activeWeeks || activeWeeks.length !== 13 || !planForecast || !persistedPlanData?.actionItems) {
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm no-print">
+                    <div className="bg-white p-6 rounded text-rose-600 font-bold shadow-2xl max-w-lg">
+                        <h2 className="mb-2 text-lg">Error: Missing Approved Data</h2>
+                        <p className="text-sm font-normal">
+                            Cannot render approved plan. Missing required persisted data (Checkpoint, canonicalPayloadJson, ActionItems, or exactly 13 ForecastWeeks). Failing closed to prevent false representations.
+                        </p>
+                        <button onClick={onClose} className="mt-4 px-4 py-2 bg-slate-100 rounded text-slate-800 text-sm border hover:bg-slate-200">Close</button>
+                    </div>
+                </div>
+            );
+        }
+    }
 
 
     const toggleExclude = (id: string) => {
@@ -423,7 +453,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
         totalPay,
         totalAutoOutflows
     } = useMemo(() => {
-        if (!isLive && persistedPlanData && persistedPlanData.actions) {
+        if (!isLive && persistedPlanData && persistedPlanData.actionItems) {
             const ap: GridItem[] = [];
             const ar: GridItem[] = [];
             const mOut: WeekBreakdownItem[] = [];
@@ -432,7 +462,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
             let tCollect = 0;
             let tPay = 0;
 
-            for (const a of persistedPlanData.actions) {
+            for (const a of persistedPlanData.actionItems) {
                 if (a.type === 'pay_ap') {
                     ap.push({
                         id: a.targetId, kind: 'ap', label: a.title, vendorName: a.title, amountOpen: Math.abs(a.amountImpact),

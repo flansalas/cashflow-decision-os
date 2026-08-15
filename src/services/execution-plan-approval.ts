@@ -60,11 +60,36 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
         }
     }
 
-    const checkpoint = await prisma.forecastCheckpoint.findFirst({
-        where: { id: opts.forecastCheckpointId, companyId: opts.companyId, sealedAt: { not: null } }
+    const checkpoint = await prisma.forecastCheckpoint.findUnique({
+        where: { id: opts.forecastCheckpointId },
+        include: {
+            forecastWeeks: {
+                orderBy: { weekStart: 'asc' }
+            }
+        }
     });
-    if (!checkpoint) {
-        throw new ApprovalValidationError("Sealed checkpoint not found or invalid.");
+
+    if (!checkpoint) throw new ApprovalValidationError("Checkpoint not found");
+    if (checkpoint.companyId !== opts.companyId) throw new ApprovalValidationError("Checkpoint belongs to another company");
+    if (!checkpoint.sealedAt) throw new ApprovalValidationError("Checkpoint is not sealed");
+    if (!checkpoint.generatedAt) throw new ApprovalValidationError("Checkpoint is missing generatedAt");
+    if (!checkpoint.forecastVersionHash) throw new ApprovalValidationError("Checkpoint is missing forecastVersionHash");
+    if (!checkpoint.canonicalPayloadJson) throw new ApprovalValidationError("Checkpoint is missing canonicalPayloadJson");
+    if (!checkpoint.forecastSchemaVersion) throw new ApprovalValidationError("Checkpoint is missing forecastSchemaVersion");
+    if (!checkpoint.hashAlgorithm) throw new ApprovalValidationError("Checkpoint is missing hashAlgorithm");
+
+    const weeks = checkpoint.forecastWeeks || [];
+    if (weeks.length !== 13) throw new ApprovalValidationError(`Checkpoint has ${weeks.length} weeks instead of exactly 13`);
+    
+    // Check contiguous ordering and first week
+    if (weeks[0].weekStart.getTime() !== parsedWeekStart.getTime()) {
+        throw new ApprovalValidationError("First week of checkpoint does not match the requested plan weekStart");
+    }
+    for (let i = 1; i < weeks.length; i++) {
+        const expectedNext = new Date(weeks[i-1].weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+        if (weeks[i].weekStart.getTime() !== expectedNext.getTime()) {
+            throw new ApprovalValidationError("Checkpoint weeks are not strictly contiguous by 7 days");
+        }
     }
 
     const exactTimestamp = new Date();
@@ -104,16 +129,7 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
 
         const nextVersion = existingPlans.length > 0 ? Math.max(...existingPlans.map(p => p.version)) + 1 : 1;
 
-        if (existingApproved) {
-            await tx.executionPlan.update({
-                where: { id: existingApproved.id },
-                data: {
-                    status: 'superseded',
-                    supersededAt: exactTimestamp,
-                    supersededByPlanId: 'PENDING_NEW_ID'
-                }
-            });
-        }
+        // Removed initial update using 'PENDING_NEW_ID'
 
         // Use transient draft status to construct plan, then update to approved
         const newPlanDraft = await tx.executionPlan.create({
@@ -150,7 +166,11 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
         if (existingApproved) {
             await tx.executionPlan.update({
                 where: { id: existingApproved.id },
-                data: { supersededByPlanId: newPlanDraft.id }
+                data: { 
+                    status: 'superseded',
+                    supersededAt: exactTimestamp,
+                    supersededByPlanId: newPlanDraft.id 
+                }
             });
         }
 
@@ -167,6 +187,18 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
             throw e;
         }
 
+        // Fetch existing approved's checkpoint for lineage if it exists
+        let forecastVersionHashBefore = null;
+        if (existingApproved?.forecastCheckpointId) {
+            const oldCheckpoint = await tx.forecastCheckpoint.findUnique({
+                where: { id: existingApproved.forecastCheckpointId },
+                select: { forecastVersionHash: true }
+            });
+            if (oldCheckpoint?.forecastVersionHash) {
+                forecastVersionHashBefore = oldCheckpoint.forecastVersionHash;
+            }
+        }
+
         await tx.changeLog.create({
             data: {
                 companyId: opts.companyId,
@@ -175,7 +207,8 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
                 inputText: newPlan.id,
                 timestamp: exactTimestamp,
                 userId: opts.approvedBy || "System",
-                forecastVersionHashAfter: "approved",
+                forecastVersionHashBefore: forecastVersionHashBefore,
+                forecastVersionHashAfter: checkpoint.forecastVersionHash as string,
                 diffJson: JSON.stringify({
                     supersededPlanId: existingApproved?.id,
                     newPlanId: newPlan.id,

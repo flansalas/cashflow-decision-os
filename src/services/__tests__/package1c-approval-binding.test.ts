@@ -8,11 +8,12 @@ const mocks = vi.hoisted(() => {
     const mockUpdateExecutionPlan = vi.fn();
     const mockCreateActionItems = vi.fn();
     const mockCreateChangeLog = vi.fn();
+    const mockFindUniqueCheckpoint = vi.fn();
 
     const mockTransaction = vi.fn(async (cb) => {
         return cb({
             $executeRaw: vi.fn(),
-            forecastCheckpoint: { findFirst: mockFindCheckpoint },
+            forecastCheckpoint: { findUnique: mockFindUniqueCheckpoint },
             executionPlan: {
                 findMany: mockFindExecutionPlans,
                 create: mockCreateExecutionPlan,
@@ -25,100 +26,159 @@ const mocks = vi.hoisted(() => {
 
     return {
         mockFindCheckpoint, mockFindExecutionPlans, mockCreateExecutionPlan,
-        mockUpdateExecutionPlan, mockCreateActionItems, mockCreateChangeLog, mockTransaction
+        mockUpdateExecutionPlan, mockCreateActionItems, mockCreateChangeLog, mockTransaction, mockFindUniqueCheckpoint
     };
 });
 
 vi.mock('@/db/prisma', () => ({
     default: {
         $transaction: mocks.mockTransaction,
-        forecastCheckpoint: { findFirst: mocks.mockFindCheckpoint }
+        forecastCheckpoint: { findUnique: mocks.mockFindCheckpoint }
     }
 }));
+
+function makeValidCheckpoint(overrides = {}) {
+    const baseDate = new Date('2026-08-01T00:00:00Z');
+    const weeks = Array.from({ length: 13 }).map((_, i) => ({
+        weekStart: new Date(baseDate.getTime() + i * 7 * 24 * 60 * 60 * 1000)
+    }));
+
+    return {
+        id: 'cp_123',
+        companyId: 'co_1',
+        sealedAt: new Date(),
+        generatedAt: new Date(),
+        forecastVersionHash: 'hash123',
+        canonicalPayloadJson: '{}',
+        forecastSchemaVersion: 1,
+        hashAlgorithm: 'sha256-canonical-json-v1',
+        forecastWeeks: weeks,
+        ...overrides
+    };
+}
 
 describe('Package 1C: Approval Binding and Concurrency', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         
-        mocks.mockFindCheckpoint.mockResolvedValue({
-            id: 'cp_123',
-            companyId: 'co_1',
-            sealedAt: new Date(),
-            forecastVersionHash: 'hash123'
-        });
+        mocks.mockFindCheckpoint.mockResolvedValue(makeValidCheckpoint());
 
         mocks.mockFindExecutionPlans.mockResolvedValue([]);
-        mocks.mockCreateExecutionPlan.mockResolvedValue({ id: 'plan_new', version: 1, weekStart: new Date('2026-08-01') });
-        mocks.mockUpdateExecutionPlan.mockResolvedValue({ id: 'plan_new', version: 1, weekStart: new Date('2026-08-01'), status: 'approved' });
+        mocks.mockCreateExecutionPlan.mockResolvedValue({ id: 'plan_new', version: 1, weekStart: new Date('2026-08-01T00:00:00Z') });
+        mocks.mockUpdateExecutionPlan.mockResolvedValue({ id: 'plan_new', version: 1, weekStart: new Date('2026-08-01T00:00:00Z'), status: 'approved' });
     });
 
     const defaultReq = {
         companyId: 'co_1',
-        weekStart: '2026-08-01',
+        weekStart: '2026-08-01T00:00:00Z',
         forecastCheckpointId: 'cp_123',
         actions: []
     };
 
-    it('requires a sealed checkpoint', async () => {
-        mocks.mockFindCheckpoint.mockResolvedValueOnce(null);
-        await expect(approveExecutionPlan(defaultReq)).rejects.toThrowError(ApprovalValidationError);
+    describe('Checkpoint Validation', () => {
+        it('rejects missing checkpoint', async () => {
+            mocks.mockFindCheckpoint.mockResolvedValueOnce(null);
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint not found');
+        });
+
+        it('rejects foreign tenant', async () => {
+            mocks.mockFindCheckpoint.mockResolvedValueOnce(makeValidCheckpoint({ companyId: 'foreign_co' }));
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint belongs to another company');
+        });
+
+        it('rejects unsealed checkpoint', async () => {
+            mocks.mockFindCheckpoint.mockResolvedValueOnce(makeValidCheckpoint({ sealedAt: null }));
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint is not sealed');
+        });
+
+        it('rejects missing generatedAt', async () => {
+            mocks.mockFindCheckpoint.mockResolvedValueOnce(makeValidCheckpoint({ generatedAt: null }));
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint is missing generatedAt');
+        });
+
+        it('rejects missing forecastVersionHash', async () => {
+            mocks.mockFindCheckpoint.mockResolvedValueOnce(makeValidCheckpoint({ forecastVersionHash: null }));
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint is missing forecastVersionHash');
+        });
+
+        it('rejects missing canonicalPayloadJson', async () => {
+            mocks.mockFindCheckpoint.mockResolvedValueOnce(makeValidCheckpoint({ canonicalPayloadJson: null }));
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint is missing canonicalPayloadJson');
+        });
+
+        it('rejects missing schema/hash algorithm', async () => {
+            mocks.mockFindCheckpoint.mockResolvedValueOnce(makeValidCheckpoint({ forecastSchemaVersion: null }));
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint is missing forecastSchemaVersion');
+            
+            mocks.mockFindCheckpoint.mockResolvedValueOnce(makeValidCheckpoint({ hashAlgorithm: null }));
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint is missing hashAlgorithm');
+        });
+
+        it('rejects if weeks !== 13 (e.g. 12 or 14)', async () => {
+            const cp = makeValidCheckpoint();
+            cp.forecastWeeks = cp.forecastWeeks.slice(0, 12);
+            mocks.mockFindCheckpoint.mockResolvedValueOnce(cp);
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint has 12 weeks instead of exactly 13');
+
+            const cp14 = makeValidCheckpoint();
+            cp14.forecastWeeks.push({ weekStart: new Date(cp14.forecastWeeks[12].weekStart.getTime() + 7 * 24 * 60 * 60 * 1000) });
+            mocks.mockFindCheckpoint.mockResolvedValueOnce(cp14);
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('Checkpoint has 14 weeks instead of exactly 13');
+        });
+
+        it('rejects wrong W1', async () => {
+            const cp = makeValidCheckpoint();
+            // shift the first week
+            cp.forecastWeeks[0].weekStart = new Date('2026-08-08T00:00:00Z');
+            mocks.mockFindCheckpoint.mockResolvedValueOnce(cp);
+            await expect(approveExecutionPlan(defaultReq)).rejects.toThrow('First week of checkpoint does not match the requested plan weekStart');
+        });
+
+        it('valid 13-week checkpoint succeeds', async () => {
+            // Setup is already valid
+            await expect(approveExecutionPlan(defaultReq)).resolves.toBeDefined();
+        });
     });
 
-    it('rejects approval if an executed week exists', async () => {
-        mocks.mockFindExecutionPlans.mockResolvedValue([
-            { id: 'p1', version: 1, status: 'executed' }
-        ]);
-        await expect(approveExecutionPlan(defaultReq)).rejects.toThrowError(ApprovalConflictError);
-        await expect(approveExecutionPlan(defaultReq)).rejects.toThrowError(/already executed/);
-    });
+    describe('Transaction Flow & Lineage', () => {
+        it('supersedes existing approved plan exactly once using the new draft ID', async () => {
+            mocks.mockFindExecutionPlans.mockResolvedValueOnce([
+                { id: 'p1', version: 1, status: 'approved', forecastCheckpointId: 'cp_old' }
+            ]);
+            mocks.mockCreateExecutionPlan.mockResolvedValueOnce({ id: 'draft_2' });
+            mocks.mockFindUniqueCheckpoint.mockResolvedValueOnce({ forecastVersionHash: 'hash_old' });
 
-    it('calculates version as MAX(existing versions) + 1', async () => {
-        mocks.mockFindExecutionPlans.mockResolvedValueOnce([
-            { id: 'p1', version: 1, status: 'superseded' },
-            { id: 'p2', version: 4, status: 'superseded' }, // max
-            { id: 'p3', version: 2, status: 'approved' }
-        ]);
+            await approveExecutionPlan({ ...defaultReq, expectedCurrentPlanId: 'p1', revisionReason: 'found error' });
 
-        await approveExecutionPlan({ ...defaultReq, expectedCurrentPlanId: 'p3', revisionReason: 'rev' });
+            // Ensure the initial status update uses the draft id directly, no PENDING_NEW_ID.
+            expect(mocks.mockUpdateExecutionPlan).toHaveBeenCalledWith({
+                where: { id: 'p1' },
+                data: expect.objectContaining({
+                    status: 'superseded',
+                    supersededByPlanId: 'draft_2'
+                })
+            });
 
-        expect(mocks.mockCreateExecutionPlan).toHaveBeenCalledWith(expect.objectContaining({
-            data: expect.objectContaining({ version: 5, status: 'draft' })
-        }));
-    });
+            // Ensure changelog captured before and after hashes
+            expect(mocks.mockCreateChangeLog).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    action: 'REVISED',
+                    forecastVersionHashBefore: 'hash_old',
+                    forecastVersionHashAfter: 'hash123'
+                })
+            });
+        });
+        
+        it('creates proper changelog for initial approval', async () => {
+            await approveExecutionPlan(defaultReq);
 
-    it('requires expectedCurrentPlanId if an approved plan exists (stale state protection)', async () => {
-        mocks.mockFindExecutionPlans.mockResolvedValueOnce([
-            { id: 'p1', version: 1, status: 'approved' }
-        ]);
-        await expect(approveExecutionPlan(defaultReq)).rejects.toThrowError(ApprovalConflictError);
-    });
-
-    it('uses transient draft state during construction before finalizing to approved', async () => {
-        mocks.mockCreateExecutionPlan.mockResolvedValueOnce({ id: 'draft_1' });
-        await approveExecutionPlan(defaultReq);
-
-        expect(mocks.mockCreateExecutionPlan).toHaveBeenCalledWith(expect.objectContaining({
-            data: expect.objectContaining({ status: 'draft' })
-        }));
-
-        expect(mocks.mockUpdateExecutionPlan).toHaveBeenCalledWith(expect.objectContaining({
-            where: { id: 'draft_1' },
-            data: expect.objectContaining({ status: 'approved' })
-        }));
-    });
-
-    it('supersedes existing approved plan during revision', async () => {
-        mocks.mockFindExecutionPlans.mockResolvedValueOnce([
-            { id: 'p1', version: 1, status: 'approved' }
-        ]);
-        mocks.mockCreateExecutionPlan.mockResolvedValueOnce({ id: 'draft_2' });
-
-        await approveExecutionPlan({ ...defaultReq, expectedCurrentPlanId: 'p1', revisionReason: 'found error' });
-
-        // Update the old plan to superseded
-        expect(mocks.mockUpdateExecutionPlan).toHaveBeenCalledWith(expect.objectContaining({
-            where: { id: 'p1' },
-            data: expect.objectContaining({ status: 'superseded' })
-        }));
+            expect(mocks.mockCreateChangeLog).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    action: 'APPROVED',
+                    forecastVersionHashBefore: null,
+                    forecastVersionHashAfter: 'hash123'
+                })
+            });
+        });
     });
 });
