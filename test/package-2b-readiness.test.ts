@@ -24,20 +24,11 @@ describe('Package 2B Data Readiness', () => {
             data: { id: cashSnapshotId, companyId, asOfDate: now, bankBalance: 1000 }
         });
 
-        const baseline = await prisma.baselineSnapshotHistory.create({
-            data: {
-                id: randomUUID(), companyId, asOfDate: now,
-                variableInflowWeekly: 0, variableOutflowWeekly: 0,
-                dataQualityStatus: 'valid',
-                forecastCheckpointId: randomUUID()
-            }
-        });
-
-        forecastCheckpointId = baseline.forecastCheckpointId!;
+        forecastCheckpointId = randomUUID();
         await prisma.forecastCheckpoint.create({
             data: {
                 id: forecastCheckpointId, companyId, cashSnapshotId, weekStart: now, weekEnd: new Date(now.getTime() + 7 * 86400000),
-                endCashExpected: 1000, inflowsExpected: 0, outflowsExpected: 0, sealedAt: now,
+                endCashExpected: 1000, inflowsExpected: 0, outflowsExpected: 0,
                 generatedAt: now, forecastVersionHash: 'hash', canonicalPayloadJson: '{}', forecastSchemaVersion: 1, hashAlgorithm: 'sha256'
             }
         });
@@ -54,6 +45,15 @@ describe('Package 2B Data Readiness', () => {
                 }
             });
         }
+
+        await prisma.baselineSnapshotHistory.create({
+            data: {
+                id: randomUUID(), companyId, asOfDate: now,
+                variableInflowWeekly: 0, variableOutflowWeekly: 0,
+                dataQualityStatus: 'valid',
+                forecastCheckpointId
+            }
+        });
     });
 
     it('missing certification => operational_only', async () => {
