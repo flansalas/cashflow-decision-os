@@ -20,6 +20,7 @@ export interface DataReadinessResult {
         baselineProvenance: { status: ReadinessStatus; detail: string };
     };
     blockingReasons: string[];
+    certificationId?: string;
 }
 
 export async function computeARPopulationHash(companyId: string, tx: Prisma.TransactionClient = prismaClient): Promise<string> {
@@ -350,7 +351,7 @@ export async function evaluateCompanyDataReadiness(
 
     // Only create a certification record if we actually have a cash snapshot
     if (result.cashSnapshotId) {
-        await tx.companyDataReadinessCertification.create({
+        const cert = await tx.companyDataReadinessCertification.create({
             data: {
                 companyId,
                 forecastCheckpointId: forecastCheckpointId || null,
@@ -361,6 +362,7 @@ export async function evaluateCompanyDataReadiness(
                 certifiedBy: 'System Evaluator',
             }
         });
+        result.certificationId = cert.id;
     }
 
     return result;

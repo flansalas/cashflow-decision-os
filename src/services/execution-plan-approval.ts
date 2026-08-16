@@ -119,13 +119,26 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
 
         const evalResult = await evaluateCompanyDataReadiness(
             opts.companyId, 
-            checkpoint.sealedAt || exactTimestamp, 
+            exactTimestamp, 
             checkpoint.cashSnapshotId, 
             checkpoint.id, 
             tx
         );
         if (evalResult.status !== 'decision_ready') {
             throw new ApprovalValidationError(`Cannot approve plan: Company data is not decision-ready (Status: ${evalResult.status})`);
+        }
+
+        const validCert = await tx.forecastVersionCertification.findFirst({
+            where: {
+                companyId: opts.companyId,
+                forecastCheckpointId: opts.forecastCheckpointId,
+                status: 'certified'
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        if (!validCert) {
+            throw new ApprovalValidationError("Cannot approve plan: A valid passing Forecast-Version Certification is absent for this checkpoint.");
         }
 
         const existingApproved = currentApproved[0] || null;
