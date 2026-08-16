@@ -130,6 +130,12 @@ export async function evaluateCompanyDataReadiness(
         blockingReasons: []
     };
 
+    const auditEvidence: any = {
+        evaluationAsOfDate: asOfDate.toISOString(),
+        forecastCheckpointId: forecastCheckpointId || null,
+        bankAccounts: []
+    };
+
     // 1. STARTING CASH
     const sevenDaysAgo = new Date(asOfDate.getTime() - 7 * 24 * 60 * 60 * 1000);
     
@@ -150,6 +156,7 @@ export async function evaluateCompanyDataReadiness(
     } else {
         result.cashSnapshotId = latestCash.id;
         result.dimensions.startingCash.cashSnapshotId = latestCash.id;
+        auditEvidence.cashSnapshotId = latestCash.id;
         if (latestCash.asOfDate < sevenDaysAgo) {
             result.dimensions.startingCash = { status: 'operational_only', detail: 'CashSnapshot is stale (older than 7 days)' };
         } else {
@@ -189,9 +196,12 @@ export async function evaluateCompanyDataReadiness(
         });
 
         let accountCovered = false;
+        let bankEvidenceEntry: any = { accountId: ba.id };
 
         if (latestManifestAccount && latestManifestAccount.coveredEndDate && latestManifestAccount.coveredEndDate >= targetCutoff) {
             accountCovered = true;
+            bankEvidenceEntry.manifestId = latestManifestAccount.manifestId;
+            bankEvidenceEntry.coveredEndDate = latestManifestAccount.coveredEndDate.toISOString();
         }
 
         if (!accountCovered) {
@@ -216,6 +226,9 @@ export async function evaluateCompanyDataReadiness(
                         });
                         if (!txInGap) {
                             accountCovered = true;
+                            bankEvidenceEntry.noActivityAttestationId = noActivityAttestation.id;
+                            bankEvidenceEntry.coveredStartDate = evidence.coveredStartDate;
+                            bankEvidenceEntry.coveredEndDate = evidence.coveredEndDate;
                         }
                     }
                 } catch (e) {
@@ -223,6 +236,8 @@ export async function evaluateCompanyDataReadiness(
                 }
             }
         }
+
+        auditEvidence.bankAccounts.push(bankEvidenceEntry);
 
         if (!accountCovered) {
             bankCoverageOperational = true;
@@ -240,29 +255,38 @@ export async function evaluateCompanyDataReadiness(
 
     // 3. AR
     const arHash = await computeARPopulationHash(companyId, tx);
+    auditEvidence.arSourceStateHash = arHash;
     const arAttestation = await tx.dataReadinessAttestation.findFirst({
         where: { companyId, scopeType: 'ar', status: 'active', sourceStateHash: arHash }
     });
     if (!arAttestation) {
         result.dimensions.accountsReceivable = { status: 'operational_only', detail: 'Active AR attestation does not match current source state' };
+    } else {
+        auditEvidence.arAttestation = { id: arAttestation.id, certifiedAt: arAttestation.certifiedAt?.toISOString() || arAttestation.createdAt.toISOString() };
     }
 
     // 4. AP
     const apHash = await computeAPPopulationHash(companyId, tx);
+    auditEvidence.apSourceStateHash = apHash;
     const apAttestation = await tx.dataReadinessAttestation.findFirst({
         where: { companyId, scopeType: 'ap', status: 'active', sourceStateHash: apHash }
     });
     if (!apAttestation) {
         result.dimensions.accountsPayable = { status: 'operational_only', detail: 'Active AP attestation does not match current source state' };
+    } else {
+        auditEvidence.apAttestation = { id: apAttestation.id, certifiedAt: apAttestation.certifiedAt?.toISOString() || apAttestation.createdAt.toISOString() };
     }
 
     // 5. RECURRING
     const recurringHash = await computeRecurringPopulationHash(companyId, tx);
+    auditEvidence.recurringSourceStateHash = recurringHash;
     const recurringAttestation = await tx.dataReadinessAttestation.findFirst({
         where: { companyId, scopeType: 'recurring', status: 'active', sourceStateHash: recurringHash }
     });
     if (!recurringAttestation) {
         result.dimensions.recurringPatterns = { status: 'operational_only', detail: 'Active Recurring attestation does not match current source state' };
+    } else {
+        auditEvidence.recurringAttestation = { id: recurringAttestation.id, certifiedAt: recurringAttestation.certifiedAt?.toISOString() || recurringAttestation.createdAt.toISOString() };
     }
 
     // 6. UNRESOLVED CONFLICTS
@@ -295,6 +319,8 @@ export async function evaluateCompanyDataReadiness(
     });
     if (!latestBaseline || latestBaseline.dataQualityStatus !== 'valid') {
         result.dimensions.baselineProvenance = { status: 'operational_only', detail: 'Baseline lacks proper provenance or relies on low-confidence evidence' };
+    } else {
+        auditEvidence.baselineProvenance = { id: latestBaseline.id, status: latestBaseline.dataQualityStatus };
     }
 
     // Aggregate overall status
@@ -322,7 +348,7 @@ export async function evaluateCompanyDataReadiness(
                 forecastCheckpointId: forecastCheckpointId || null,
                 asOfDate,
                 status: result.status,
-                evidenceJson: JSON.stringify({ ...result.dimensions, cashSnapshotId: result.cashSnapshotId }),
+                evidenceJson: JSON.stringify({ ...result.dimensions, cashSnapshotId: result.cashSnapshotId, auditEvidence }),
                 blockingReasonsJson: JSON.stringify(result.blockingReasons),
                 certifiedBy: 'System Evaluator',
             }
