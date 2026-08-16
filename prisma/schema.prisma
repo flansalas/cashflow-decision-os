@@ -463,7 +463,6 @@ model BaselineVarianceLedger {
   createdAt        DateTime @default(now())
   company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  @@unique([companyId, weekStart], map: "ExecutionPlan_companyId_weekStart_approved_key", where: raw("status = 'approved' AND \"forecastCheckpointId\" IS NOT NULL"))
   @@index([companyId, weekStart])
 }
 
@@ -490,6 +489,7 @@ model ExecutionPlan {
   @@index([companyId, weekStart])
   @@index([companyId, weekStart, status])
   @@index([forecastCheckpointId])
+  @@unique([companyId, weekStart], map: "ExecutionPlan_companyId_weekStart_approved_key", where: raw("status = 'approved' AND \"forecastCheckpointId\" IS NOT NULL"))
 }
 
 model CustomerPaymentObservation {
