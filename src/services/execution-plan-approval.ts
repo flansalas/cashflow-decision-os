@@ -1,5 +1,6 @@
 import prisma from "@/db/prisma";
 import { Prisma } from "@prisma/client";
+import { evaluateCompanyDataReadiness } from "./data-readiness-evaluation";
 
 export class ApprovalConflictError extends Error {
     constructor(message: string) {
@@ -114,6 +115,18 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
 
         if (currentApproved.length > 1) {
             throw new ApprovalConflictError("Legacy duplicate approved plans exist. Please contact support.");
+        }
+
+        let readiness = await tx.companyDataReadinessCertification.findFirst({
+            where: { forecastCheckpointId: checkpoint.id },
+            orderBy: { evaluatedAt: 'desc' }
+        });
+
+        if (!readiness || readiness.status !== 'decision_ready') {
+            const evalResult = await evaluateCompanyDataReadiness(opts.companyId, checkpoint.sealedAt || exactTimestamp, checkpoint.cashSnapshotId, checkpoint.id, tx);
+            if (evalResult.status !== 'decision_ready') {
+                throw new ApprovalValidationError(`Cannot approve plan: Company data is not decision-ready (Status: ${evalResult.status})`);
+            }
         }
 
         const existingApproved = currentApproved[0] || null;

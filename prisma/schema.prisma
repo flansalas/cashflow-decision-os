@@ -7,53 +7,55 @@ datasource db {
 }
 
 model Company {
-  id                            String                          @id @default(uuid())
-  name                          String
-  clerkOrgId                    String?                         @unique
-  isDemo                        Boolean                         @default(false)
-  onboardingCompleted           Boolean                         @default(false)
-  onboardingStep                Int                             @default(0)
-  createdAt                     DateTime                        @default(now())
-  updatedAt                     DateTime                        @updatedAt
-  actionItems                   ActionItem[]
-  actualCashAttributions        ActualCashAttribution[]
-  assumptions                   Assumption[]
-  bankAccounts                  BankAccount[]
-  BankImportManifest            BankImportManifest[]
-  bankTransactions              BankTransaction[]
-  baselineSnapshot              BaselineSnapshot?
-  BaselineSnapshotHistory       BaselineSnapshotHistory[]
-  baselineVarianceLedgers       BaselineVarianceLedger[]
-  cashAdjustments               CashAdjustment[]
-  cashFlowCategories            CashFlowCategory[]
-  internalTransferHistory       InternalTransferHistory[]
-  cashFlowEntries               CashFlowEntry[]
-  cashSnapshots                 CashSnapshot[]
-  changeLogs                    ChangeLog[]
-  notes                         CompanyNote[]
-  customerPaymentObservations   CustomerPaymentObservation[]
-  customerProfiles              CustomerProfile[]
-  EvaluationJob                 EvaluationJob[]
-  EvaluationJobTrigger          EvaluationJobTrigger[]
-  executionPlans                ExecutionPlan[]
-  forecastCheckpoints           ForecastCheckpoint[]
-  ForecastEvaluationObservation ForecastEvaluationObservation[]
-  forecastEvaluationRuns        ForecastEvaluationRun[]
-  forecastWeeks                 ForecastWeek[]
-  importApplications            ImportApplication[]
-  importApplyChanges            ImportApplyChange[]
-  importBatches                 ImportBatch[]
-  learningProposals             LearningProposal[]
-  mappingProfiles               MappingProfile[]
-  overrides                     Override[]
-  payableBills                  PayableBill[]
-  receivableInvoices            ReceivableInvoice[]
-  recurringPatterns             RecurringPattern[]
-  scenarioItems                 ScenarioItem[]
-  stagedImportRows              StagedImportRow[]
-  vendorPaymentObservations     VendorPaymentObservation[]
-  vendorProfiles                VendorProfile[]
-  reconciliationLinks           ReconciliationLink[]
+  id                                 String                              @id @default(uuid())
+  name                               String
+  clerkOrgId                         String?                             @unique
+  isDemo                             Boolean                             @default(false)
+  onboardingCompleted                Boolean                             @default(false)
+  onboardingStep                     Int                                 @default(0)
+  createdAt                          DateTime                            @default(now())
+  updatedAt                          DateTime                            @updatedAt
+  actionItems                        ActionItem[]
+  actualCashAttributions             ActualCashAttribution[]
+  assumptions                        Assumption[]
+  bankAccounts                       BankAccount[]
+  BankImportManifest                 BankImportManifest[]
+  bankTransactions                   BankTransaction[]
+  baselineSnapshot                   BaselineSnapshot?
+  BaselineSnapshotHistory            BaselineSnapshotHistory[]
+  baselineVarianceLedgers            BaselineVarianceLedger[]
+  cashAdjustments                    CashAdjustment[]
+  cashFlowCategories                 CashFlowCategory[]
+  internalTransferHistory            InternalTransferHistory[]
+  cashFlowEntries                    CashFlowEntry[]
+  cashSnapshots                      CashSnapshot[]
+  changeLogs                         ChangeLog[]
+  notes                              CompanyNote[]
+  customerPaymentObservations        CustomerPaymentObservation[]
+  customerProfiles                   CustomerProfile[]
+  EvaluationJob                      EvaluationJob[]
+  EvaluationJobTrigger               EvaluationJobTrigger[]
+  executionPlans                     ExecutionPlan[]
+  forecastCheckpoints                ForecastCheckpoint[]
+  ForecastEvaluationObservation      ForecastEvaluationObservation[]
+  forecastEvaluationRuns             ForecastEvaluationRun[]
+  forecastWeeks                      ForecastWeek[]
+  importApplications                 ImportApplication[]
+  importApplyChanges                 ImportApplyChange[]
+  importBatches                      ImportBatch[]
+  learningProposals                  LearningProposal[]
+  mappingProfiles                    MappingProfile[]
+  overrides                          Override[]
+  payableBills                       PayableBill[]
+  receivableInvoices                 ReceivableInvoice[]
+  recurringPatterns                  RecurringPattern[]
+  scenarioItems                      ScenarioItem[]
+  stagedImportRows                   StagedImportRow[]
+  vendorPaymentObservations          VendorPaymentObservation[]
+  vendorProfiles                     VendorProfile[]
+  reconciliationLinks                ReconciliationLink[]
+  dataReadinessAttestations          DataReadinessAttestation[]
+  companyDataReadinessCertifications CompanyDataReadinessCertification[]
 }
 
 model CompanyNote {
@@ -315,28 +317,28 @@ model ChangeLog {
 }
 
 model ForecastWeek {
-  id                     String              @id @default(uuid())
-  companyId              String
-  weekStart              DateTime
-  weekEnd                DateTime
-  startCash              Float
-  inflowsExpected        Float
-  outflowsExpected       Float
-  endCashExpected        Float
-  inflowsBest            Float
-  outflowsBest           Float
-  endCashBest            Float
-  inflowsWorst           Float
-  outflowsWorst          Float
-  endCashWorst           Float
-  zone                   String
-  confidenceScore        Int                 @default(100)
-  breakdownJson          String?
-  computedAt             DateTime            @default(now())
-  forecastVersionHash    String
-  forecastCheckpointId   String?
-  company                Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  forecastCheckpoint     ForecastCheckpoint?  @relation("CheckpointWeeks", fields: [forecastCheckpointId], references: [id], onDelete: Cascade)
+  id                   String              @id @default(uuid())
+  companyId            String
+  weekStart            DateTime
+  weekEnd              DateTime
+  startCash            Float
+  inflowsExpected      Float
+  outflowsExpected     Float
+  endCashExpected      Float
+  inflowsBest          Float
+  outflowsBest         Float
+  endCashBest          Float
+  inflowsWorst         Float
+  outflowsWorst        Float
+  endCashWorst         Float
+  zone                 String
+  confidenceScore      Int                 @default(100)
+  breakdownJson        String?
+  computedAt           DateTime            @default(now())
+  forecastVersionHash  String
+  forecastCheckpointId String?
+  company              Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  forecastCheckpoint   ForecastCheckpoint? @relation("CheckpointWeeks", fields: [forecastCheckpointId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, weekStart, forecastVersionHash])
   @@unique([forecastCheckpointId, weekStart])
@@ -412,34 +414,35 @@ model CashFlowEntry {
 }
 
 model ForecastCheckpoint {
-  id                            String                          @id @default(uuid())
-  companyId                     String
-  cashSnapshotId                String
-  snapshotSource                String                          @default("client_observed_v1")
-  forecastVersionHash           String?
-  generatedAt                   DateTime?
-  weekStart                     DateTime
-  weekEnd                       DateTime
-  endCashExpected               Float
-  inflowsExpected               Float
-  outflowsExpected              Float
-  breakdownJson                 String?
-  isBankCoverageVerified        Boolean                         @default(false)
-  bankCoverageEvidenceJson      String?
-  createdAt                     DateTime                        @default(now())
-  forecastSchemaVersion         Int?
-  hashAlgorithm                 String?
-  canonicalPayloadJson          String?
-  sealedAt                      DateTime?
-  ActualCashAttribution         ActualCashAttribution[]
-  BaselineSnapshotHistory       BaselineSnapshotHistory?
-  cashSnapshot                  CashSnapshot                    @relation(fields: [cashSnapshotId], references: [id], onDelete: Cascade)
-  company                       Company                         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  componentSnapshots            ForecastComponentSnapshot[]
-  forecastWeeks                 ForecastWeek[]                  @relation("CheckpointWeeks")
-  ForecastEvaluationObservation ForecastEvaluationObservation[]
-  forecastEvaluationRuns        ForecastEvaluationRun[]
-  executionPlans                ExecutionPlan[]
+  id                                 String                              @id @default(uuid())
+  companyId                          String
+  cashSnapshotId                     String
+  snapshotSource                     String                              @default("client_observed_v1")
+  forecastVersionHash                String?
+  generatedAt                        DateTime?
+  weekStart                          DateTime
+  weekEnd                            DateTime
+  endCashExpected                    Float
+  inflowsExpected                    Float
+  outflowsExpected                   Float
+  breakdownJson                      String?
+  isBankCoverageVerified             Boolean                             @default(false)
+  bankCoverageEvidenceJson           String?
+  createdAt                          DateTime                            @default(now())
+  forecastSchemaVersion              Int?
+  hashAlgorithm                      String?
+  canonicalPayloadJson               String?
+  sealedAt                           DateTime?
+  ActualCashAttribution              ActualCashAttribution[]
+  BaselineSnapshotHistory            BaselineSnapshotHistory?
+  cashSnapshot                       CashSnapshot                        @relation(fields: [cashSnapshotId], references: [id], onDelete: Cascade)
+  company                            Company                             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  componentSnapshots                 ForecastComponentSnapshot[]
+  forecastWeeks                      ForecastWeek[]                      @relation("CheckpointWeeks")
+  ForecastEvaluationObservation      ForecastEvaluationObservation[]
+  forecastEvaluationRuns             ForecastEvaluationRun[]
+  executionPlans                     ExecutionPlan[]
+  companyDataReadinessCertifications CompanyDataReadinessCertification[]
 
   @@index([companyId, forecastVersionHash])
   @@index([cashSnapshotId])
@@ -937,4 +940,45 @@ model ReconciliationLink {
   @@index([sourceType, sourceId])
   @@index([targetType, targetId])
   @@index([companyId])
+}
+
+model DataReadinessAttestation {
+  id              String    @id @default(uuid())
+  companyId       String
+  scopeType       String
+  scopeKey        String?
+  asOfDate        DateTime
+  controlCount    Int?
+  controlAmount   Float?
+  sourceStateHash String
+  evidenceJson    String
+  certifiedBy     String
+  certifiedAt     DateTime  @default(now())
+  revokedAt       DateTime?
+  status          String    @default("active")
+  createdAt       DateTime  @default(now())
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, scopeType])
+  @@index([companyId, status])
+}
+
+model CompanyDataReadinessCertification {
+  id                   String              @id @default(uuid())
+  companyId            String
+  forecastCheckpointId String?
+  evaluatedAt          DateTime            @default(now())
+  asOfDate             DateTime
+  expiresAt            DateTime?
+  status               String
+  schemaVersion        Int                 @default(1)
+  evidenceJson         String
+  blockingReasonsJson  String?
+  certifiedBy          String?
+  createdAt            DateTime            @default(now())
+  company              Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  forecastCheckpoint   ForecastCheckpoint? @relation(fields: [forecastCheckpointId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, status])
+  @@index([forecastCheckpointId])
 }
