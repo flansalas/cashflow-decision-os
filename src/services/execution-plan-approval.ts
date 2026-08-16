@@ -141,6 +141,17 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
             throw new ApprovalValidationError("Cannot approve plan: A valid passing Forecast-Version Certification is absent for this checkpoint.");
         }
 
+        // 7. READINESS EVIDENCE BINDING
+        if (validCert.readinessEvidenceHash !== evalResult.evidenceHash) {
+            throw new ApprovalValidationError("Cannot approve plan: Stale certification. The readiness evidence hash has changed since the certification was made.");
+        }
+        if (validCert.forecastVersionHash !== checkpoint.forecastVersionHash) {
+            throw new ApprovalValidationError("Cannot approve plan: Stale certification. The forecastVersionHash has changed.");
+        }
+        if (validCert.cashSnapshotId !== checkpoint.cashSnapshotId) {
+            throw new ApprovalValidationError("Cannot approve plan: Stale certification. The cashSnapshotId has changed.");
+        }
+
         const existingApproved = currentApproved[0] || null;
 
         if (existingApproved) {

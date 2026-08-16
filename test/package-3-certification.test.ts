@@ -93,7 +93,55 @@ describe('Package 3 Certification', () => {
     it('3. operational_only Company Data-Readiness cannot produce passing Forecast-Version Certification', async () => {
         await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
         // Without readiness attestations, it will evaluate to operational_only or blocked
-        const cert = await certifyForecastVersion(companyId, forecastCheckpointId, { status: 'certified' }, {});
+        const cert = await certifyForecastVersion(companyId, forecastCheckpointId, { status: 'certified', decidedBy: 'admin' }, {}, 'buffer ok');
+        expect(cert.status).toBe('cannot_certify');
+    });
+
+    it('4. stale readiness/current-evidence mismatch cannot authorize certification/approval', async () => {
+        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
+        await satisfyReadiness();
+        const cert = await certifyForecastVersion(companyId, forecastCheckpointId, { status: 'certified', decidedBy: 'admin' }, {}, 'buffer ok');
+        expect(cert.status).toBe('certified');
+        
+        // Mutate source state to invalidate readiness
+        await prisma.receivableInvoice.create({
+            data: { id: randomUUID(), companyId, invoiceNo: 'INV-NEW', customerName: 'Test', amountOpen: 1000, dueDate: now, status: 'open' }
+        });
+        
+        const planOpts = { companyId, weekStart: now.toISOString(), forecastCheckpointId, actions: [] };
+        // Fails because the evidence hash computed during approval doesn't match the cert's preserved evidence hash
+        await expect(approveExecutionPlan(planOpts)).rejects.toThrow(/readiness evidence hash has changed/);
+    });
+
+    it('malformed/non-13-week sealed checkpoint cannot certify', async () => {
+        const badCheckpointId = randomUUID();
+        await prisma.forecastCheckpoint.create({
+            data: {
+                id: badCheckpointId, companyId, cashSnapshotId, weekStart: now, weekEnd: new Date(now.getTime() + 7 * 86400000),
+                endCashExpected: 1000, inflowsExpected: 0, outflowsExpected: 0,
+                generatedAt: now, forecastVersionHash: 'hash', canonicalPayloadJson: '{}', forecastSchemaVersion: 1, hashAlgorithm: 'sha256',
+                sealedAt: now
+            }
+        });
+        // 0 weeks instead of 13
+        await expect(certifyForecastVersion(companyId, badCheckpointId, { status: 'certified', decidedBy: 'admin' }, {}, 'buffer ok'))
+            .rejects.toThrow(/exactly 13 ForecastWeeks/);
+    });
+
+    it('certified without authenticated human authority is refused', async () => {
+        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
+        await satisfyReadiness();
+        // decidedBy is missing
+        await expect(certifyForecastVersion(companyId, forecastCheckpointId, { status: 'certified' }, {}, 'buffer ok'))
+            .rejects.toThrow(/authenticated human decision authority required/);
+    });
+
+    it('missing authoritative buffer cannot certify', async () => {
+        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
+        await satisfyReadiness();
+        await prisma.assumption.deleteMany({ where: { companyId } });
+        
+        const cert = await certifyForecastVersion(companyId, forecastCheckpointId, { status: 'certified', decidedBy: 'admin' }, {}, 'buffer ok');
         expect(cert.status).toBe('cannot_certify');
     });
 
@@ -135,6 +183,26 @@ describe('Package 3 Certification', () => {
         
         const after = await prisma.forecastCheckpoint.findUnique({ where: { id: forecastCheckpointId }, include: { forecastWeeks: true } });
         expect(before).toEqual(after);
+    });
+
+    it('AR shifted outside W13 is explicitly preserved in scenario evidence', async () => {
+        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
+        // Create an AR component in Week 12
+        await prisma.forecastComponentSnapshot.create({
+            data: { id: randomUUID(), forecastCheckpointId, targetWeekStart: new Date(now.getTime() + 11 * 7 * 86400000), direction: 'inflow', componentCategory: 'rev', sourceType: 'invoice', projectedAmount: 1200, confidenceTier: 'high', sourceStateHash: 'x' }
+        });
+        
+        // Delay by 4 weeks => pushes it to week 16, which is outside the 13 week horizon.
+        const scenario = await evaluateDownsideScenario(companyId, forecastCheckpointId, { arDelayWeeks: 4 }, 500);
+        
+        // The stress reduction in week 12 must be present
+        const w12 = scenario.payload[11];
+        expect(w12.stressAdjustments.length).toBeGreaterThan(0);
+        expect(w12.stressAdjustments[0].amountImpact).toBe(-1200);
+        expect(w12.stressAdjustments[0].description).toContain('delayed by 4 weeks');
+        
+        // Ensure no week after 13 was created
+        expect(scenario.payload.length).toBe(13);
     });
 
     it('9 & 10. risk metrics reconcile to the scenario’s 13-week values and buffer breach is deterministic', async () => {

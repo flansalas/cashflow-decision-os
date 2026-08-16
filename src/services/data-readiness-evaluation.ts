@@ -21,6 +21,7 @@ export interface DataReadinessResult {
     };
     blockingReasons: string[];
     certificationId?: string;
+    evidenceHash?: string;
 }
 
 export async function computeARPopulationHash(companyId: string, tx: Prisma.TransactionClient = prismaClient): Promise<string> {
@@ -349,6 +350,9 @@ export async function evaluateCompanyDataReadiness(
         result.status = 'decision_ready';
     }
 
+    const finalEvidenceJson = JSON.stringify({ ...result.dimensions, cashSnapshotId: result.cashSnapshotId, auditEvidence });
+    result.evidenceHash = computeCanonicalHash(canonicalJsonSerialize(JSON.parse(finalEvidenceJson)));
+
     // Only create a certification record if we actually have a cash snapshot
     if (result.cashSnapshotId) {
         const cert = await tx.companyDataReadinessCertification.create({
@@ -357,7 +361,7 @@ export async function evaluateCompanyDataReadiness(
                 forecastCheckpointId: forecastCheckpointId || null,
                 asOfDate,
                 status: result.status,
-                evidenceJson: JSON.stringify({ ...result.dimensions, cashSnapshotId: result.cashSnapshotId, auditEvidence }),
+                evidenceJson: finalEvidenceJson,
                 blockingReasonsJson: JSON.stringify(result.blockingReasons),
                 certifiedBy: 'System Evaluator',
             }

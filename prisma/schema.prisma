@@ -994,6 +994,9 @@ model ForecastScenario {
   id                   String   @id @default(uuid())
   companyId            String
   forecastCheckpointId String
+  forecastVersionHash  String
+  schemaVersion        Int      @default(1)
+  hashAlgorithm        String   @default("sha256")
   scenarioHash         String
   createdAt            DateTime @default(now())
   
@@ -1019,6 +1022,9 @@ model ForecastVersionCertification {
   id                        String   @id @default(uuid())
   companyId                 String
   forecastCheckpointId      String
+  forecastVersionHash       String
+  cashSnapshotId            String
+  readinessEvidenceHash     String
   downsideScenarioId        String?
   status                    String   
   schemaVersion             Int      @default(1)

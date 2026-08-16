@@ -220,6 +220,7 @@ export async function evaluateDownsideScenario(
             data: {
                 companyId,
                 forecastCheckpointId,
+                forecastVersionHash: checkpoint.forecastVersionHash as string,
                 scenarioHash,
                 stressInputsJson: JSON.stringify(stressInputs),
                 scenarioPayloadJson: JSON.stringify(payload),

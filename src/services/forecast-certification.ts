@@ -18,12 +18,52 @@ export async function certifyForecastVersion(
     tx: Prisma.TransactionClient = prismaClient
 ) {
     const checkpoint = await tx.forecastCheckpoint.findUnique({
-        where: { id: forecastCheckpointId, companyId, sealedAt: { not: null } },
+        where: { id: forecastCheckpointId, companyId },
         include: { forecastWeeks: { orderBy: { weekStart: 'asc' } } }
     });
 
+    // 2. EXACT CHECKPOINT VALIDATION
     if (!checkpoint) {
-        throw new Error(`Cannot certify: ForecastCheckpoint ${forecastCheckpointId} is either unsealed or does not exist.`);
+        throw new Error(`Cannot certify: ForecastCheckpoint ${forecastCheckpointId} does not exist or belongs to another company.`);
+    }
+    if (!checkpoint.sealedAt) {
+        throw new Error("Cannot certify: ForecastCheckpoint must be sealed.");
+    }
+    if (!checkpoint.forecastVersionHash) {
+        throw new Error("Cannot certify: ForecastCheckpoint missing forecastVersionHash.");
+    }
+    if (!checkpoint.canonicalPayloadJson) {
+        throw new Error("Cannot certify: ForecastCheckpoint missing canonicalPayloadJson.");
+    }
+    if (!checkpoint.forecastSchemaVersion) {
+        throw new Error("Cannot certify: ForecastCheckpoint missing forecastSchemaVersion.");
+    }
+    if (!checkpoint.hashAlgorithm) {
+        throw new Error("Cannot certify: ForecastCheckpoint missing hashAlgorithm.");
+    }
+    if (!checkpoint.generatedAt) {
+        throw new Error("Cannot certify: ForecastCheckpoint missing generatedAt.");
+    }
+    
+    const weeks = checkpoint.forecastWeeks || [];
+    if (weeks.length !== 13) {
+        throw new Error("Cannot certify: ForecastCheckpoint must have exactly 13 ForecastWeeks.");
+    }
+
+    if (weeks[0].weekStart.getTime() !== checkpoint.weekStart.getTime()) {
+        throw new Error("Cannot certify: First week is not consistent with checkpoint weekStart.");
+    }
+
+    for (let i = 1; i < weeks.length; i++) {
+        const expectedNext = new Date(weeks[i-1].weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+        if (weeks[i].weekStart.getTime() !== expectedNext.getTime()) {
+            throw new Error("Cannot certify: Weeks strictly contiguous by 7 days is required.");
+        }
+    }
+
+    const cashSnapshot = await tx.cashSnapshot.findUnique({ where: { id: checkpoint.cashSnapshotId } });
+    if (!cashSnapshot || cashSnapshot.companyId !== companyId) {
+        throw new Error("Cannot certify: CashSnapshot identity must belong to same company.");
     }
 
     // 1. Evaluate current Company Data-Readiness
@@ -33,16 +73,39 @@ export async function certifyForecastVersion(
     let effectiveStatus = decision.status;
     let readinessId = readiness.certificationId || null;
     
+    // Stale readiness
     if (readiness.status !== 'decision_ready') {
         effectiveStatus = 'cannot_certify';
     }
 
-    // 2. Determine buffer amount
+    // 3. Buffer Governance
     const assumption = await tx.assumption.findFirst({ where: { companyId } });
-    const bufferAmount = assumption?.bufferMin || 10000;
+    const bufferAmount = assumption?.bufferMin;
 
-    if (!bufferRationale && effectiveStatus === 'certified') {
-        effectiveStatus = 'cannot_certify';
+    if (bufferAmount === undefined || bufferAmount === null) {
+        if (effectiveStatus === 'certified') {
+            effectiveStatus = 'cannot_certify';
+        }
+    }
+
+    if (effectiveStatus === 'certified') {
+        if (bufferAmount === undefined || bufferAmount === null || !bufferRationale) {
+            effectiveStatus = 'cannot_certify';
+        }
+    }
+
+    // 4. HUMAN DECISION AUTHORITY
+    if (effectiveStatus === 'certified') {
+        if (!decision.decidedBy) {
+            throw new Error("Cannot certify: authenticated human decision authority required.");
+        }
+    }
+
+    if (decision.decidedBy && effectiveStatus !== 'cannot_certify') {
+        // We preserve decidedBy when there's an actual human authority making a deliberate action
+    } else {
+        // system-generated cannot_certify
+        decision.decidedBy = undefined;
     }
 
     // 3. Base Metrics (from 13 weeks)
@@ -70,7 +133,7 @@ export async function certifyForecastVersion(
             }
         }
 
-        const headroom = week.endCashExpected - bufferAmount;
+        const headroom = week.endCashExpected - (bufferAmount || 0);
         if (headroom < baseMinBufferHeadroom) {
             baseMinBufferHeadroom = headroom;
         }
@@ -83,12 +146,13 @@ export async function certifyForecastVersion(
     if (baseMaxDeficit === null) baseMaxDeficit = 0;
 
     // 4. Downside Scenario
-    const downside = await evaluateDownsideScenario(companyId, forecastCheckpointId, stressInputs, bufferAmount, tx);
+    const downside = await evaluateDownsideScenario(companyId, forecastCheckpointId, stressInputs, bufferAmount || 0, tx);
 
     // 5. Evidence payload
     const evidenceJson = JSON.stringify({
         readinessStatus: readiness.status,
         readinessId,
+        readinessEvidenceHash: readiness.evidenceHash,
         stressInputs,
         baseMetrics: {
             baseMinCash,
@@ -106,8 +170,12 @@ export async function certifyForecastVersion(
         data: {
             companyId,
             forecastCheckpointId,
+            forecastVersionHash: checkpoint.forecastVersionHash as string,
+            cashSnapshotId: checkpoint.cashSnapshotId,
+            readinessEvidenceHash: readiness.evidenceHash || "missing",
             downsideScenarioId: downside.id,
             status: effectiveStatus,
+            schemaVersion: 1,
             evaluatedAt: new Date(),
             decidedBy: decision.decidedBy,
             decidedAt: decision.decidedBy ? new Date() : null,
@@ -127,7 +195,7 @@ export async function certifyForecastVersion(
             downsideBufferHeadroom: downside.metrics.bufferHeadroom,
             downsideFirstBreachWeek: downside.metrics.firstBreachWeek,
 
-            bufferAmount,
+            bufferAmount: bufferAmount || 0,
             bufferRationale,
             
             readinessCertificationId: readinessId,
