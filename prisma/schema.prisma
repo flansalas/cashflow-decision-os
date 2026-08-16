@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -446,6 +447,7 @@ model ForecastCheckpoint {
 
   @@index([companyId, forecastVersionHash])
   @@index([cashSnapshotId])
+  @@unique([companyId, forecastVersionHash], map: "ForecastCheckpoint_companyId_forecastVersionHash_sealedAt_key", where: raw("\"sealedAt\" IS NOT NULL"))
 }
 
 model BaselineVarianceLedger {
@@ -461,6 +463,7 @@ model BaselineVarianceLedger {
   createdAt        DateTime @default(now())
   company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@unique([companyId, weekStart], map: "ExecutionPlan_companyId_weekStart_approved_key", where: raw("status = 'approved' AND \"forecastCheckpointId\" IS NOT NULL"))
   @@index([companyId, weekStart])
 }
 

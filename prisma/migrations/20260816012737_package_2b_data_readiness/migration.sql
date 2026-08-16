@@ -1,8 +1,4 @@
--- DropIndex
-DROP INDEX "ExecutionPlan_companyId_weekStart_approved_key";
 
--- DropIndex
-DROP INDEX "ForecastCheckpoint_companyId_forecastVersionHash_sealedAt_key";
 
 -- CreateTable
 CREATE TABLE "DataReadinessAttestation" (
