@@ -5,10 +5,9 @@ import { useState, useEffect } from 'react';
 export default function ReadinessPage() {
     const [readiness, setReadiness] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [companyId] = useState('00000000-0000-0000-0000-000000000000'); // placeholder for auth context
 
     useEffect(() => {
-        fetch(`/api/readiness?companyId=${companyId}`)
+        fetch('/api/readiness')
             .then(res => res.json())
             .then(data => {
                 setReadiness(data);
@@ -18,15 +17,13 @@ export default function ReadinessPage() {
                 console.error(err);
                 setLoading(false);
             });
-    }, [companyId]);
+    }, []);
 
     const handleAttest = async (scopeType: string) => {
         const payload = {
-            companyId,
             scopeType,
             asOfDate: new Date().toISOString(),
-            evidenceJson: JSON.stringify({ manual: true }),
-            certifiedBy: 'Owner'
+            evidenceJson: JSON.stringify({ manual: true })
         };
 
         await fetch('/api/readiness/attest', {
@@ -36,7 +33,7 @@ export default function ReadinessPage() {
         });
 
         // Refresh
-        const res = await fetch(`/api/readiness?companyId=${companyId}`);
+        const res = await fetch('/api/readiness');
         const data = await res.json();
         setReadiness(data);
     };
@@ -61,9 +58,13 @@ export default function ReadinessPage() {
                                 <p className="text-sm text-gray-600">Status: {status}</p>
                                 <p className="text-sm text-gray-500">{readiness?.dimensions?.[dim]?.detail}</p>
                             </div>
-                            {status !== 'decision_ready' && status !== 'blocked' && (
+                            {dim === 'bankCoverage' && status !== 'decision_ready' ? (
+                                <p className="text-sm text-gray-600 text-right">
+                                    Requires account-level bank evidence
+                                </p>
+                            ) : status !== 'decision_ready' && status !== 'blocked' && (
                                 <button 
-                                    onClick={() => handleAttest(dim === 'accountsReceivable' ? 'ar' : dim === 'accountsPayable' ? 'ap' : dim === 'bankCoverage' ? 'bank_no_activity' : 'recurring')}
+                                    onClick={() => handleAttest(dim === 'accountsReceivable' ? 'ar' : dim === 'accountsPayable' ? 'ap' : 'recurring')}
                                     className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                                 >
                                     Certify Now

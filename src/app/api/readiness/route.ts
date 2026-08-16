@@ -1,22 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/db/prisma";
+import { resolveTenant } from "@/lib/tenant";
 import { evaluateCompanyDataReadiness } from "@/services/data-readiness-evaluation";
 
 export async function GET(req: NextRequest) {
     try {
-        const { searchParams } = new URL(req.url);
-        const companyId = searchParams.get('companyId');
+        const companyId = await resolveTenant(req);
         
         if (!companyId) {
-            return NextResponse.json({ error: "Missing companyId parameter" }, { status: 400 });
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const company = await prisma.company.findUnique({
-            where: { id: companyId }
-        });
-
-        if (!company) {
-            return NextResponse.json({ error: "Company not found" }, { status: 404 });
+        const requestedCompanyId = req.nextUrl.searchParams.get("companyId");
+        if (requestedCompanyId && requestedCompanyId !== companyId) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
         const readiness = await evaluateCompanyDataReadiness(companyId, new Date());

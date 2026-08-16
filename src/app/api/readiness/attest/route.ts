@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
+import { resolveTenant } from "@/lib/tenant";
 import { 
     computeARPopulationHash, 
     computeAPPopulationHash, 
@@ -8,19 +10,33 @@ import {
 
 export async function POST(req: NextRequest) {
     try {
-        const body = await req.json();
-        const { companyId, scopeType, scopeKey, asOfDate, controlCount, controlAmount, evidenceJson, certifiedBy } = body;
-
-        if (!companyId || !scopeType || !asOfDate || !evidenceJson || !certifiedBy) {
-            return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const company = await prisma.company.findUnique({
-            where: { id: companyId }
-        });
+        const companyId = await resolveTenant(req);
+        if (!companyId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
 
-        if (!company) {
-            return NextResponse.json({ error: "Company not found" }, { status: 404 });
+        const body = await req.json();
+        const {
+            companyId: requestedCompanyId,
+            scopeType,
+            scopeKey,
+            asOfDate,
+            controlCount,
+            controlAmount,
+            evidenceJson
+        } = body;
+
+        if (requestedCompanyId !== undefined && requestedCompanyId !== companyId) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+
+        if (!scopeType || !asOfDate || !evidenceJson) {
+            return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
 
         let sourceStateHash = '';
@@ -34,6 +50,13 @@ export async function POST(req: NextRequest) {
         } else if (scopeType === 'bank_no_activity') {
             if (!scopeKey) {
                 return NextResponse.json({ error: "scopeKey (bankAccountId) is required for bank_no_activity" }, { status: 400 });
+            }
+            const bankAccount = await prisma.bankAccount.findFirst({
+                where: { id: scopeKey, companyId },
+                select: { id: true }
+            });
+            if (!bankAccount) {
+                return NextResponse.json({ error: "Forbidden" }, { status: 403 });
             }
             // For bank no activity, the "source state" is just the interval which is captured in evidence
             // We can hash the evidence to create a deterministic hash
@@ -61,7 +84,7 @@ export async function POST(req: NextRequest) {
                 controlAmount: controlAmount || null,
                 sourceStateHash,
                 evidenceJson,
-                certifiedBy,
+                certifiedBy: userId,
                 status: 'active'
             }
         });
