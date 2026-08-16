@@ -51,6 +51,23 @@ export async function POST(req: NextRequest) {
             if (!scopeKey) {
                 return NextResponse.json({ error: "scopeKey (bankAccountId) is required for bank_no_activity" }, { status: 400 });
             }
+            let interval: { coveredStartDate?: string; coveredEndDate?: string };
+            try {
+                interval = JSON.parse(evidenceJson);
+            } catch {
+                return NextResponse.json({ error: "bank_no_activity evidence must be valid JSON" }, { status: 400 });
+            }
+            const coveredStartDate = new Date(interval.coveredStartDate || '');
+            const coveredEndDate = new Date(interval.coveredEndDate || '');
+            if (
+                !interval.coveredStartDate ||
+                !interval.coveredEndDate ||
+                isNaN(coveredStartDate.getTime()) ||
+                isNaN(coveredEndDate.getTime()) ||
+                coveredStartDate > coveredEndDate
+            ) {
+                return NextResponse.json({ error: "bank_no_activity requires a valid coveredStartDate and coveredEndDate" }, { status: 400 });
+            }
             const bankAccount = await prisma.bankAccount.findFirst({
                 where: { id: scopeKey, companyId },
                 select: { id: true }

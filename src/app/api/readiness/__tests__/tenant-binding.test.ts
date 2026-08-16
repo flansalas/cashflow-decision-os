@@ -115,7 +115,7 @@ describe("Package 2B readiness tenant binding", () => {
             scopeType: "bank_no_activity",
             scopeKey: "bank-account-b",
             asOfDate: "2026-08-16T00:00:00.000Z",
-            evidenceJson: JSON.stringify({ intervalStart: "2026-08-01", intervalEnd: "2026-08-15" })
+            evidenceJson: JSON.stringify({ coveredStartDate: "2026-08-01T00:00:00.000Z", coveredEndDate: "2026-08-15T00:00:00.000Z" })
         }));
 
         expect(response.status).toBe(403);
@@ -127,5 +127,18 @@ describe("Package 2B readiness tenant binding", () => {
         expect(prisma.dataReadinessAttestation.create).not.toHaveBeenCalled();
         expect(computeAPPopulationHash).not.toHaveBeenCalled();
         expect(computeRecurringPopulationHash).not.toHaveBeenCalled();
+    });
+
+    it("requires an exact account and valid covered interval for bank_no_activity", async () => {
+        const response = await POST(makePostRequest({
+            scopeType: "bank_no_activity",
+            scopeKey: "bank-account-a",
+            asOfDate: "2026-08-16T00:00:00.000Z",
+            evidenceJson: JSON.stringify({ coveredStartDate: "2026-08-15T00:00:00.000Z" })
+        }));
+
+        expect(response.status).toBe(400);
+        expect(prisma.bankAccount.findFirst).not.toHaveBeenCalled();
+        expect(prisma.dataReadinessAttestation.create).not.toHaveBeenCalled();
     });
 });
