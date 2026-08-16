@@ -12,7 +12,7 @@ describe('Package 2B Data Readiness', () => {
     beforeEach(async () => {
         companyId = randomUUID();
         await prisma.company.create({ data: { id: companyId, name: 'Test 2B' } });
-        
+
         bankAccountId = randomUUID();
         await prisma.bankAccount.create({
             data: { id: bankAccountId, companyId, name: 'Main', isActive: true, role: 'operating' }
@@ -25,8 +25,8 @@ describe('Package 2B Data Readiness', () => {
         });
 
         const baseline = await prisma.baselineSnapshotHistory.create({
-            data: { 
-                id: randomUUID(), companyId, asOfDate: now, 
+            data: {
+                id: randomUUID(), companyId, asOfDate: now,
                 variableInflowWeekly: 0, variableOutflowWeekly: 0,
                 dataQualityStatus: 'valid',
                 forecastCheckpointId: randomUUID()
@@ -66,13 +66,46 @@ describe('Package 2B Data Readiness', () => {
         expect(result.dimensions.bankCoverage.status).toBe('operational_only');
     });
 
-    it('valid bank no-activity closes gap', async () => {
+    it('certified interval ending at cutoff but starting too late => operational_only', async () => {
         const now = new Date();
-        const start = new Date(now.getTime() - 86400000).toISOString();
-        const end = now.toISOString();
+        const start = new Date(now.getTime() - 2 * 86400000); // Only 2 days ago, required is 7
 
+        await prisma.bankImportManifestAccount.create({
+            data: {
+                id: randomUUID(),
+                BankAccount: { connect: { id: bankAccountId } },
+                importSuccess: true,
+                rejectedRowCount: 0,
+                coveredStartDate: start,
+                coveredEndDate: now,
+                BankImportManifest: {
+                    create: { id: randomUUID(), companyId, userCertified: true }
+                }
+            }
+        });
+
+        const result = await evaluateCompanyDataReadiness(companyId, now, cashSnapshotId, forecastCheckpointId);
+        expect(result.dimensions.bankCoverage.status).toBe('operational_only');
+    });
+
+    it('exact no-activity bridge closes a real gap', async () => {
+        const now = new Date();
+        const gapStart = new Date(now.getTime() - 7 * 86400000); // 7 days ago
+        const gapEnd = new Date(now.getTime() - 2 * 86400000); // 2 days ago
+
+        // Manifest covers last 2 days
+        await prisma.bankImportManifestAccount.create({
+            data: {
+                id: randomUUID(), BankAccount: { connect: { id: bankAccountId } },
+                importSuccess: true, rejectedRowCount: 0,
+                coveredStartDate: gapEnd, coveredEndDate: now,
+                BankImportManifest: { create: { id: randomUUID(), companyId, userCertified: true } }
+            }
+        });
+
+        // No-activity bridges exactly the 5-day gap
         await prisma.dataReadinessAttestation.create({
-            data: { companyId, scopeType: 'bank_no_activity', scopeKey: bankAccountId, status: 'active', asOfDate: now, certifiedBy: 'test', evidenceJson: JSON.stringify({ coveredStartDate: start, coveredEndDate: end }), sourceStateHash: 'none' }
+            data: { companyId, scopeType: 'bank_no_activity', scopeKey: bankAccountId, status: 'active', asOfDate: now, certifiedBy: 'test', evidenceJson: JSON.stringify({ coveredStartDate: gapStart.toISOString(), coveredEndDate: gapEnd.toISOString() }), sourceStateHash: 'none' }
         });
 
         const result = await evaluateCompanyDataReadiness(companyId, now, cashSnapshotId, forecastCheckpointId);
@@ -80,16 +113,27 @@ describe('Package 2B Data Readiness', () => {
 
         // tx inside invalidates
         await prisma.bankTransaction.create({
-            data: { id: randomUUID(), companyId, accountId: bankAccountId, txDate: new Date(now.getTime() - 10000), amount: 10, direction: 'inflow', description: 'Test' }
+            data: { id: randomUUID(), companyId, accountId: bankAccountId, txDate: new Date(now.getTime() - 4 * 86400000), amount: 10, direction: 'inflow', description: 'Test' }
         });
 
         const r2 = await evaluateCompanyDataReadiness(companyId, now, cashSnapshotId, forecastCheckpointId);
         expect(r2.dimensions.bankCoverage.status).toBe('operational_only');
     });
 
+    it('matching hash + stale asOfDate => operational_only', async () => {
+        const now = new Date();
+        const staleDate = new Date(now.getTime() - 86400000); // Yesterday
+
+        const arHash = await computeARPopulationHash(companyId);
+        await prisma.dataReadinessAttestation.create({ data: { companyId, scopeType: 'ar', asOfDate: staleDate, sourceStateHash: arHash, evidenceJson: '{}', certifiedBy: 'test', status: 'active' }});
+
+        const result = await evaluateCompanyDataReadiness(companyId, now, cashSnapshotId, forecastCheckpointId);
+        expect(result.dimensions.accountsReceivable.status).toBe('operational_only');
+    });
+
     it('source state changes invalidate readiness', async () => {
         const now = new Date();
-        const start = new Date(now.getTime() - 86400000).toISOString();
+        const start = new Date(now.getTime() - 7 * 86400000).toISOString(); // 7 days ago
         const end = now.toISOString();
 
         // Satisfy bank
@@ -98,7 +142,7 @@ describe('Package 2B Data Readiness', () => {
         // Satisfy AR
         let arHash = await computeARPopulationHash(companyId);
         await prisma.dataReadinessAttestation.create({ data: { companyId, scopeType: 'ar', asOfDate: now, sourceStateHash: arHash, evidenceJson: '{}', certifiedBy: 'test', status: 'active' }});
-        
+
         // Satisfy AP
         let apHash = await computeAPPopulationHash(companyId);
         await prisma.dataReadinessAttestation.create({ data: { companyId, scopeType: 'ap', asOfDate: now, sourceStateHash: apHash, evidenceJson: '{}', certifiedBy: 'test', status: 'active' }});
@@ -121,10 +165,10 @@ describe('Package 2B Data Readiness', () => {
         await prisma.override.create({
             data: { id: randomUUID(), companyId, type: 'exclude', targetType: 'ReceivableInvoice', targetId: inv.id, status: 'active', metaJson: '{}' }
         });
-        
+
         arHash = await computeARPopulationHash(companyId);
         await prisma.dataReadinessAttestation.create({ data: { companyId, scopeType: 'ar', asOfDate: now, sourceStateHash: arHash, evidenceJson: '{}', certifiedBy: 'test', status: 'active' }});
-        
+
         result = await evaluateCompanyDataReadiness(companyId, now, cashSnapshotId, forecastCheckpointId);
         expect(result.status).toBe('decision_ready'); // Valid hidden AR can be certified
 

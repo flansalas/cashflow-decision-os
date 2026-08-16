@@ -173,9 +173,7 @@ export async function evaluateCompanyDataReadiness(
     // 2. BANK COVERAGE
     // Verify coverage up to the cash snapshot's asOfDate
     const targetCutoff = latestCash ? latestCash.asOfDate : asOfDate;
-    // We check coverage by utilizing verifyBankCoverage. Wait, verifyBankCoverage expects weekStart/weekEnd.
-    // Instead of using verifyBankCoverage directly which checks a specific week window,
-    // we must verify that EVERY active bank account has coverage continuously through the cutoff.
+    const requiredCoverageStart = sevenDaysAgo;
     
     const activeAccounts = await tx.bankAccount.findMany({
         where: { companyId, isActive: true }
@@ -197,35 +195,37 @@ export async function evaluateCompanyDataReadiness(
 
         let accountCovered = false;
         let bankEvidenceEntry: any = { accountId: ba.id };
+        let currentCoverageStart = targetCutoff;
 
         if (latestManifestAccount && latestManifestAccount.coveredEndDate && latestManifestAccount.coveredEndDate >= targetCutoff) {
-            accountCovered = true;
-            bankEvidenceEntry.manifestId = latestManifestAccount.manifestId;
-            bankEvidenceEntry.coveredEndDate = latestManifestAccount.coveredEndDate.toISOString();
+            if (latestManifestAccount.coveredStartDate) {
+                currentCoverageStart = latestManifestAccount.coveredStartDate;
+                bankEvidenceEntry.manifestId = latestManifestAccount.manifestId;
+                bankEvidenceEntry.coveredEndDate = latestManifestAccount.coveredEndDate.toISOString();
+                bankEvidenceEntry.coveredStartDate = latestManifestAccount.coveredStartDate.toISOString();
+            }
         }
 
-        if (!accountCovered) {
-            // Check for explicit bank_no_activity attestation that bridges the gap
+        if (currentCoverageStart > requiredCoverageStart) {
             const noActivityAttestation = await tx.dataReadinessAttestation.findFirst({
                 where: { companyId, scopeType: 'bank_no_activity', scopeKey: ba.id, status: 'active' }
             });
 
             if (noActivityAttestation) {
-                // Parse evidence to see if it covers up to targetCutoff
                 try {
                     const evidence = JSON.parse(noActivityAttestation.evidenceJson);
                     const attestedEnd = new Date(evidence.coveredEndDate);
-                    if (!isNaN(attestedEnd.getTime()) && attestedEnd >= targetCutoff) {
-                        // Check if any transactions actually occurred in the interval
+                    const attestedStart = new Date(evidence.coveredStartDate);
+                    if (!isNaN(attestedEnd.getTime()) && !isNaN(attestedStart.getTime()) && attestedEnd >= currentCoverageStart && attestedStart <= requiredCoverageStart) {
                         const txInGap = await tx.bankTransaction.findFirst({
                             where: { 
                                 companyId, 
                                 accountId: ba.id, 
-                                txDate: { gte: new Date(evidence.coveredStartDate), lte: attestedEnd }
+                                txDate: { gte: attestedStart, lte: attestedEnd }
                             }
                         });
                         if (!txInGap) {
-                            accountCovered = true;
+                            currentCoverageStart = requiredCoverageStart;
                             bankEvidenceEntry.noActivityAttestationId = noActivityAttestation.id;
                             bankEvidenceEntry.coveredStartDate = evidence.coveredStartDate;
                             bankEvidenceEntry.coveredEndDate = evidence.coveredEndDate;
@@ -239,7 +239,9 @@ export async function evaluateCompanyDataReadiness(
 
         auditEvidence.bankAccounts.push(bankEvidenceEntry);
 
-        if (!accountCovered) {
+        if (currentCoverageStart <= requiredCoverageStart) {
+            accountCovered = true;
+        } else {
             bankCoverageOperational = true;
         }
     }
@@ -257,7 +259,7 @@ export async function evaluateCompanyDataReadiness(
     const arHash = await computeARPopulationHash(companyId, tx);
     auditEvidence.arSourceStateHash = arHash;
     const arAttestation = await tx.dataReadinessAttestation.findFirst({
-        where: { companyId, scopeType: 'ar', status: 'active', sourceStateHash: arHash }
+        where: { companyId, scopeType: 'ar', status: 'active', sourceStateHash: arHash, asOfDate: { gte: targetCutoff } }
     });
     if (!arAttestation) {
         result.dimensions.accountsReceivable = { status: 'operational_only', detail: 'Active AR attestation does not match current source state' };
@@ -269,7 +271,7 @@ export async function evaluateCompanyDataReadiness(
     const apHash = await computeAPPopulationHash(companyId, tx);
     auditEvidence.apSourceStateHash = apHash;
     const apAttestation = await tx.dataReadinessAttestation.findFirst({
-        where: { companyId, scopeType: 'ap', status: 'active', sourceStateHash: apHash }
+        where: { companyId, scopeType: 'ap', status: 'active', sourceStateHash: apHash, asOfDate: { gte: targetCutoff } }
     });
     if (!apAttestation) {
         result.dimensions.accountsPayable = { status: 'operational_only', detail: 'Active AP attestation does not match current source state' };
@@ -281,7 +283,7 @@ export async function evaluateCompanyDataReadiness(
     const recurringHash = await computeRecurringPopulationHash(companyId, tx);
     auditEvidence.recurringSourceStateHash = recurringHash;
     const recurringAttestation = await tx.dataReadinessAttestation.findFirst({
-        where: { companyId, scopeType: 'recurring', status: 'active', sourceStateHash: recurringHash }
+        where: { companyId, scopeType: 'recurring', status: 'active', sourceStateHash: recurringHash, asOfDate: { gte: targetCutoff } }
     });
     if (!recurringAttestation) {
         result.dimensions.recurringPatterns = { status: 'operational_only', detail: 'Active Recurring attestation does not match current source state' };
