@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { computeARPopulationHash } from "@/services/data-readiness-evaluation";
+import { computeAPPopulationHash, computeARPopulationHash } from "@/services/data-readiness-evaluation";
 import { buildManagerialVisibility } from "@/services/managerial-visibility";
 
 const companyId = "tenant-a";
@@ -15,6 +15,22 @@ const invoices = Array.from({ length: 21 }, (_, index) => ({
 function hashFor(overrides: Array<{ targetId: string | null; targetType: string }>) {
     return computeARPopulationHash(companyId, {
         receivableInvoice: { findMany: vi.fn().mockResolvedValue(invoices) },
+        override: { findMany: vi.fn().mockResolvedValue(overrides) }
+    } as any);
+}
+
+const bills = Array.from({ length: 3 }, (_, index) => ({
+    id: `bill-${index + 1}`,
+    vendorName: `Vendor ${index + 1}`,
+    billNo: `BILL-${index + 1}`,
+    amountOpen: index + 1,
+    dueDate: new Date("2026-08-10T00:00:00.000Z"),
+    status: "open"
+}));
+
+function apHashFor(overrides: Array<{ targetId: string | null; targetType: string }>) {
+    return computeAPPopulationHash(companyId, {
+        payableBill: { findMany: vi.fn().mockResolvedValue(bills) },
         override: { findMany: vi.fn().mockResolvedValue(overrides) }
     } as any);
 }
@@ -46,6 +62,36 @@ describe("AR readiness managerial visibility", () => {
         const hashWithDanglingExclusion = await hashFor([
             ...currentExclusions,
             { targetId: "historical-invoice-id", targetType: "receivable_invoice" }
+        ]);
+
+        expect(hashWithDanglingExclusion).toBe(currentHash);
+    });
+});
+
+describe("AP readiness managerial visibility", () => {
+    const currentExclusion = { targetId: "bill-1", targetType: "payable_bill" };
+
+    it("represents a current hidden bill as managerially excluded", () => {
+        const visibility = buildManagerialVisibility([currentExclusion]);
+
+        expect(visibility.hiddenBillIds).toEqual(new Set(["bill-1"]));
+        expect(bills.filter(bill => !visibility.hiddenBillIds.has(bill.id))).toHaveLength(2);
+    });
+
+    it("changes the AP readiness hash when a bill is hidden or restored", async () => {
+        const visibleHash = await apHashFor([]);
+        const hiddenHash = await apHashFor([currentExclusion]);
+        const restoredHash = await apHashFor([]);
+
+        expect(hiddenHash).not.toBe(visibleHash);
+        expect(restoredHash).toBe(visibleHash);
+    });
+
+    it("does not let a dangling exclusion alter the current AP population hash", async () => {
+        const currentHash = await apHashFor([currentExclusion]);
+        const hashWithDanglingExclusion = await apHashFor([
+            currentExclusion,
+            { targetId: "historical-bill-id", targetType: "payable_bill" }
         ]);
 
         expect(hashWithDanglingExclusion).toBe(currentHash);

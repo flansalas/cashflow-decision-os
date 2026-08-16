@@ -59,9 +59,10 @@ export async function computeAPPopulationHash(companyId: string, tx: Prisma.Tran
     });
 
     const overrides = await tx.override.findMany({
-        where: { companyId, type: 'exclude', targetType: 'PayableBill', status: 'active' }
+        where: { companyId, type: 'exclude', status: 'active', targetId: { not: null } },
+        select: { targetId: true, targetType: true }
     });
-    const excludedIds = new Set(overrides.map(o => o.targetId));
+    const visibility = buildManagerialVisibility(overrides);
 
     const hashedData = bills.map(b => ({
         id: b.id,
@@ -70,7 +71,7 @@ export async function computeAPPopulationHash(companyId: string, tx: Prisma.Tran
         amountOpen: b.amountOpen,
         dueDate: b.dueDate?.toISOString() || null,
         status: b.status,
-        managerialExcluded: excludedIds.has(b.id)
+        managerialExcluded: visibility.hiddenBillIds.has(b.id)
     }));
 
     return computeCanonicalHash(canonicalJsonSerialize(hashedData));
