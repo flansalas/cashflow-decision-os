@@ -1,291 +1,658 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import prisma from '@/db/prisma';
-import { randomUUID } from 'crypto';
-import { certifyForecastVersion } from '@/services/forecast-certification';
-import { evaluateDownsideScenario } from '@/services/forecast-scenario';
-import { approveExecutionPlan } from '@/services/execution-plan-approval';
+import { beforeEach, describe, expect, it } from "vitest";
+import { randomUUID } from "crypto";
+import prisma from "@/db/prisma";
+import {
+    computeAPPopulationHash,
+    computeARPopulationHash,
+    computeRecurringPopulationHash,
+    evaluateCompanyDataReadiness
+} from "@/services/data-readiness-evaluation";
+import {
+    certifyForecastVersion,
+    evaluateForecastRisk
+} from "@/services/forecast-certification";
+import {
+    evaluateDownsideScenario,
+    StressInputs,
+    validateStressInputs
+} from "@/services/forecast-scenario";
+import { approveExecutionPlan } from "@/services/execution-plan-approval";
+import {
+    canonicalJsonSerialize,
+    computeCanonicalHash,
+    FORECAST_SCHEMA_VERSION,
+    HASH_ALGORITHM
+} from "@/services/canonical-hash";
 
-describe('Package 3 Certification', () => {
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * DAY_MS;
+
+describe("Package 3 governed forecast certification", { timeout: 300000 }, () => {
     let companyId: string;
     let cashSnapshotId: string;
-    let forecastCheckpointId: string;
     let bankAccountId: string;
+    let forecastCheckpointId: string;
     let now: Date;
+
+    async function createCheckpoint(options: {
+        id?: string;
+        sealed?: boolean;
+        weekCount?: number;
+        weekStart?: Date;
+        canonicalPayloadJson?: string;
+    } = {}) {
+        const id = options.id || randomUUID();
+        const canonicalPayloadJson = options.canonicalPayloadJson
+            ?? canonicalJsonSerialize({ fixtureCheckpointId: id });
+        const hash = computeCanonicalHash(canonicalPayloadJson);
+        const weekStart = options.weekStart || now;
+        await prisma.forecastCheckpoint.create({
+            data: {
+                id,
+                companyId,
+                cashSnapshotId,
+                weekStart,
+                weekEnd: new Date(weekStart.getTime() + WEEK_MS),
+                endCashExpected: 1000,
+                inflowsExpected: 0,
+                outflowsExpected: 0,
+                generatedAt: weekStart,
+                forecastVersionHash: hash,
+                canonicalPayloadJson,
+                forecastSchemaVersion: FORECAST_SCHEMA_VERSION,
+                hashAlgorithm: HASH_ALGORITHM,
+                sealedAt: null
+            }
+        });
+
+        await prisma.forecastWeek.createMany({
+            data: Array.from({ length: options.weekCount ?? 13 }, (_, index) => ({
+                id: randomUUID(),
+                forecastCheckpointId: id,
+                companyId,
+                weekStart: new Date(weekStart.getTime() + index * WEEK_MS),
+                weekEnd: new Date(weekStart.getTime() + (index + 1) * WEEK_MS),
+                startCash: 1000,
+                endCashExpected: 1000,
+                inflowsExpected: 0,
+                outflowsExpected: 0,
+                inflowsBest: 0,
+                outflowsBest: 0,
+                endCashBest: 1000,
+                inflowsWorst: 0,
+                outflowsWorst: 0,
+                endCashWorst: 1000,
+                zone: "green",
+                forecastVersionHash: hash
+            }))
+        });
+
+        if (options.sealed) {
+            await prisma.forecastCheckpoint.update({
+                where: { id },
+                data: { sealedAt: weekStart }
+            });
+        }
+
+        return id;
+    }
+
+    async function sealCheckpoint(id = forecastCheckpointId) {
+        await prisma.forecastCheckpoint.update({ where: { id }, data: { sealedAt: now } });
+    }
+
+    async function satisfyReadiness(asOfDate = new Date()) {
+        const coveredStartDate = new Date(asOfDate.getTime() - WEEK_MS);
+        await prisma.dataReadinessAttestation.create({
+            data: {
+                companyId,
+                scopeType: "bank_no_activity",
+                scopeKey: bankAccountId,
+                status: "active",
+                asOfDate,
+                certifiedBy: "readiness-owner",
+                evidenceJson: JSON.stringify({
+                    coveredStartDate: coveredStartDate.toISOString(),
+                    coveredEndDate: asOfDate.toISOString()
+                }),
+                sourceStateHash: "no-activity"
+            }
+        });
+
+        const [arHash, apHash, recurringHash] = await Promise.all([
+            computeARPopulationHash(companyId),
+            computeAPPopulationHash(companyId),
+            computeRecurringPopulationHash(companyId)
+        ]);
+        for (const [scopeType, sourceStateHash] of [
+            ["ar", arHash],
+            ["ap", apHash],
+            ["recurring", recurringHash]
+        ] as const) {
+            await prisma.dataReadinessAttestation.create({
+                data: {
+                    companyId,
+                    scopeType,
+                    asOfDate,
+                    sourceStateHash,
+                    evidenceJson: "{}",
+                    certifiedBy: "readiness-owner",
+                    status: "active"
+                }
+            });
+        }
+    }
+
+    async function addGovernedInvoiceComponent(targetWeekIndex = 0, amount = 1200) {
+        const weeks = await prisma.forecastWeek.findMany({
+            where: { forecastCheckpointId },
+            orderBy: { weekStart: "asc" }
+        });
+        const week = weeks[targetWeekIndex];
+        await prisma.forecastWeek.update({
+            where: { id: week.id },
+            data: {
+                inflowsExpected: amount,
+                outflowsExpected: amount,
+                endCashExpected: 1000
+            }
+        });
+        await prisma.forecastComponentSnapshot.create({
+            data: {
+                id: randomUUID(),
+                forecastCheckpointId,
+                targetWeekStart: week.weekStart,
+                direction: "inflow",
+                componentCategory: "receivables",
+                sourceType: "invoice",
+                sourceId: `invoice-${targetWeekIndex}`,
+                projectedAmount: amount,
+                confidenceTier: "high",
+                sourceStateHash: `invoice-state-${targetWeekIndex}`
+            }
+        });
+    }
+
+    async function reviewAuthority(stressInputs: StressInputs = {}) {
+        const review = await evaluateForecastRisk(
+            companyId,
+            forecastCheckpointId,
+            stressInputs
+        );
+        return review.decisionAuthority;
+    }
+
+    async function createCertifiedDecision() {
+        const stressInputs = { arDelayWeeks: 4, residualInflowReductionPct: 20 };
+        const authority = await reviewAuthority(stressInputs);
+        return certifyForecastVersion(
+            companyId,
+            forecastCheckpointId,
+            { status: "certified", decidedBy: "clerk-user" },
+            stressInputs,
+            "The live buffer reflects current operating commitments.",
+            authority
+        );
+    }
 
     beforeEach(async () => {
         companyId = randomUUID();
-        await prisma.company.create({ data: { id: companyId, name: 'Test 3' } });
+        now = new Date();
+        await prisma.company.create({ data: { id: companyId, name: "Package 3 Test" } });
 
         bankAccountId = randomUUID();
         await prisma.bankAccount.create({
-            data: { id: bankAccountId, companyId, name: 'Main', isActive: true, role: 'operating' }
+            data: { id: bankAccountId, companyId, name: "Operating", isActive: true, role: "operating" }
         });
 
-        now = new Date();
         cashSnapshotId = randomUUID();
         await prisma.cashSnapshot.create({
             data: { id: cashSnapshotId, companyId, asOfDate: now, bankBalance: 1000 }
         });
 
-        forecastCheckpointId = randomUUID();
-        await prisma.forecastCheckpoint.create({
-            data: {
-                id: forecastCheckpointId, companyId, cashSnapshotId, weekStart: now, weekEnd: new Date(now.getTime() + 7 * 86400000),
-                endCashExpected: 1000, inflowsExpected: 0, outflowsExpected: 0,
-                generatedAt: now, forecastVersionHash: 'hash', canonicalPayloadJson: '{}', forecastSchemaVersion: 1, hashAlgorithm: 'sha256'
-            }
-        });
-
-        for (let i = 0; i < 13; i++) {
-            await prisma.forecastWeek.create({
-                data: {
-                    id: randomUUID(), forecastCheckpointId, companyId, weekStart: new Date(now.getTime() + i * 7 * 86400000),
-                    weekEnd: new Date(now.getTime() + (i + 1) * 7 * 86400000),
-                    startCash: 1000, endCashExpected: 1000, inflowsExpected: 0, outflowsExpected: 0,
-                    inflowsBest: 0, outflowsBest: 0, endCashBest: 1000,
-                    inflowsWorst: 0, outflowsWorst: 0, endCashWorst: 1000,
-                    zone: 'green', forecastVersionHash: 'hash'
-                }
-            });
-        }
-
+        forecastCheckpointId = await createCheckpoint({ id: randomUUID() });
         await prisma.baselineSnapshotHistory.create({
             data: {
-                id: randomUUID(), companyId, asOfDate: now,
-                variableInflowWeekly: 0, variableOutflowWeekly: 0,
-                dataQualityStatus: 'valid',
+                id: randomUUID(),
+                companyId,
+                asOfDate: now,
+                variableInflowWeekly: 0,
+                variableOutflowWeekly: 0,
+                dataQualityStatus: "valid",
                 forecastCheckpointId
             }
         });
-
         await prisma.assumption.create({
             data: { id: randomUUID(), companyId, bufferMin: 500 }
         });
+    }, 60000);
+
+    it("rejects unsealed, foreign, and malformed checkpoints", async () => {
+        await expect(evaluateForecastRisk(companyId, forecastCheckpointId, {})).rejects.toThrow(/must be sealed/);
+
+        await sealCheckpoint();
+        await expect(evaluateForecastRisk(randomUUID(), forecastCheckpointId, {})).rejects.toThrow(/not found/);
+
+        const malformed = await createCheckpoint({ sealed: true, weekCount: 12 });
+        await expect(evaluateForecastRisk(companyId, malformed, {})).rejects.toThrow(/exactly 13/);
+
+        const malformedPayload = await createCheckpoint({ sealed: true, canonicalPayloadJson: "{" });
+        await expect(evaluateForecastRisk(companyId, malformedPayload, {})).rejects.toThrow(/canonical payload is malformed/);
     });
 
-    async function satisfyReadiness(cid: string = companyId, asOf: Date = now) {
-        const start = new Date(asOf.getTime() - 7 * 86400000).toISOString();
-        const end = asOf.toISOString();
-        await prisma.dataReadinessAttestation.create({ data: { companyId: cid, scopeType: 'bank_no_activity', scopeKey: bankAccountId, status: 'active', asOfDate: asOf, certifiedBy: 'test', evidenceJson: JSON.stringify({ coveredStartDate: start, coveredEndDate: end }), sourceStateHash: 'none' } });
+    it("keeps unchanged semantic readiness evidence stable across evaluation timestamps", async () => {
+        await satisfyReadiness(now);
+        const first = await evaluateCompanyDataReadiness(companyId, now, cashSnapshotId, forecastCheckpointId);
+        const second = await evaluateCompanyDataReadiness(
+            companyId,
+            new Date(now.getTime() + 5000),
+            cashSnapshotId,
+            forecastCheckpointId
+        );
 
-        // Actually we need the real hashes for readiness evaluation
-        const arHash = await import('@/services/data-readiness-evaluation').then(m => m.computeARPopulationHash(cid));
-        const apHash = await import('@/services/data-readiness-evaluation').then(m => m.computeAPPopulationHash(cid));
-        const recHash = await import('@/services/data-readiness-evaluation').then(m => m.computeRecurringPopulationHash(cid));
-
-        await prisma.dataReadinessAttestation.deleteMany({ where: { companyId: cid, scopeType: { in: ['ar', 'ap', 'recurring'] } }});
-
-        await prisma.dataReadinessAttestation.create({ data: { companyId: cid, scopeType: 'ar', asOfDate: asOf, sourceStateHash: arHash, evidenceJson: '{}', certifiedBy: 'test', status: 'active' }});
-        await prisma.dataReadinessAttestation.create({ data: { companyId: cid, scopeType: 'ap', asOfDate: asOf, sourceStateHash: apHash, evidenceJson: '{}', certifiedBy: 'test', status: 'active' }});
-        await prisma.dataReadinessAttestation.create({ data: { companyId: cid, scopeType: 'recurring', asOfDate: asOf, sourceStateHash: recHash, evidenceJson: '{}', certifiedBy: 'test', status: 'active' }});
-    }
-
-    it('1. unsealed checkpoint cannot be certified', async () => {
-        await expect(certifyForecastVersion(companyId, forecastCheckpointId, { status: 'certified' }, {})).rejects.toThrow(/unsealed/);
+        expect(first.status).toBe("decision_ready");
+        expect(second.status).toBe("decision_ready");
+        expect(second.evidenceHash).toBe(first.evidenceHash);
+        expect(second.certificationId).not.toBe(first.certificationId);
     });
 
-    it('2. foreign checkpoint cannot be certified', async () => {
-        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
-        const foreignCompanyId = randomUUID();
-        await expect(certifyForecastVersion(foreignCompanyId, forecastCheckpointId, { status: 'certified' }, {})).rejects.toThrow(/unsealed or does not exist/);
-    });
+    it("changes semantic readiness identity when material source authority changes", async () => {
+        await satisfyReadiness(now);
+        const first = await evaluateCompanyDataReadiness(companyId, now, cashSnapshotId, forecastCheckpointId);
 
-    it('3. operational_only Company Data-Readiness cannot produce passing Forecast-Version Certification', async () => {
-        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
-        // Without readiness attestations, it will evaluate to operational_only or blocked
-        const cert = await certifyForecastVersion(companyId, forecastCheckpointId, { status: 'certified', decidedBy: 'admin' }, {}, 'buffer ok');
-        expect(cert.status).toBe('cannot_certify');
-    });
-
-    it('4. stale readiness/current-evidence mismatch cannot authorize certification/approval', async () => {
-        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
-        await satisfyReadiness();
-        const cert = await certifyForecastVersion(companyId, forecastCheckpointId, { status: 'certified', decidedBy: 'admin' }, {}, 'buffer ok');
-        expect(cert.status).toBe('certified');
-        
-        // Mutate source state to invalidate readiness
         await prisma.receivableInvoice.create({
-            data: { id: randomUUID(), companyId, invoiceNo: 'INV-NEW', customerName: 'Test', amountOpen: 1000, dueDate: now, status: 'open' }
-        });
-        
-        const planOpts = { companyId, weekStart: now.toISOString(), forecastCheckpointId, actions: [] };
-        // Fails because the evidence hash computed during approval doesn't match the cert's preserved evidence hash
-        await expect(approveExecutionPlan(planOpts)).rejects.toThrow(/readiness evidence hash has changed/);
-    });
-
-    it('malformed/non-13-week sealed checkpoint cannot certify', async () => {
-        const badCheckpointId = randomUUID();
-        await prisma.forecastCheckpoint.create({
             data: {
-                id: badCheckpointId, companyId, cashSnapshotId, weekStart: now, weekEnd: new Date(now.getTime() + 7 * 86400000),
-                endCashExpected: 1000, inflowsExpected: 0, outflowsExpected: 0,
-                generatedAt: now, forecastVersionHash: 'hash', canonicalPayloadJson: '{}', forecastSchemaVersion: 1, hashAlgorithm: 'sha256',
-                sealedAt: now
+                id: randomUUID(),
+                companyId,
+                invoiceNo: "INV-NEW",
+                customerName: "Changed customer",
+                amountOpen: 1000,
+                dueDate: now,
+                status: "open"
             }
         });
-        // 0 weeks instead of 13
-        await expect(certifyForecastVersion(companyId, badCheckpointId, { status: 'certified', decidedBy: 'admin' }, {}, 'buffer ok'))
-            .rejects.toThrow(/exactly 13 ForecastWeeks/);
+        const second = await evaluateCompanyDataReadiness(companyId, now, cashSnapshotId, forecastCheckpointId);
+
+        expect(second.evidenceHash).not.toBe(first.evidenceHash);
+        expect(second.dimensions.accountsReceivable.status).toBe("operational_only");
     });
 
-    it('certified without authenticated human authority is refused', async () => {
-        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
-        await satisfyReadiness();
-        // decidedBy is missing
-        await expect(certifyForecastVersion(companyId, forecastCheckpointId, { status: 'certified' }, {}, 'buffer ok'))
-            .rejects.toThrow(/authenticated human decision authority required/);
+    it("evaluates an exact decision-ready checkpoint without creating a final decision", async () => {
+        await sealCheckpoint();
+        await satisfyReadiness(now);
+        const before = await prisma.forecastVersionCertification.count({ where: { companyId } });
+
+        const review = await evaluateForecastRisk(
+            companyId,
+            forecastCheckpointId,
+            { arDelayWeeks: 4, residualInflowReductionPct: 20 }
+        );
+
+        expect(review.readiness.status).toBe("decision_ready");
+        expect(review.eligibility.canFinalizeDecision).toBe(true);
+        expect(review.buffer.amount).toBe(500);
+        expect(await prisma.forecastVersionCertification.count({ where: { companyId } })).toBe(before);
+        expect(await prisma.forecastScenario.count({ where: { companyId } })).toBe(1);
     });
 
-    it('missing authoritative buffer cannot certify', async () => {
-        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
-        await satisfyReadiness();
-        await prisma.assumption.deleteMany({ where: { companyId } });
-        
-        const cert = await certifyForecastVersion(companyId, forecastCheckpointId, { status: 'certified', decidedBy: 'admin' }, {}, 'buffer ok');
-        expect(cert.status).toBe('cannot_certify');
+    it("normalizes valid stress inputs and rejects unsafe values", () => {
+        expect(validateStressInputs({})).toEqual({ arDelayWeeks: 0, residualInflowReductionPct: 0 });
+        for (const invalid of [
+            { arDelayWeeks: -1 },
+            { arDelayWeeks: 1.5 },
+            { arDelayWeeks: 14 },
+            { arDelayWeeks: Number.NaN },
+            { arDelayWeeks: Number.POSITIVE_INFINITY },
+            { residualInflowReductionPct: -1 },
+            { residualInflowReductionPct: 101 },
+            { residualInflowReductionPct: Number.NaN },
+            { residualInflowReductionPct: Number.POSITIVE_INFINITY }
+        ]) {
+            expect(() => validateStressInputs(invalid)).toThrow();
+        }
     });
 
-    it('5. exact sealed checkpoint + decision_ready readiness can be evaluated', async () => {
-        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
-        await satisfyReadiness();
-        const cert = await certifyForecastVersion(companyId, forecastCheckpointId, { status: 'certified', decidedBy: 'admin' }, {}, 'buffer ok');
-        expect(cert.status).toBe('certified');
-        expect(cert.baseMinCash).toBe(1000);
-        expect(cert.baseBufferHeadroom).toBe(500); // 1000 - 500
+    it("produces deterministic downside results and binds input changes to scenario identity", async () => {
+        await addGovernedInvoiceComponent();
+        await sealCheckpoint();
+        const first = await evaluateDownsideScenario(companyId, forecastCheckpointId, { arDelayWeeks: 1 }, 500);
+        const repeated = await evaluateDownsideScenario(companyId, forecastCheckpointId, { arDelayWeeks: 1 }, 500);
+        const changed = await evaluateDownsideScenario(companyId, forecastCheckpointId, { arDelayWeeks: 2 }, 500);
+
+        expect(repeated.id).toBe(first.id);
+        expect(repeated.scenarioHash).toBe(first.scenarioHash);
+        expect(repeated.payload).toEqual(first.payload);
+        expect(changed.scenarioHash).not.toBe(first.scenarioHash);
     });
 
-    it('6 & 7. deterministic downside calculation is reproducible and changes with inputs', async () => {
-        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
-        
-        // Add a component to delay
-        await prisma.forecastComponentSnapshot.create({
-            data: {
-                id: randomUUID(), forecastCheckpointId, targetWeekStart: now, direction: 'inflow', componentCategory: 'revenue',
-                sourceType: 'invoice', projectedAmount: 200, confidenceTier: 'high', sourceStateHash: 'x'
-            }
-        });
-        
-        const scenario1 = await evaluateDownsideScenario(companyId, forecastCheckpointId, { arDelayWeeks: 1 }, 500);
-        const scenario1_again = await evaluateDownsideScenario(companyId, forecastCheckpointId, { arDelayWeeks: 1 }, 500);
-        
-        expect(scenario1.scenarioHash).toEqual(scenario1_again.scenarioHash);
-        expect(scenario1.id).toEqual(scenario1_again.id);
-        
-        const scenario2 = await evaluateDownsideScenario(companyId, forecastCheckpointId, { arDelayWeeks: 2 }, 500);
-        expect(scenario1.scenarioHash).not.toEqual(scenario2.scenarioHash);
-    });
-
-    it('8. base sealed checkpoint is never mutated by downside evaluation', async () => {
-        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
-        const before = await prisma.forecastCheckpoint.findUnique({ where: { id: forecastCheckpointId }, include: { forecastWeeks: true } });
-        
-        await evaluateDownsideScenario(companyId, forecastCheckpointId, { arDelayWeeks: 1, residualInflowReductionPct: 20 }, 500);
-        
-        const after = await prisma.forecastCheckpoint.findUnique({ where: { id: forecastCheckpointId }, include: { forecastWeeks: true } });
-        expect(before).toEqual(after);
-    });
-
-    it('AR shifted outside W13 is explicitly preserved in scenario evidence', async () => {
-        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
-        // Create an AR component in Week 12
-        await prisma.forecastComponentSnapshot.create({
-            data: { id: randomUUID(), forecastCheckpointId, targetWeekStart: new Date(now.getTime() + 11 * 7 * 86400000), direction: 'inflow', componentCategory: 'rev', sourceType: 'invoice', projectedAmount: 1200, confidenceTier: 'high', sourceStateHash: 'x' }
-        });
-        
-        // Delay by 4 weeks => pushes it to week 16, which is outside the 13 week horizon.
-        const scenario = await evaluateDownsideScenario(companyId, forecastCheckpointId, { arDelayWeeks: 4 }, 500);
-        
-        // The stress reduction in week 12 must be present
-        const w12 = scenario.payload[11];
-        expect(w12.stressAdjustments.length).toBeGreaterThan(0);
-        expect(w12.stressAdjustments[0].amountImpact).toBe(-1200);
-        expect(w12.stressAdjustments[0].description).toContain('delayed by 4 weeks');
-        
-        // Ensure no week after 13 was created
-        expect(scenario.payload.length).toBe(13);
-    });
-
-    it('9 & 10. risk metrics reconcile to the scenario’s 13-week values and buffer breach is deterministic', async () => {
-        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
-        // The mock starts all weeks with startCash=1000, endCash=1000.
-        // If we delay AR, some endCash will drop.
-        await prisma.forecastComponentSnapshot.create({
-            data: { id: randomUUID(), forecastCheckpointId, targetWeekStart: now, direction: 'inflow', componentCategory: 'rev', sourceType: 'invoice', projectedAmount: 1200, confidenceTier: 'high', sourceStateHash: 'x' }
+    it("does not mutate the sealed checkpoint and reconciles risk metrics to the 13-week path", async () => {
+        await addGovernedInvoiceComponent();
+        await sealCheckpoint();
+        const before = await prisma.forecastCheckpoint.findUnique({
+            where: { id: forecastCheckpointId },
+            include: { forecastWeeks: { orderBy: { weekStart: "asc" } } }
         });
 
-        // 1200 inflow removed from week 1 => endCash goes to 1000 - 1200 = -200
         const scenario = await evaluateDownsideScenario(companyId, forecastCheckpointId, { arDelayWeeks: 1 }, 500);
-        
-        expect(scenario.metrics.minCash).toBe(-200);
+        const after = await prisma.forecastCheckpoint.findUnique({
+            where: { id: forecastCheckpointId },
+            include: { forecastWeeks: { orderBy: { weekStart: "asc" } } }
+        });
+        const endingValues = scenario.payload.map(week => week.endingCash);
+
+        expect(after).toEqual(before);
+        expect(scenario.payload).toHaveLength(13);
+        expect(scenario.metrics.minCash).toBe(Math.min(...endingValues));
         expect(scenario.metrics.firstNegativeWeek).toEqual(now);
         expect(scenario.metrics.maxDeficit).toBe(200);
-        expect(scenario.metrics.bufferHeadroom).toBe(-700); // -200 - 500
+        expect(scenario.metrics.bufferHeadroom).toBe(-700);
         expect(scenario.metrics.firstBreachWeek).toEqual(now);
     });
 
-    it('11 & 12. cert is bound to exact checkpoint identity, cert for A cannot authorize plan for B', async () => {
-        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
-        await satisfyReadiness();
-        
-        const checkpointB = await prisma.forecastCheckpoint.create({
+    it("removes AR delayed beyond W13 and persists explicit outside-horizon evidence", async () => {
+        await addGovernedInvoiceComponent(11, 1200);
+        await sealCheckpoint();
+        const scenario = await evaluateDownsideScenario(companyId, forecastCheckpointId, { arDelayWeeks: 4 }, 500);
+        const persisted = await prisma.forecastScenario.findUniqueOrThrow({ where: { id: scenario.id } });
+        const document = JSON.parse(persisted.scenarioPayloadJson);
+
+        expect(scenario.payload).toHaveLength(13);
+        expect(scenario.payload[11].stressAdjustments).toEqual(expect.arrayContaining([
+            expect.objectContaining({ kind: "ar_delay_removal", amountImpact: -1200 })
+        ]));
+        expect(scenario.payload.flatMap(week => week.stressAdjustments)).not.toEqual(expect.arrayContaining([
+            expect.objectContaining({ kind: "ar_delay_receipt", sourceId: "invoice-11" })
+        ]));
+        expect(document.outsideHorizonAR).toEqual([
+            expect.objectContaining({
+                sourceId: "invoice-11",
+                originalAmount: 1200,
+                originalWeek: new Date(now.getTime() + 11 * WEEK_MS).toISOString(),
+                delayedTargetDate: new Date(now.getTime() + 15 * WEEK_MS).toISOString(),
+                delayedTargetWeek: 16,
+                status: "outside_horizon"
+            })
+        ]);
+    });
+
+    it("treats missing authoritative buffer as cannot_certify rather than not_safe", async () => {
+        await sealCheckpoint();
+        await satisfyReadiness(now);
+        await prisma.assumption.deleteMany({ where: { companyId } });
+
+        const review = await evaluateForecastRisk(companyId, forecastCheckpointId, {});
+        expect(review.buffer.amount).toBeNull();
+        expect(review.eligibility.status).toBe("cannot_certify");
+
+        const certification = await certifyForecastVersion(
+            companyId,
+            forecastCheckpointId,
+            { status: "not_safe", decidedBy: "clerk-user", rationale: "Risk review attempted." },
+            {},
+            undefined,
+            review.decisionAuthority
+        );
+        expect(certification.status).toBe("cannot_certify");
+        expect(certification.bufferAmount).toBeNull();
+    });
+
+    it("requires authenticated human authority and governed buffer rationale for certification", async () => {
+        await sealCheckpoint();
+        await satisfyReadiness(now);
+
+        await expect(certifyForecastVersion(
+            companyId,
+            forecastCheckpointId,
+            { status: "certified", decidedBy: "" },
+            {}
+        )).rejects.toThrow(/Authenticated human/);
+
+        const missingRationale = await certifyForecastVersion(
+            companyId,
+            forecastCheckpointId,
+            { status: "certified", decidedBy: "clerk-user" },
+            {},
+            undefined,
+            await reviewAuthority()
+        );
+        expect(missingRationale.status).toBe("cannot_certify");
+
+        const certified = await createCertifiedDecision();
+        expect(certified.status).toBe("certified");
+        expect(certified.decidedBy).toBe("clerk-user");
+        expect(certified.bufferAmount).toBe(500);
+        expect(certified.bufferRationale).toMatch(/live buffer/);
+    });
+
+    it("binds certification to exact checkpoint, hash, cash snapshot, readiness, and scenario", async () => {
+        await sealCheckpoint();
+        await satisfyReadiness(now);
+        const certification = await createCertifiedDecision();
+        const evidence = JSON.parse(certification.evidenceJson);
+
+        expect(certification.forecastCheckpointId).toBe(forecastCheckpointId);
+        expect(certification.forecastVersionHash).toMatch(/^[a-f0-9]{64}$/);
+        expect(certification.cashSnapshotId).toBe(cashSnapshotId);
+        expect(certification.readinessEvidenceHash).toBeTruthy();
+        expect(certification.downsideScenarioId).toBeTruthy();
+        expect(evidence.downsideScenarioId).toBe(certification.downsideScenarioId);
+        expect(evidence.readinessEvidenceHash).toBe(certification.readinessEvidenceHash);
+    });
+
+    it("rejects a final decision if governed authority changes after human review", async () => {
+        await sealCheckpoint();
+        await satisfyReadiness(now);
+        const reviewed = await reviewAuthority();
+        const before = await prisma.forecastVersionCertification.count({ where: { companyId } });
+
+        await prisma.receivableInvoice.create({
             data: {
-                id: randomUUID(), companyId, cashSnapshotId, weekStart: now, weekEnd: new Date(now.getTime() + 7 * 86400000), endCashExpected: 1000, inflowsExpected: 0, outflowsExpected: 0, generatedAt: now, forecastVersionHash: 'hashb', canonicalPayloadJson: '{}', forecastSchemaVersion: 1, hashAlgorithm: 'sha256', sealedAt: now
+                id: randomUUID(),
+                companyId,
+                invoiceNo: "INV-AFTER-REVIEW",
+                customerName: "Changed after review",
+                amountOpen: 500,
+                dueDate: now,
+                status: "open"
             }
         });
 
-        await certifyForecastVersion(companyId, forecastCheckpointId, { status: 'certified' }, {}, 'ok');
-        
-        const planOpts = { companyId, weekStart: now.toISOString(), forecastCheckpointId: checkpointB.id, actions: [] };
-        
-        // Fails because the certification is for forecastCheckpointId, not checkpointB.id
-        await expect(approveExecutionPlan(planOpts)).rejects.toThrow(/passing Forecast-Version Certification is absent/);
+        await expect(certifyForecastVersion(
+            companyId,
+            forecastCheckpointId,
+            { status: "certified", decidedBy: "clerk-user" },
+            {},
+            "Reviewed buffer rationale.",
+            reviewed
+        )).rejects.toThrow(/changed after review/);
+        expect(await prisma.forecastVersionCertification.count({ where: { companyId } })).toBe(before);
     });
 
-    it('13 & 14. ExecutionPlan approval refuses when cert is absent, succeeds when present', async () => {
-        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
-        await satisfyReadiness();
-        
-        const planOpts = {
-            companyId, weekStart: now.toISOString(), forecastCheckpointId, actions: []
+    it("records operational-only evidence as cannot_certify, never certified", async () => {
+        await sealCheckpoint();
+        const review = await evaluateForecastRisk(companyId, forecastCheckpointId, {});
+        expect(review.readiness.status).toBe("operational_only");
+
+        const certification = await certifyForecastVersion(
+            companyId,
+            forecastCheckpointId,
+            { status: "certified", decidedBy: "clerk-user" },
+            {},
+            "Reviewed buffer rationale.",
+            review.decisionAuthority
+        );
+        expect(certification.status).toBe("cannot_certify");
+    });
+
+    it("prevents checkpoint A certification from authorizing checkpoint B", async () => {
+        await sealCheckpoint();
+        await satisfyReadiness(now);
+        await createCertifiedDecision();
+        const checkpointB = await createCheckpoint({ sealed: true });
+
+        await expect(approveExecutionPlan({
+            companyId,
+            weekStart: now.toISOString(),
+            forecastCheckpointId: checkpointB,
+            actions: []
+        })).rejects.toThrow(/Certification is absent/);
+    });
+
+    it("rejects approval without a certification and after readiness evidence becomes stale", async () => {
+        await sealCheckpoint();
+        await satisfyReadiness(now);
+        const planRequest = {
+            companyId,
+            weekStart: now.toISOString(),
+            forecastCheckpointId,
+            actions: []
         };
-        
-        // Fails because no cert exists
-        await expect(approveExecutionPlan(planOpts)).rejects.toThrow(/passing Forecast-Version Certification is absent/);
-        
-        // Fails if cert is not_safe
-        await certifyForecastVersion(companyId, forecastCheckpointId, { status: 'not_safe' }, {});
-        await expect(approveExecutionPlan(planOpts)).rejects.toThrow(/passing Forecast-Version Certification is absent/);
+        await expect(approveExecutionPlan(planRequest)).rejects.toThrow(/Certification is absent/);
 
-        // Succeeds if certified
-        await certifyForecastVersion(companyId, forecastCheckpointId, { status: 'certified' }, {}, 'ok');
-        const plan = await approveExecutionPlan(planOpts);
-        expect(plan.status).toBe('approved');
+        await createCertifiedDecision();
+        await prisma.receivableInvoice.create({
+            data: {
+                id: randomUUID(),
+                companyId,
+                customerName: "New source state",
+                invoiceNo: "INV-STALE",
+                amountOpen: 200,
+                dueDate: now,
+                status: "open"
+            }
+        });
+        const newARHash = await computeARPopulationHash(companyId);
+        await prisma.dataReadinessAttestation.create({
+            data: {
+                companyId,
+                scopeType: "ar",
+                asOfDate: new Date(),
+                sourceStateHash: newARHash,
+                evidenceJson: "{}",
+                certifiedBy: "readiness-owner",
+                status: "active"
+            }
+        });
+
+        await expect(approveExecutionPlan(planRequest)).rejects.toThrow(/readiness evidence hash has changed/);
     });
 
-    it('15. historical finalized certification cannot be financially rewritten', async () => {
-        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
-        await satisfyReadiness();
-        const cert = await certifyForecastVersion(companyId, forecastCheckpointId, { status: 'certified' }, {}, 'ok');
-        
-        await expect(
-            prisma.forecastVersionCertification.update({
-                where: { id: cert.id },
-                data: { baseMinCash: 99999 }
-            })
-        ).rejects.toThrow(); // Trigger will raise exception
+    it("lets the latest not_safe decision block an earlier certification", async () => {
+        await sealCheckpoint();
+        await satisfyReadiness(now);
+        const planRequest = {
+            companyId,
+            weekStart: now.toISOString(),
+            forecastCheckpointId,
+            actions: []
+        };
+
+        await createCertifiedDecision();
+        await certifyForecastVersion(
+            companyId,
+            forecastCheckpointId,
+            { status: "not_safe", decidedBy: "clerk-user", rationale: "Downside is unacceptable." },
+            { arDelayWeeks: 4, residualInflowReductionPct: 20 },
+            undefined,
+            await reviewAuthority({ arDelayWeeks: 4, residualInflowReductionPct: 20 })
+        );
+        await expect(approveExecutionPlan(planRequest)).rejects.toThrow(/Latest governing.*not_safe/);
     });
 
-    it('16. tenant A cannot read/write/certify tenant B artifacts', async () => {
+    it("lets the latest cannot_certify decision block an earlier certification", async () => {
+        await sealCheckpoint();
+        await satisfyReadiness(now);
+        const planRequest = {
+            companyId,
+            weekStart: now.toISOString(),
+            forecastCheckpointId,
+            actions: []
+        };
+
+        await createCertifiedDecision();
+        await prisma.assumption.deleteMany({ where: { companyId } });
+        const recurringHashWithoutAssumption = await computeRecurringPopulationHash(companyId);
+        await prisma.dataReadinessAttestation.create({
+            data: {
+                companyId,
+                scopeType: "recurring",
+                asOfDate: new Date(),
+                sourceStateHash: recurringHashWithoutAssumption,
+                evidenceJson: "{}",
+                certifiedBy: "readiness-owner",
+                status: "active"
+            }
+        });
+        const cannotReview = await evaluateForecastRisk(companyId, forecastCheckpointId, {});
+        const cannotCertify = await certifyForecastVersion(
+            companyId,
+            forecastCheckpointId,
+            { status: "not_safe", decidedBy: "clerk-user", rationale: "Required buffer authority is absent." },
+            {},
+            undefined,
+            cannotReview.decisionAuthority
+        );
+        expect(cannotCertify.status).toBe("cannot_certify");
+        await expect(approveExecutionPlan(planRequest)).rejects.toThrow(/Latest governing.*cannot_certify/);
+    });
+
+    it("lets a newer certified decision restore approval after a blocking decision", async () => {
+        await sealCheckpoint();
+        await satisfyReadiness(now);
+        const planRequest = {
+            companyId,
+            weekStart: now.toISOString(),
+            forecastCheckpointId,
+            actions: []
+        };
+
+        await certifyForecastVersion(
+            companyId,
+            forecastCheckpointId,
+            { status: "not_safe", decidedBy: "clerk-user", rationale: "Downside is unacceptable." },
+            { arDelayWeeks: 4, residualInflowReductionPct: 20 },
+            undefined,
+            await reviewAuthority({ arDelayWeeks: 4, residualInflowReductionPct: 20 })
+        );
+        await createCertifiedDecision();
+        const plan = await approveExecutionPlan(planRequest);
+        expect(plan.status).toBe("approved");
+        expect(plan.forecastCheckpointId).toBe(forecastCheckpointId);
+    });
+
+    it("enforces database immutability for scenarios and finalized certifications", async () => {
+        await sealCheckpoint();
+        await satisfyReadiness(now);
+        const scenario = await evaluateDownsideScenario(companyId, forecastCheckpointId, {}, 500);
+        const certification = await createCertifiedDecision();
+
+        await expect(prisma.forecastScenario.update({
+            where: { id: scenario.id },
+            data: { minCash: 999999 }
+        })).rejects.toThrow();
+        await expect(prisma.forecastScenario.delete({ where: { id: scenario.id } })).rejects.toThrow();
+        await expect(prisma.forecastVersionCertification.update({
+            where: { id: certification.id },
+            data: { baseMinCash: 999999 }
+        })).rejects.toThrow();
+        await expect(prisma.forecastVersionCertification.delete({ where: { id: certification.id } })).rejects.toThrow();
+    });
+
+    it("rejects tenant B reads and writes against tenant A governed artifacts", async () => {
+        await sealCheckpoint();
+        await satisfyReadiness(now);
         const tenantB = randomUUID();
-        await prisma.company.create({ data: { id: tenantB, name: 'Tenant B' } });
-        
-        await prisma.forecastCheckpoint.update({ where: { id: forecastCheckpointId }, data: { sealedAt: now } });
-        await satisfyReadiness();
+        await prisma.company.create({ data: { id: tenantB, name: "Tenant B" } });
 
-        // Tenant B tries to certify Tenant A's checkpoint
-        await expect(
-            certifyForecastVersion(tenantB, forecastCheckpointId, { status: 'certified' }, {}, 'ok')
-        ).rejects.toThrow();
+        await expect(evaluateForecastRisk(tenantB, forecastCheckpointId, {})).rejects.toThrow(/not found/);
+        await expect(certifyForecastVersion(
+            tenantB,
+            forecastCheckpointId,
+            { status: "certified", decidedBy: "tenant-b-user" },
+            {},
+            "Tenant B rationale"
+        )).rejects.toThrow(/not found/);
+        expect(await prisma.forecastVersionCertification.count({ where: { companyId: tenantB } })).toBe(0);
+        expect(await prisma.forecastScenario.count({ where: { companyId: tenantB } })).toBe(0);
     });
-
 });

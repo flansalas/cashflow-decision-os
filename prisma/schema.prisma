@@ -999,17 +999,17 @@ model ForecastScenario {
   hashAlgorithm        String   @default("sha256")
   scenarioHash         String
   createdAt            DateTime @default(now())
-  
+
   stressInputsJson     String
   scenarioPayloadJson  String
-  
+
   minCash              Float
   minCashWeek          DateTime
   firstNegativeWeek    DateTime?
   maxDeficit           Float?
-  bufferHeadroom       Float
+  bufferHeadroom       Float?
   firstBreachWeek      DateTime?
-  
+
   company              Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   forecastCheckpoint   ForecastCheckpoint @relation(fields: [forecastCheckpointId], references: [id], onDelete: Restrict)
 
@@ -1026,18 +1026,18 @@ model ForecastVersionCertification {
   cashSnapshotId            String
   readinessEvidenceHash     String
   downsideScenarioId        String?
-  status                    String   
+  status                    String
   schemaVersion             Int      @default(1)
   evaluatedAt               DateTime @default(now())
-  
-  decidedBy                 String?
-  decidedAt                 DateTime?
+
+  decidedBy                 String
+  decidedAt                 DateTime
 
   baseMinCash               Float
   baseMinCashWeek           DateTime
   baseFirstNegativeWeek     DateTime?
   baseMaxDeficit            Float?
-  baseBufferHeadroom        Float
+  baseBufferHeadroom        Float?
   baseFirstBreachWeek       DateTime?
 
   downsideMinCash           Float?
@@ -1047,19 +1047,20 @@ model ForecastVersionCertification {
   downsideBufferHeadroom    Float?
   downsideFirstBreachWeek   DateTime?
 
-  bufferAmount              Float
+  bufferAmount              Float?
   bufferRationale           String?
 
   readinessCertificationId  String?
-  evidenceJson              String   
+  evidenceJson              String
   rationale                 String?
 
   createdAt                 DateTime @default(now())
-  
+
   company                   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   forecastCheckpoint        ForecastCheckpoint @relation(fields: [forecastCheckpointId], references: [id], onDelete: Restrict)
   downsideScenario          ForecastScenario? @relation(fields: [downsideScenarioId], references: [id], onDelete: Restrict)
-  
+
   @@index([companyId, forecastCheckpointId])
+  @@index([companyId, forecastCheckpointId, decidedAt, createdAt], map: "ForecastVersionCertification_governing_decision_idx")
   @@index([companyId, status])
 }

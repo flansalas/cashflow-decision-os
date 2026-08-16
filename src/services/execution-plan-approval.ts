@@ -1,6 +1,12 @@
 import prisma from "@/db/prisma";
 import { Prisma } from "@prisma/client";
 import { evaluateCompanyDataReadiness } from "./data-readiness-evaluation";
+import { assertCertifiedDecisionIntegrity } from "./forecast-certification";
+import {
+    computeCanonicalHash,
+    FORECAST_SCHEMA_VERSION,
+    HASH_ALGORITHM
+} from "./canonical-hash";
 
 export class ApprovalConflictError extends Error {
     constructor(message: string) {
@@ -24,7 +30,7 @@ interface ActionItemPayload {
     constraintWeekStart: string;
     targetType?: string;
     targetId?: string;
-    reasoningJson?: any;
+    reasoningJson?: unknown;
     ownerName: string;
     dueDate: string;
 }
@@ -79,13 +85,29 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
             }
         });
 
-        if (!checkpoint) throw new ApprovalValidationError("Checkpoint not found or belongs to another company");
+        if (!checkpoint || checkpoint.companyId !== opts.companyId) {
+            throw new ApprovalValidationError("Checkpoint not found or belongs to another company");
+        }
         if (!checkpoint.sealedAt) throw new ApprovalValidationError("Checkpoint is not sealed");
         if (!checkpoint.generatedAt) throw new ApprovalValidationError("Checkpoint is missing generatedAt");
         if (!checkpoint.forecastVersionHash) throw new ApprovalValidationError("Checkpoint is missing forecastVersionHash");
         if (!checkpoint.canonicalPayloadJson) throw new ApprovalValidationError("Checkpoint is missing canonicalPayloadJson");
         if (!checkpoint.forecastSchemaVersion) throw new ApprovalValidationError("Checkpoint is missing forecastSchemaVersion");
         if (!checkpoint.hashAlgorithm) throw new ApprovalValidationError("Checkpoint is missing hashAlgorithm");
+        if (checkpoint.forecastSchemaVersion !== FORECAST_SCHEMA_VERSION) {
+            throw new ApprovalValidationError("Checkpoint forecastSchemaVersion is unsupported");
+        }
+        if (checkpoint.hashAlgorithm !== HASH_ALGORITHM) {
+            throw new ApprovalValidationError("Checkpoint hashAlgorithm is unsupported");
+        }
+        try {
+            JSON.parse(checkpoint.canonicalPayloadJson);
+        } catch {
+            throw new ApprovalValidationError("Checkpoint canonicalPayloadJson is malformed");
+        }
+        if (computeCanonicalHash(checkpoint.canonicalPayloadJson) !== checkpoint.forecastVersionHash) {
+            throw new ApprovalValidationError("Checkpoint canonicalPayloadJson does not match forecastVersionHash");
+        }
 
         const weeks = checkpoint.forecastWeeks || [];
         if (weeks.length !== 13) throw new ApprovalValidationError(`Checkpoint has ${weeks.length} weeks instead of exactly 13`);
@@ -118,37 +140,54 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
         }
 
         const evalResult = await evaluateCompanyDataReadiness(
-            opts.companyId, 
-            exactTimestamp, 
-            checkpoint.cashSnapshotId, 
-            checkpoint.id, 
+            opts.companyId,
+            exactTimestamp,
+            checkpoint.cashSnapshotId,
+            checkpoint.id,
             tx
         );
         if (evalResult.status !== 'decision_ready') {
             throw new ApprovalValidationError(`Cannot approve plan: Company data is not decision-ready (Status: ${evalResult.status})`);
         }
 
-        const validCert = await tx.forecastVersionCertification.findFirst({
+        const governingCert = await tx.forecastVersionCertification.findFirst({
             where: {
                 companyId: opts.companyId,
-                forecastCheckpointId: opts.forecastCheckpointId,
-                status: 'certified'
+                forecastCheckpointId: opts.forecastCheckpointId
             },
-            orderBy: { createdAt: 'desc' }
+            orderBy: [{ decidedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+            include: { downsideScenario: true }
         });
 
-        if (!validCert) {
-            throw new ApprovalValidationError("Cannot approve plan: A valid passing Forecast-Version Certification is absent for this checkpoint.");
+        if (!governingCert) {
+            throw new ApprovalValidationError("Cannot approve plan: A finalized Forecast-Version Certification is absent for this checkpoint.");
+        }
+        if (governingCert.status !== 'certified') {
+            throw new ApprovalValidationError(
+                `Cannot approve plan: Latest governing Forecast-Version Certification is ${governingCert.status}, not certified.`
+            );
+        }
+        try {
+            assertCertifiedDecisionIntegrity(governingCert, {
+                id: checkpoint.id,
+                companyId: checkpoint.companyId,
+                forecastVersionHash: checkpoint.forecastVersionHash,
+                cashSnapshotId: checkpoint.cashSnapshotId,
+                forecastWeeks: checkpoint.forecastWeeks
+            });
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Unknown integrity error";
+            throw new ApprovalValidationError(`Cannot approve plan: ${message}`);
         }
 
         // 7. READINESS EVIDENCE BINDING
-        if (validCert.readinessEvidenceHash !== evalResult.evidenceHash) {
+        if (governingCert.readinessEvidenceHash !== evalResult.evidenceHash) {
             throw new ApprovalValidationError("Cannot approve plan: Stale certification. The readiness evidence hash has changed since the certification was made.");
         }
-        if (validCert.forecastVersionHash !== checkpoint.forecastVersionHash) {
+        if (governingCert.forecastVersionHash !== checkpoint.forecastVersionHash) {
             throw new ApprovalValidationError("Cannot approve plan: Stale certification. The forecastVersionHash has changed.");
         }
-        if (validCert.cashSnapshotId !== checkpoint.cashSnapshotId) {
+        if (governingCert.cashSnapshotId !== checkpoint.cashSnapshotId) {
             throw new ApprovalValidationError("Cannot approve plan: Stale certification. The cashSnapshotId has changed.");
         }
 
@@ -190,7 +229,9 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
                         constraintWeekStart: new Date(a.constraintWeekStart),
                         targetType: a.targetType || "none",
                         targetId: a.targetId || "none",
-                        reasoningJson: a.reasoningJson || {},
+                        reasoningJson: typeof a.reasoningJson === "string"
+                            ? a.reasoningJson
+                            : JSON.stringify(a.reasoningJson ?? {}),
                         ownerName: a.ownerName,
                         dueDate: new Date(a.dueDate),
                         status: 'pending'
@@ -216,11 +257,11 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
                 where: { id: newPlanDraft.id },
                 data: { status: 'approved' }
             });
-        } catch (e: any) {
-            if (e.code === 'P2002') {
+        } catch (error: unknown) {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
                 throw new ApprovalConflictError("Approval uniqueness conflict.");
             }
-            throw e;
+            throw error;
         }
 
         // Fetch existing approved's checkpoint for lineage if it exists
@@ -244,7 +285,7 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
                 timestamp: exactTimestamp,
                 userId: opts.approvedBy || "System",
                 forecastVersionHashBefore: forecastVersionHashBefore,
-                forecastVersionHashAfter: checkpoint.forecastVersionHash as string,
+                forecastVersionHashAfter: checkpoint.forecastVersionHash,
                 diffJson: JSON.stringify({
                     supersededPlanId: existingApproved?.id,
                     newPlanId: newPlan.id,
@@ -255,5 +296,8 @@ export async function approveExecutionPlan(opts: ApprovePlanOptions) {
         });
 
         return newPlan;
+    }, {
+        maxWait: 10_000,
+        timeout: 60_000
     });
 }

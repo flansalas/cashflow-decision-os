@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { approveExecutionPlan, ApprovalConflictError, ApprovalValidationError } from '../execution-plan-approval';
+import { approveExecutionPlan } from '../execution-plan-approval';
+import { computeCanonicalHash } from '../canonical-hash';
+
+const CANONICAL_PAYLOAD = '{}';
+const VALID_FORECAST_HASH = computeCanonicalHash(CANONICAL_PAYLOAD);
 
 const mocks = vi.hoisted(() => {
     const mockFindCheckpoint = vi.fn();
@@ -9,11 +13,13 @@ const mocks = vi.hoisted(() => {
     const mockCreateActionItems = vi.fn();
     const mockCreateChangeLog = vi.fn();
     const mockFindUniqueCheckpoint = vi.fn();
+    const mockFindForecastCertification = vi.fn();
 
     const mockTransaction = vi.fn(async (cb) => {
         return cb({
             $executeRaw: vi.fn(),
             forecastCheckpoint: { findUnique: mockFindUniqueCheckpoint, findFirst: mockFindCheckpoint },
+            forecastVersionCertification: { findFirst: mockFindForecastCertification },
             executionPlan: {
                 findMany: mockFindExecutionPlans,
                 create: mockCreateExecutionPlan,
@@ -26,7 +32,8 @@ const mocks = vi.hoisted(() => {
 
     return {
         mockFindCheckpoint, mockFindExecutionPlans, mockCreateExecutionPlan,
-        mockUpdateExecutionPlan, mockCreateActionItems, mockCreateChangeLog, mockTransaction, mockFindUniqueCheckpoint
+        mockUpdateExecutionPlan, mockCreateActionItems, mockCreateChangeLog, mockTransaction,
+        mockFindUniqueCheckpoint, mockFindForecastCertification
     };
 });
 
@@ -35,6 +42,17 @@ vi.mock('@/db/prisma', () => ({
         $transaction: mocks.mockTransaction,
         forecastCheckpoint: { findUnique: mocks.mockFindCheckpoint }
     }
+}));
+
+vi.mock('@/services/data-readiness-evaluation', () => ({
+    evaluateCompanyDataReadiness: vi.fn().mockResolvedValue({
+        status: 'decision_ready',
+        evidenceHash: 'readiness-hash'
+    })
+}));
+
+vi.mock('@/services/forecast-certification', () => ({
+    assertCertifiedDecisionIntegrity: vi.fn()
 }));
 
 function makeValidCheckpoint(overrides = {}) {
@@ -48,10 +66,11 @@ function makeValidCheckpoint(overrides = {}) {
         companyId: 'co_1',
         sealedAt: new Date(),
         generatedAt: new Date(),
-        forecastVersionHash: 'hash123',
-        canonicalPayloadJson: '{}',
+        forecastVersionHash: VALID_FORECAST_HASH,
+        canonicalPayloadJson: CANONICAL_PAYLOAD,
         forecastSchemaVersion: 1,
         hashAlgorithm: 'sha256-canonical-json-v1',
+        cashSnapshotId: 'cash_1',
         forecastWeeks: weeks,
         ...overrides
     };
@@ -64,6 +83,16 @@ describe('Package 1C: Approval Binding and Concurrency', () => {
         mocks.mockFindCheckpoint.mockResolvedValue(makeValidCheckpoint());
 
         mocks.mockFindExecutionPlans.mockResolvedValue([]);
+        mocks.mockFindForecastCertification.mockResolvedValue({
+            id: 'cert_1',
+            companyId: 'co_1',
+            forecastCheckpointId: 'cp_123',
+            forecastVersionHash: VALID_FORECAST_HASH,
+            cashSnapshotId: 'cash_1',
+            readinessEvidenceHash: 'readiness-hash',
+            status: 'certified',
+            downsideScenario: {}
+        });
         mocks.mockCreateExecutionPlan.mockResolvedValue({ id: 'plan_new', version: 1, weekStart: new Date('2026-08-01T00:00:00Z') });
         mocks.mockUpdateExecutionPlan.mockResolvedValue({ id: 'plan_new', version: 1, weekStart: new Date('2026-08-01T00:00:00Z'), status: 'approved' });
     });
@@ -178,7 +207,7 @@ describe('Package 1C: Approval Binding and Concurrency', () => {
                 data: expect.objectContaining({
                     action: 'REVISED',
                     forecastVersionHashBefore: 'hash_old',
-                    forecastVersionHashAfter: 'hash123'
+                    forecastVersionHashAfter: VALID_FORECAST_HASH
                 })
             });
         });
@@ -190,7 +219,7 @@ describe('Package 1C: Approval Binding and Concurrency', () => {
                 data: expect.objectContaining({
                     action: 'APPROVED',
                     forecastVersionHashBefore: null,
-                    forecastVersionHashAfter: 'hash123'
+                    forecastVersionHashAfter: VALID_FORECAST_HASH
                 })
             });
         });

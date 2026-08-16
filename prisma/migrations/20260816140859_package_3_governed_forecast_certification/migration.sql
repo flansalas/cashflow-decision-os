@@ -3,6 +3,9 @@ CREATE TABLE "ForecastScenario" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "forecastCheckpointId" TEXT NOT NULL,
+    "forecastVersionHash" TEXT NOT NULL,
+    "schemaVersion" INTEGER NOT NULL DEFAULT 1,
+    "hashAlgorithm" TEXT NOT NULL DEFAULT 'sha256',
     "scenarioHash" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "stressInputsJson" TEXT NOT NULL,
@@ -11,7 +14,7 @@ CREATE TABLE "ForecastScenario" (
     "minCashWeek" TIMESTAMP(3) NOT NULL,
     "firstNegativeWeek" TIMESTAMP(3),
     "maxDeficit" DOUBLE PRECISION,
-    "bufferHeadroom" DOUBLE PRECISION NOT NULL,
+    "bufferHeadroom" DOUBLE PRECISION,
     "firstBreachWeek" TIMESTAMP(3),
 
     CONSTRAINT "ForecastScenario_pkey" PRIMARY KEY ("id")
@@ -22,17 +25,20 @@ CREATE TABLE "ForecastVersionCertification" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "forecastCheckpointId" TEXT NOT NULL,
+    "forecastVersionHash" TEXT NOT NULL,
+    "cashSnapshotId" TEXT NOT NULL,
+    "readinessEvidenceHash" TEXT NOT NULL,
     "downsideScenarioId" TEXT,
     "status" TEXT NOT NULL,
     "schemaVersion" INTEGER NOT NULL DEFAULT 1,
     "evaluatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "decidedBy" TEXT,
-    "decidedAt" TIMESTAMP(3),
+    "decidedBy" TEXT NOT NULL,
+    "decidedAt" TIMESTAMP(3) NOT NULL,
     "baseMinCash" DOUBLE PRECISION NOT NULL,
     "baseMinCashWeek" TIMESTAMP(3) NOT NULL,
     "baseFirstNegativeWeek" TIMESTAMP(3),
     "baseMaxDeficit" DOUBLE PRECISION,
-    "baseBufferHeadroom" DOUBLE PRECISION NOT NULL,
+    "baseBufferHeadroom" DOUBLE PRECISION,
     "baseFirstBreachWeek" TIMESTAMP(3),
     "downsideMinCash" DOUBLE PRECISION,
     "downsideMinCashWeek" TIMESTAMP(3),
@@ -40,7 +46,7 @@ CREATE TABLE "ForecastVersionCertification" (
     "downsideMaxDeficit" DOUBLE PRECISION,
     "downsideBufferHeadroom" DOUBLE PRECISION,
     "downsideFirstBreachWeek" TIMESTAMP(3),
-    "bufferAmount" DOUBLE PRECISION NOT NULL,
+    "bufferAmount" DOUBLE PRECISION,
     "bufferRationale" TEXT,
     "readinessCertificationId" TEXT,
     "evidenceJson" TEXT NOT NULL,
@@ -57,7 +63,15 @@ CREATE UNIQUE INDEX "ForecastScenario_companyId_forecastCheckpointId_scenarioHas
 CREATE INDEX "ForecastVersionCertification_companyId_forecastCheckpointId_idx" ON "ForecastVersionCertification"("companyId", "forecastCheckpointId");
 
 -- CreateIndex
+CREATE INDEX "ForecastVersionCertification_governing_decision_idx" ON "ForecastVersionCertification"("companyId", "forecastCheckpointId", "decidedAt", "createdAt");
+
+-- CreateIndex
 CREATE INDEX "ForecastVersionCertification_companyId_status_idx" ON "ForecastVersionCertification"("companyId", "status");
+
+-- Finalized Package 3 decisions use a closed status vocabulary.
+ALTER TABLE "ForecastVersionCertification"
+ADD CONSTRAINT "ForecastVersionCertification_status_check"
+CHECK ("status" IN ('certified', 'not_safe', 'cannot_certify'));
 
 -- AddForeignKey
 ALTER TABLE "ForecastScenario" ADD CONSTRAINT "ForecastScenario_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -103,11 +117,7 @@ EXECUTE FUNCTION prevent_forecast_scenario_delete();
 CREATE OR REPLACE FUNCTION prevent_forecast_version_certification_update()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF OLD."status" = 'certified' OR OLD."status" = 'cannot_certify' OR OLD."status" = 'not_safe' THEN
-        -- Only status transitions might be allowed if we decide, but for now we enforce full immutability of the row once inserted.
-        RAISE EXCEPTION 'ForecastVersionCertification records are immutable and cannot be updated.';
-    END IF;
-    RETURN NEW;
+    RAISE EXCEPTION 'Finalized ForecastVersionCertification records are immutable and cannot be updated.';
 END;
 $$ LANGUAGE plpgsql;
 

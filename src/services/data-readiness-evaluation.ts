@@ -1,7 +1,6 @@
 import prismaClient from "@/db/prisma";
 import { Prisma } from "@prisma/client";
 import { computeCanonicalHash, canonicalJsonSerialize } from "./canonical-hash";
-import { verifyBankCoverage } from "./bank-coverage";
 import { buildManagerialVisibility } from "./managerial-visibility";
 
 export type ReadinessStatus = 'decision_ready' | 'operational_only' | 'blocked';
@@ -22,6 +21,40 @@ export interface DataReadinessResult {
     blockingReasons: string[];
     certificationId?: string;
     evidenceHash?: string;
+}
+
+interface BankEvidenceEntry {
+    accountId: string;
+    manifestId?: string;
+    manifestAccountId?: string;
+    userCertifiedAt?: string | null;
+    coveredEndDate?: string;
+    coveredStartDate?: string;
+    noActivityAttestationId?: string;
+}
+
+type AuditEvidence = Record<string, unknown> & {
+    evaluationAsOfDate: string;
+    forecastCheckpointId: string | null;
+    bankAccounts: BankEvidenceEntry[];
+};
+
+interface SemanticEvidence {
+    schemaVersion: number;
+    companyId: string;
+    forecastCheckpointId: string | null;
+    cashSnapshot: { id: string; asOfDate: string; bankBalance: number } | null;
+    bankAccounts: BankEvidenceEntry[];
+    accountsReceivable: unknown;
+    accountsPayable: unknown;
+    recurringPatterns: unknown;
+    unresolvedConflicts: unknown;
+    baselineProvenance: unknown;
+    readiness?: {
+        status: ReadinessStatus;
+        dimensions: DataReadinessResult["dimensions"];
+        blockingReasons: string[];
+    };
 }
 
 export async function computeARPopulationHash(companyId: string, tx: Prisma.TransactionClient = prismaClient): Promise<string> {
@@ -138,10 +171,22 @@ export async function evaluateCompanyDataReadiness(
         blockingReasons: []
     };
 
-    const auditEvidence: any = {
+    const auditEvidence: AuditEvidence = {
         evaluationAsOfDate: asOfDate.toISOString(),
         forecastCheckpointId: forecastCheckpointId || null,
         bankAccounts: []
+    };
+    const semanticEvidence: SemanticEvidence = {
+        schemaVersion: 1,
+        companyId,
+        forecastCheckpointId: forecastCheckpointId || null,
+        cashSnapshot: null,
+        bankAccounts: [],
+        accountsReceivable: null,
+        accountsPayable: null,
+        recurringPatterns: null,
+        unresolvedConflicts: null,
+        baselineProvenance: null
     };
 
     // 1. STARTING CASH
@@ -165,6 +210,11 @@ export async function evaluateCompanyDataReadiness(
         result.cashSnapshotId = latestCash.id;
         result.dimensions.startingCash.cashSnapshotId = latestCash.id;
         auditEvidence.cashSnapshotId = latestCash.id;
+        semanticEvidence.cashSnapshot = {
+            id: latestCash.id,
+            asOfDate: latestCash.asOfDate.toISOString(),
+            bankBalance: latestCash.bankBalance
+        };
         if (latestCash.asOfDate < sevenDaysAgo) {
             result.dimensions.startingCash = { status: 'operational_only', detail: 'CashSnapshot is stale (older than 7 days)' };
         } else {
@@ -184,7 +234,8 @@ export async function evaluateCompanyDataReadiness(
     const requiredCoverageStart = sevenDaysAgo;
     
     const activeAccounts = await tx.bankAccount.findMany({
-        where: { companyId, isActive: true }
+        where: { companyId, isActive: true },
+        orderBy: { id: 'asc' }
     });
 
     let bankCoverageOperational = false;
@@ -197,18 +248,19 @@ export async function evaluateCompanyDataReadiness(
                 rejectedRowCount: 0,
                 BankImportManifest: { userCertified: true }
             },
-            orderBy: { coveredEndDate: 'desc' },
+            orderBy: [{ coveredEndDate: 'desc' }, { id: 'desc' }],
             include: { BankImportManifest: true }
         });
 
-        let accountCovered = false;
-        let bankEvidenceEntry: any = { accountId: ba.id };
+        const bankEvidenceEntry: BankEvidenceEntry = { accountId: ba.id };
         let currentCoverageStart = targetCutoff;
 
         if (latestManifestAccount && latestManifestAccount.coveredEndDate && latestManifestAccount.coveredEndDate >= targetCutoff) {
             if (latestManifestAccount.coveredStartDate) {
                 currentCoverageStart = latestManifestAccount.coveredStartDate;
                 bankEvidenceEntry.manifestId = latestManifestAccount.manifestId;
+                bankEvidenceEntry.manifestAccountId = latestManifestAccount.id;
+                bankEvidenceEntry.userCertifiedAt = latestManifestAccount.userCertifiedAt?.toISOString() || null;
                 bankEvidenceEntry.coveredEndDate = latestManifestAccount.coveredEndDate.toISOString();
                 bankEvidenceEntry.coveredStartDate = latestManifestAccount.coveredStartDate.toISOString();
             }
@@ -216,39 +268,46 @@ export async function evaluateCompanyDataReadiness(
 
         if (currentCoverageStart > requiredCoverageStart) {
             const noActivityAttestation = await tx.dataReadinessAttestation.findFirst({
-                where: { companyId, scopeType: 'bank_no_activity', scopeKey: ba.id, status: 'active' }
+                where: { companyId, scopeType: 'bank_no_activity', scopeKey: ba.id, status: 'active' },
+                orderBy: [{ certifiedAt: 'desc' }, { id: 'desc' }]
             });
 
             if (noActivityAttestation) {
                 try {
-                    const evidence = JSON.parse(noActivityAttestation.evidenceJson);
-                    const attestedEnd = new Date(evidence.coveredEndDate);
-                    const attestedStart = new Date(evidence.coveredStartDate);
-                    if (!isNaN(attestedEnd.getTime()) && !isNaN(attestedStart.getTime()) && attestedEnd >= currentCoverageStart && attestedStart <= requiredCoverageStart) {
-                        const txInGap = await tx.bankTransaction.findFirst({
-                            where: { 
-                                companyId, 
-                                accountId: ba.id, 
-                                txDate: { gte: attestedStart, lte: attestedEnd }
+                    const evidence = JSON.parse(noActivityAttestation.evidenceJson) as {
+                        coveredEndDate?: string;
+                        coveredStartDate?: string;
+                    };
+                    if (evidence.coveredEndDate && evidence.coveredStartDate) {
+                        const attestedEnd = new Date(evidence.coveredEndDate);
+                        const attestedStart = new Date(evidence.coveredStartDate);
+                        if (!isNaN(attestedEnd.getTime()) && !isNaN(attestedStart.getTime()) && attestedEnd >= currentCoverageStart && attestedStart <= requiredCoverageStart) {
+                            const txInGap = await tx.bankTransaction.findFirst({
+                                where: {
+                                    companyId,
+                                    accountId: ba.id,
+                                    txDate: { gte: attestedStart, lte: attestedEnd }
+                                }
+                            });
+                            if (!txInGap) {
+                                currentCoverageStart = requiredCoverageStart;
+                                bankEvidenceEntry.noActivityAttestationId = noActivityAttestation.id;
+                                bankEvidenceEntry.coveredStartDate = evidence.coveredStartDate;
+                                bankEvidenceEntry.coveredEndDate = evidence.coveredEndDate;
                             }
-                        });
-                        if (!txInGap) {
-                            currentCoverageStart = requiredCoverageStart;
-                            bankEvidenceEntry.noActivityAttestationId = noActivityAttestation.id;
-                            bankEvidenceEntry.coveredStartDate = evidence.coveredStartDate;
-                            bankEvidenceEntry.coveredEndDate = evidence.coveredEndDate;
                         }
                     }
-                } catch (e) {
+                } catch {
                     // Invalid evidence JSON
                 }
             }
         }
 
         auditEvidence.bankAccounts.push(bankEvidenceEntry);
+        semanticEvidence.bankAccounts.push(bankEvidenceEntry);
 
         if (currentCoverageStart <= requiredCoverageStart) {
-            accountCovered = true;
+            // Covered by a certified manifest and/or exact no-activity bridge.
         } else {
             bankCoverageOperational = true;
         }
@@ -267,57 +326,106 @@ export async function evaluateCompanyDataReadiness(
     const arHash = await computeARPopulationHash(companyId, tx);
     auditEvidence.arSourceStateHash = arHash;
     const arAttestation = await tx.dataReadinessAttestation.findFirst({
-        where: { companyId, scopeType: 'ar', status: 'active', sourceStateHash: arHash, asOfDate: { gte: targetCutoff } }
+        where: { companyId, scopeType: 'ar', status: 'active', sourceStateHash: arHash, asOfDate: { gte: targetCutoff } },
+        orderBy: [{ certifiedAt: 'desc' }, { id: 'desc' }]
     });
     if (!arAttestation) {
         result.dimensions.accountsReceivable = { status: 'operational_only', detail: 'Active AR attestation does not match current source state' };
     } else {
         auditEvidence.arAttestation = { id: arAttestation.id, certifiedAt: arAttestation.certifiedAt?.toISOString() || arAttestation.createdAt.toISOString() };
     }
+    semanticEvidence.accountsReceivable = {
+        sourceStateHash: arHash,
+        governingAttestation: arAttestation ? {
+            id: arAttestation.id,
+            sourceStateHash: arAttestation.sourceStateHash,
+            asOfDate: arAttestation.asOfDate.toISOString(),
+            certifiedAt: arAttestation.certifiedAt.toISOString(),
+            certifiedBy: arAttestation.certifiedBy
+        } : null
+    };
 
     // 4. AP
     const apHash = await computeAPPopulationHash(companyId, tx);
     auditEvidence.apSourceStateHash = apHash;
     const apAttestation = await tx.dataReadinessAttestation.findFirst({
-        where: { companyId, scopeType: 'ap', status: 'active', sourceStateHash: apHash, asOfDate: { gte: targetCutoff } }
+        where: { companyId, scopeType: 'ap', status: 'active', sourceStateHash: apHash, asOfDate: { gte: targetCutoff } },
+        orderBy: [{ certifiedAt: 'desc' }, { id: 'desc' }]
     });
     if (!apAttestation) {
         result.dimensions.accountsPayable = { status: 'operational_only', detail: 'Active AP attestation does not match current source state' };
     } else {
         auditEvidence.apAttestation = { id: apAttestation.id, certifiedAt: apAttestation.certifiedAt?.toISOString() || apAttestation.createdAt.toISOString() };
     }
+    semanticEvidence.accountsPayable = {
+        sourceStateHash: apHash,
+        governingAttestation: apAttestation ? {
+            id: apAttestation.id,
+            sourceStateHash: apAttestation.sourceStateHash,
+            asOfDate: apAttestation.asOfDate.toISOString(),
+            certifiedAt: apAttestation.certifiedAt.toISOString(),
+            certifiedBy: apAttestation.certifiedBy
+        } : null
+    };
 
     // 5. RECURRING
     const recurringHash = await computeRecurringPopulationHash(companyId, tx);
     auditEvidence.recurringSourceStateHash = recurringHash;
     const recurringAttestation = await tx.dataReadinessAttestation.findFirst({
-        where: { companyId, scopeType: 'recurring', status: 'active', sourceStateHash: recurringHash, asOfDate: { gte: targetCutoff } }
+        where: { companyId, scopeType: 'recurring', status: 'active', sourceStateHash: recurringHash, asOfDate: { gte: targetCutoff } },
+        orderBy: [{ certifiedAt: 'desc' }, { id: 'desc' }]
     });
     if (!recurringAttestation) {
         result.dimensions.recurringPatterns = { status: 'operational_only', detail: 'Active Recurring attestation does not match current source state' };
     } else {
         auditEvidence.recurringAttestation = { id: recurringAttestation.id, certifiedAt: recurringAttestation.certifiedAt?.toISOString() || recurringAttestation.createdAt.toISOString() };
     }
+    semanticEvidence.recurringPatterns = {
+        sourceStateHash: recurringHash,
+        governingAttestation: recurringAttestation ? {
+            id: recurringAttestation.id,
+            sourceStateHash: recurringAttestation.sourceStateHash,
+            asOfDate: recurringAttestation.asOfDate.toISOString(),
+            certifiedAt: recurringAttestation.certifiedAt.toISOString(),
+            certifiedBy: recurringAttestation.certifiedBy
+        } : null
+    };
 
     // 6. UNRESOLVED CONFLICTS
-    const unresolvedStagedCount = await tx.stagedImportRow.count({
+    const unresolvedStaged = await tx.stagedImportRow.findMany({
         where: {
             companyId,
             conflictType: 'possible_match',
             userDecision: null
-        }
+        },
+        orderBy: { id: 'asc' },
+        select: { id: true, importBatchId: true, matchedRecordId: true, conflictType: true }
     });
-    const failedCurrentApply = await tx.importApplication.count({
-        where: { companyId, status: 'failed' } // current
+    const failedCurrentApply = await tx.importApplication.findMany({
+        where: { companyId, status: 'failed' },
+        orderBy: { id: 'asc' },
+        select: { id: true, importBatchId: true, status: true }
     });
-    const contradictoryEvidence = await tx.companyNote.count({
-        where: { companyId, noteText: { contains: 'contradictory' } }
+    const contradictoryEvidence = await tx.companyNote.findMany({
+        where: { companyId, noteText: { contains: 'contradictory' } },
+        orderBy: { id: 'asc' },
+        select: { id: true, updatedAt: true }
     });
-    const unresolvedEconomicOverlap = await tx.reconciliationLink.count({
-        where: { companyId, status: 'conflict' }
+    const unresolvedEconomicOverlap = await tx.reconciliationLink.findMany({
+        where: { companyId, status: 'conflict' },
+        orderBy: { id: 'asc' },
+        select: { id: true, sourceType: true, sourceId: true, targetType: true, targetId: true }
     });
 
-    if (unresolvedStagedCount > 0 || failedCurrentApply > 0 || contradictoryEvidence > 0 || unresolvedEconomicOverlap > 0) {
+    semanticEvidence.unresolvedConflicts = {
+        stagedPossibleMatches: unresolvedStaged,
+        failedApplications: failedCurrentApply,
+        contradictoryNotes: contradictoryEvidence.map(note => ({ id: note.id, updatedAt: note.updatedAt.toISOString() })),
+        reconciliationConflicts: unresolvedEconomicOverlap
+    };
+    auditEvidence.unresolvedConflicts = semanticEvidence.unresolvedConflicts;
+
+    if (unresolvedStaged.length > 0 || failedCurrentApply.length > 0 || contradictoryEvidence.length > 0 || unresolvedEconomicOverlap.length > 0) {
         result.dimensions.unresolvedConflicts = { status: 'blocked', detail: 'Unresolved current unsafe conflicts exist' };
         result.blockingReasons.push('Unresolved current unsafe conflicts exist');
     }
@@ -325,19 +433,30 @@ export async function evaluateCompanyDataReadiness(
     // 7. BASELINE PROVENANCE
     const latestBaseline = await tx.baselineSnapshotHistory.findFirst({
         where: { companyId },
-        orderBy: { generatedAt: 'desc' }
+        orderBy: [{ generatedAt: 'desc' }, { id: 'desc' }]
     });
     if (!latestBaseline || latestBaseline.dataQualityStatus !== 'valid') {
         result.dimensions.baselineProvenance = { status: 'operational_only', detail: 'Baseline lacks proper provenance or relies on low-confidence evidence' };
     } else {
         auditEvidence.baselineProvenance = { id: latestBaseline.id, status: latestBaseline.dataQualityStatus };
     }
+    semanticEvidence.baselineProvenance = latestBaseline ? {
+        id: latestBaseline.id,
+        forecastCheckpointId: latestBaseline.forecastCheckpointId,
+        status: latestBaseline.dataQualityStatus,
+        generatedAt: latestBaseline.generatedAt.toISOString(),
+        appCommitHash: latestBaseline.appCommitHash,
+        m1EstimatorVersion: latestBaseline.m1EstimatorVersion,
+        m4EstimatorVersion: latestBaseline.m4EstimatorVersion,
+        preprocessingVersion: latestBaseline.preprocessingVersion,
+        forecastAssemblyVersion: latestBaseline.forecastAssemblyVersion
+    } : null;
 
     // Aggregate overall status
     let hasBlocked = false;
     let hasOperational = false;
-    for (const key of Object.keys(result.dimensions)) {
-        const dimStatus = (result.dimensions as any)[key].status;
+    for (const dimension of Object.values(result.dimensions)) {
+        const dimStatus = dimension.status;
         if (dimStatus === 'blocked') hasBlocked = true;
         if (dimStatus === 'operational_only') hasOperational = true;
     }
@@ -350,8 +469,19 @@ export async function evaluateCompanyDataReadiness(
         result.status = 'decision_ready';
     }
 
-    const finalEvidenceJson = JSON.stringify({ ...result.dimensions, cashSnapshotId: result.cashSnapshotId, auditEvidence });
-    result.evidenceHash = computeCanonicalHash(canonicalJsonSerialize(JSON.parse(finalEvidenceJson)));
+    semanticEvidence.readiness = {
+        status: result.status,
+        dimensions: result.dimensions,
+        blockingReasons: [...result.blockingReasons].sort()
+    };
+    result.evidenceHash = computeCanonicalHash(canonicalJsonSerialize(semanticEvidence));
+    const finalEvidenceJson = JSON.stringify({
+        ...result.dimensions,
+        cashSnapshotId: result.cashSnapshotId,
+        evidenceHash: result.evidenceHash,
+        semanticEvidence,
+        auditEvidence
+    });
 
     // Only create a certification record if we actually have a cash snapshot
     if (result.cashSnapshotId) {
