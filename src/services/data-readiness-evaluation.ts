@@ -2,6 +2,7 @@ import prismaClient from "@/db/prisma";
 import { Prisma } from "@prisma/client";
 import { computeCanonicalHash, canonicalJsonSerialize } from "./canonical-hash";
 import { verifyBankCoverage } from "./bank-coverage";
+import { buildManagerialVisibility } from "./managerial-visibility";
 
 export type ReadinessStatus = 'decision_ready' | 'operational_only' | 'blocked';
 
@@ -28,10 +29,14 @@ export async function computeARPopulationHash(companyId: string, tx: Prisma.Tran
         select: { id: true, customerName: true, invoiceNo: true, amountOpen: true, dueDate: true, status: true }
     });
 
+    // Managerial visibility is owned by the active exclude overrides. Reuse the
+    // same authority as the forecast and management views rather than maintaining
+    // a readiness-only target-type interpretation.
     const overrides = await tx.override.findMany({
-        where: { companyId, type: 'exclude', targetType: 'ReceivableInvoice', status: 'active' }
+        where: { companyId, type: 'exclude', status: 'active', targetId: { not: null } },
+        select: { targetId: true, targetType: true }
     });
-    const excludedIds = new Set(overrides.map(o => o.targetId));
+    const visibility = buildManagerialVisibility(overrides);
 
     const hashedData = invoices.map(inv => ({
         id: inv.id,
@@ -40,7 +45,7 @@ export async function computeARPopulationHash(companyId: string, tx: Prisma.Tran
         amountOpen: inv.amountOpen,
         dueDate: inv.dueDate?.toISOString() || null,
         status: inv.status,
-        managerialExcluded: excludedIds.has(inv.id)
+        managerialExcluded: visibility.hiddenInvoiceIds.has(inv.id)
     }));
 
     return computeCanonicalHash(canonicalJsonSerialize(hashedData));
@@ -54,9 +59,10 @@ export async function computeAPPopulationHash(companyId: string, tx: Prisma.Tran
     });
 
     const overrides = await tx.override.findMany({
-        where: { companyId, type: 'exclude', targetType: 'PayableBill', status: 'active' }
+        where: { companyId, type: 'exclude', status: 'active', targetId: { not: null } },
+        select: { targetId: true, targetType: true }
     });
-    const excludedIds = new Set(overrides.map(o => o.targetId));
+    const visibility = buildManagerialVisibility(overrides);
 
     const hashedData = bills.map(b => ({
         id: b.id,
@@ -65,7 +71,7 @@ export async function computeAPPopulationHash(companyId: string, tx: Prisma.Tran
         amountOpen: b.amountOpen,
         dueDate: b.dueDate?.toISOString() || null,
         status: b.status,
-        managerialExcluded: excludedIds.has(b.id)
+        managerialExcluded: visibility.hiddenBillIds.has(b.id)
     }));
 
     return computeCanonicalHash(canonicalJsonSerialize(hashedData));
