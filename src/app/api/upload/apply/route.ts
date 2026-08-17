@@ -82,7 +82,8 @@ export async function POST(req: NextRequest) {
 
             for (const r of rows) {
                 try {
-                    const norm = JSON.parse(r.normalizedDataJson);
+                    const norm = { ...JSON.parse(r.normalizedDataJson) };
+                    delete norm._raw;
                     // Convert potential date fields to Date objects or ISO strings
                     for (const f of ["dueDate", "invoiceDate", "billDate", "date"]) {
                         if (norm[f] && typeof norm[f] === "string" && norm[f].length === 10) {
