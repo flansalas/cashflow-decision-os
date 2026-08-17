@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { evaluateMaturedCheckpoints } from "@/services/canonical-evaluator";
 import { auth } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
+import { resolveTenant } from "@/lib/tenant";
 
 export const dynamic = 'force-dynamic';
 
@@ -9,18 +10,22 @@ export const dynamic = 'force-dynamic';
 const evaluationLocks = new Set<string>();
 
 export async function POST(req: NextRequest) {
-    let lockKey = "global";
+    let lockKey: string | null = null;
+    let lockAcquired = false;
     try {
-        const { userId, orgId } = await auth();
+        const { userId } = await auth();
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const body = await req.json().catch(() => ({}));
-        const companyId = body.companyId as string;
-
+        const companyId = await resolveTenant(req);
         if (!companyId) {
-            return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const body = await req.json().catch(() => ({}));
+        if (body.companyId !== undefined && body.companyId !== companyId) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
         lockKey = companyId;
@@ -28,35 +33,30 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: false, message: "Evaluation already in progress for this company" }, { status: 409 });
         }
         evaluationLocks.add(lockKey);
+        lockAcquired = true;
 
-        const company = await prisma.company.findUnique({ where: { id: companyId } });
-        if (!company) {
-            return NextResponse.json({ error: "Company not found" }, { status: 404 });
-        }
-        
-        if (orgId && company.clerkOrgId && orgId !== company.clerkOrgId) {
-            return NextResponse.json({ error: "Unauthorized for company" }, { status: 403 });
-        }
+        const evaluation = await evaluateMaturedCheckpoints(companyId);
 
-        await evaluateMaturedCheckpoints(companyId);
-
-        // Audit Log
         await prisma.changeLog.create({
             data: {
                 companyId,
                 source: "evaluate-horizons",
                 action: "manual_trigger",
                 inputText: "Manually triggered canonical evaluator",
-                diffJson: JSON.stringify({ userId }),
+                diffJson: JSON.stringify({ userId, evaluation }),
                 forecastVersionHashAfter: "n/a"
             }
         });
 
-        return NextResponse.json({ ok: true, message: "Evaluated matured horizons successfully" });
+        return NextResponse.json({
+            ok: true,
+            message: "Evaluated matured horizons successfully",
+            evaluation
+        });
     } catch (err: unknown) {
         console.error("Evaluation trigger error:", err);
         return NextResponse.json({ error: (err as Error).message ?? "Internal error" }, { status: 500 });
     } finally {
-        evaluationLocks.delete(lockKey);
+        if (lockAcquired && lockKey) evaluationLocks.delete(lockKey);
     }
 }

@@ -115,6 +115,14 @@ describe("calculateResidualActuals", () => {
         expect(res.residualOutflow).toBe(0);
     });
 
+    it("excludes legacy resolved transfers entirely", () => {
+        const txs = [
+            { amount: 1000, direction: "inflow", internalTransferStatus: "resolved", attributions: [] }
+        ];
+        const res = calculateResidualActuals(txs);
+        expect(res.residualInflow).toBe(0);
+    });
+
     it("leaves partial allocation remainders", () => {
         const txs = [
             {

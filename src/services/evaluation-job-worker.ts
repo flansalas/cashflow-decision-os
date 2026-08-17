@@ -1,77 +1,68 @@
 import prisma from "@/db/prisma";
 import { evaluateMaturedCheckpoints } from "./canonical-evaluator";
 
-export async function processEvaluationJobs(companyIdFilter?: string) {
+export async function processEvaluationJobs(companyId: string) {
+    if (!companyId) throw new Error("Evaluation worker requires a companyId");
+
     let jobsProcessed = 0;
     while (true) {
-        // Atomic claiming of a pending or expired running job
-        const claimedJobs = companyIdFilter 
-            ? await prisma.$queryRaw<{ id: string, companyId: string }[]>`
-                UPDATE "EvaluationJob"
-                SET 
-                    status = 'running',
-                    "claimedBy" = 'worker-node',
-                    "claimExpiresAt" = NOW() + INTERVAL '10 minutes',
-                    "startedAt" = NOW(),
-                    "attemptCount" = "attemptCount" + 1
-                WHERE id = (
-                    SELECT id FROM "EvaluationJob"
-                    WHERE "companyId" = ${companyIdFilter} 
-                      AND (status = 'pending' OR (status = 'running' AND "claimExpiresAt" < NOW()))
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT 1
-                )
-                RETURNING id, "companyId";
-            `
-            : await prisma.$queryRaw<{ id: string, companyId: string }[]>`
-                UPDATE "EvaluationJob"
-                SET 
-                    status = 'running',
-                    "claimedBy" = 'worker-node',
-                    "claimExpiresAt" = NOW() + INTERVAL '10 minutes',
-                    "startedAt" = NOW(),
-                    "attemptCount" = "attemptCount" + 1
-                WHERE id = (
-                    SELECT id FROM "EvaluationJob"
-                    WHERE status = 'pending' 
-                       OR (status = 'running' AND "claimExpiresAt" < NOW())
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT 1
-                )
-                RETURNING id, "companyId";
-            `;
+        const claimedJobs = await prisma.$queryRaw<{ id: string, companyId: string }[]>`
+            UPDATE "EvaluationJob"
+            SET
+                status = 'running',
+                "claimedBy" = 'worker-node',
+                "claimExpiresAt" = NOW() + INTERVAL '10 minutes',
+                "startedAt" = NOW(),
+                "retryAfter" = NULL,
+                "attemptCount" = "attemptCount" + 1
+            WHERE id = (
+                SELECT id FROM "EvaluationJob"
+                WHERE "companyId" = ${companyId}
+                  AND (
+                    (status = 'pending' AND ("retryAfter" IS NULL OR "retryAfter" <= NOW()))
+                    OR (status = 'running' AND "claimExpiresAt" < NOW())
+                  )
+                ORDER BY "createdAt" ASC
+                FOR UPDATE SKIP LOCKED
+                LIMIT 1
+            )
+            RETURNING id, "companyId";
+        `;
 
         if (!claimedJobs || claimedJobs.length === 0) {
-            break; // No more jobs to process
+            break;
         }
 
         const job = claimedJobs[0];
         
         try {
-            // Process the evaluation for the specific company
             await evaluateMaturedCheckpoints(job.companyId);
 
-            // Mark job as completed
             await prisma.evaluationJob.update({
                 where: { id: job.id },
                 data: {
                     status: 'completed',
                     completedAt: new Date(),
-                    claimExpiresAt: null
+                    claimedBy: null,
+                    claimExpiresAt: null,
+                    retryAfter: null,
+                    failureDetails: null
                 }
             });
         } catch (error) {
             console.error(`Error processing EvaluationJob ${job.id}:`, error);
-            
-            // Mark job as failed and allow retry if under limit
+
+            const failureDetails = error instanceof Error ? error.message : String(error);
             const failedJob = await prisma.evaluationJob.findUnique({ where: { id: job.id } });
             if (failedJob && failedJob.attemptCount < 3) {
                 await prisma.evaluationJob.update({
                     where: { id: job.id },
                     data: {
                         status: 'pending',
-                        failureDetails: (error as Error).message,
-                        retryAfter: new Date(Date.now() + 5 * 60 * 1000) // retry in 5 minutes
+                        claimedBy: null,
+                        claimExpiresAt: null,
+                        failureDetails,
+                        retryAfter: new Date(Date.now() + 5 * 60 * 1000)
                     }
                 });
             } else {
@@ -80,7 +71,8 @@ export async function processEvaluationJobs(companyIdFilter?: string) {
                     data: {
                         status: 'failed',
                         failedAt: new Date(),
-                        failureDetails: (error as Error).message,
+                        claimedBy: null,
+                        failureDetails,
                         claimExpiresAt: null
                     }
                 });

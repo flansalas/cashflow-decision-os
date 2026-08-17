@@ -258,8 +258,8 @@ export function calculateResidualActuals(txs: any[]) {
     let totalConfirmedOutflowAttr = 0;
 
     for (const tx of txs) {
-        // Exclude confirmed internal transfers
-        if (tx.internalTransferStatus === "confirmed") continue;
+        // Exclude both current and legacy terminal statuses for internal transfers.
+        if (tx.internalTransferStatus === "confirmed" || tx.internalTransferStatus === "resolved") continue;
 
         const amt = Math.abs(tx.amount);
         let isTxInflow = tx.direction === "inflow" && tx.amount >= 0;
