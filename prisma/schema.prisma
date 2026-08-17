@@ -57,6 +57,8 @@ model Company {
   reconciliationLinks                ReconciliationLink[]
   dataReadinessAttestations          DataReadinessAttestation[]
   companyDataReadinessCertifications CompanyDataReadinessCertification[]
+  forecastScenarios                  ForecastScenario[]
+  forecastVersionCertifications      ForecastVersionCertification[]
 }
 
 model CompanyNote {
@@ -444,6 +446,8 @@ model ForecastCheckpoint {
   forecastEvaluationRuns             ForecastEvaluationRun[]
   executionPlans                     ExecutionPlan[]
   companyDataReadinessCertifications CompanyDataReadinessCertification[]
+  forecastScenarios                  ForecastScenario[]
+  forecastVersionCertifications      ForecastVersionCertification[]
 
   @@index([companyId, forecastVersionHash])
   @@index([cashSnapshotId])
@@ -984,4 +988,79 @@ model CompanyDataReadinessCertification {
 
   @@index([companyId, status])
   @@index([forecastCheckpointId])
+}
+
+model ForecastScenario {
+  id                   String   @id @default(uuid())
+  companyId            String
+  forecastCheckpointId String
+  forecastVersionHash  String
+  schemaVersion        Int      @default(1)
+  hashAlgorithm        String   @default("sha256")
+  scenarioHash         String
+  createdAt            DateTime @default(now())
+
+  stressInputsJson     String
+  scenarioPayloadJson  String
+
+  minCash              Float
+  minCashWeek          DateTime
+  firstNegativeWeek    DateTime?
+  maxDeficit           Float?
+  bufferHeadroom       Float?
+  firstBreachWeek      DateTime?
+
+  company              Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  forecastCheckpoint   ForecastCheckpoint @relation(fields: [forecastCheckpointId], references: [id], onDelete: Restrict)
+
+  certifications       ForecastVersionCertification[]
+
+  @@unique([companyId, forecastCheckpointId, scenarioHash])
+}
+
+model ForecastVersionCertification {
+  id                        String   @id @default(uuid())
+  companyId                 String
+  forecastCheckpointId      String
+  forecastVersionHash       String
+  cashSnapshotId            String
+  readinessEvidenceHash     String
+  downsideScenarioId        String?
+  status                    String
+  schemaVersion             Int      @default(1)
+  evaluatedAt               DateTime @default(now())
+
+  decidedBy                 String
+  decidedAt                 DateTime
+
+  baseMinCash               Float
+  baseMinCashWeek           DateTime
+  baseFirstNegativeWeek     DateTime?
+  baseMaxDeficit            Float?
+  baseBufferHeadroom        Float?
+  baseFirstBreachWeek       DateTime?
+
+  downsideMinCash           Float?
+  downsideMinCashWeek       DateTime?
+  downsideFirstNegativeWeek DateTime?
+  downsideMaxDeficit        Float?
+  downsideBufferHeadroom    Float?
+  downsideFirstBreachWeek   DateTime?
+
+  bufferAmount              Float?
+  bufferRationale           String?
+
+  readinessCertificationId  String?
+  evidenceJson              String
+  rationale                 String?
+
+  createdAt                 DateTime @default(now())
+
+  company                   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  forecastCheckpoint        ForecastCheckpoint @relation(fields: [forecastCheckpointId], references: [id], onDelete: Restrict)
+  downsideScenario          ForecastScenario? @relation(fields: [downsideScenarioId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, forecastCheckpointId])
+  @@index([companyId, forecastCheckpointId, decidedAt, createdAt], map: "ForecastVersionCertification_governing_decision_idx")
+  @@index([companyId, status])
 }
