@@ -204,10 +204,10 @@ export default function ReadinessPage() {
                                 </select>
                             </label>
                             <label className="text-sm">Covered start
-                                <input type="datetime-local" value={coveredStartDate} onChange={event => setCoveredStartDate(event.target.value)} className="mt-1 block w-full border rounded p-2" />
+                                <input type="datetime-local" step="0.001" value={coveredStartDate} onChange={event => setCoveredStartDate(event.target.value)} className="mt-1 block w-full border rounded p-2" />
                             </label>
                             <label className="text-sm">Covered end
-                                <input type="datetime-local" value={coveredEndDate} onChange={event => setCoveredEndDate(event.target.value)} className="mt-1 block w-full border rounded p-2" />
+                                <input type="datetime-local" step="0.001" value={coveredEndDate} onChange={event => setCoveredEndDate(event.target.value)} className="mt-1 block w-full border rounded p-2" />
                             </label>
                         </div>
                         <label className="flex gap-2 text-sm items-start">

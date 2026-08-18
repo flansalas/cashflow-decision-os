@@ -58,8 +58,12 @@ describe("readiness bank evidence UI", () => {
             expect.objectContaining({ body: JSON.stringify({ manifestId: "manifest-a" }) })
         ));
 
-        fireEvent.change(screen.getByLabelText("Covered start"), { target: { value: "2026-08-09T15:45" } });
-        fireEvent.change(screen.getByLabelText("Covered end"), { target: { value: "2026-08-10T00:00" } });
+        const coveredStart = screen.getByLabelText("Covered start");
+        const coveredEnd = screen.getByLabelText("Covered end");
+        expect(coveredStart.getAttribute("step")).toBe("0.001");
+        expect(coveredEnd.getAttribute("step")).toBe("0.001");
+        fireEvent.change(coveredStart, { target: { value: "2026-08-09T15:45:00.000" } });
+        fireEvent.change(coveredEnd, { target: { value: "2026-08-10T00:00:00.999" } });
         fireEvent.click(screen.getByRole("checkbox"));
         fireEvent.click(screen.getByRole("button", { name: "Record no-activity evidence" }));
 
@@ -69,8 +73,8 @@ describe("readiness bank evidence UI", () => {
             const payload = JSON.parse(attestationCall![1].body);
             expect(payload).toMatchObject({ scopeType: "bank_no_activity", scopeKey: "account-a" });
             expect(JSON.parse(payload.evidenceJson)).toMatchObject({
-                coveredStartDate: new Date("2026-08-09T15:45").toISOString(),
-                coveredEndDate: new Date("2026-08-10T00:00").toISOString()
+                coveredStartDate: new Date("2026-08-09T15:45:00.000").toISOString(),
+                coveredEndDate: new Date("2026-08-10T00:00:00.999").toISOString()
             });
             expect(payload.companyId).toBeUndefined();
         });
