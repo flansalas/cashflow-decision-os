@@ -286,4 +286,33 @@ describe("Pure Integrity Assertions", () => {
         expect(outflow).toBeDefined();
         expect(outflow!.metadata.effectiveDateAtForecast).toBe(targetDate.toISOString());
     });
+
+    it("derives expected totals from individually rounded component cents", () => {
+        const targetDate = new Date("2026-08-10T00:00:00.000Z");
+        const result = computeForecast({
+            hasBankBaseline: false,
+            adjustedOpeningCash: 100,
+            bankBalance: 100,
+            adjustmentsTotal: 0,
+            asOfDate: targetDate,
+            assumptions: {},
+            cashFlowEntries: [
+                { direction: "outflow", amount: 0.335, targetDate: targetDate.toISOString(), categoryName: "operating", sourceId: "rounding-a" },
+                { direction: "outflow", amount: 0.335, targetDate: targetDate.toISOString(), categoryName: "operating", sourceId: "rounding-b" },
+            ],
+            invoices: [],
+            bills: [],
+            recurring: [],
+        } as any);
+
+        const week = result.weeks[0];
+        const componentCents = week.breakdown.outflows.reduce(
+            (sum: number, item: any) => sum + Math.round(item.amount * 100),
+            0
+        );
+
+        expect(componentCents).toBe(68);
+        expect(Math.round(week.outflowsExpected * 100)).toBe(componentCents);
+        expect(week.endCashExpected).toBe(99.32);
+    });
 });

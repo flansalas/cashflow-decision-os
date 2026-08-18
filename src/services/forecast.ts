@@ -1071,6 +1071,18 @@ export function computeForecast(input: ForecastInput): ForecastResult {
             return 0;
         });
 
+        // Forecast components are persisted as whole cents. Derive the expected
+        // weekly totals from those same cent-rounded components so the sealed
+        // total and its immutable component ledger cannot differ by a cent.
+        inflowExpected = inflowBreakdown.reduce(
+            (sum, item) => sum + Math.round(item.amount * 100),
+            0
+        ) / 100;
+        outflowExpected = outflowBreakdown.reduce(
+            (sum, item) => sum + Math.round(item.amount * 100),
+            0
+        ) / 100;
+
         // ── Compute end cash ────────────────────────────────────────
         const endCashExpected = runningCashExpected + inflowExpected - outflowExpected;
         const endCashBest = runningCashBest + inflowBest - outflowBest;
