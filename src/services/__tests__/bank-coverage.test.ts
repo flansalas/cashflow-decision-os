@@ -1,146 +1,191 @@
-import { describe, it, expect, beforeEach, beforeAll, afterAll } from "vitest";
-import prisma from "@/db/prisma";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { mockPrisma } = vi.hoisted(() => ({
+    mockPrisma: {
+        bankAccount: { findMany: vi.fn() },
+        bankImportManifestAccount: { findMany: vi.fn() },
+        dataReadinessAttestation: { findMany: vi.fn() },
+        bankTransaction: { findFirst: vi.fn() }
+    }
+}));
+
+vi.mock("@/db/prisma", () => ({ default: mockPrisma }));
+
 import { verifyBankCoverage } from "../bank-coverage";
 
 describe("Bank Coverage Verification", () => {
-    const companyId = "test-company-" + Math.random().toString(36).substring(7);
-    const weekStart = new Date("2026-08-01T00:00:00Z");
-    const weekEnd = new Date("2026-08-07T23:59:59Z");
+    const companyId = "test-company";
+    const account = { id: "account-a" };
+    const weekStart = new Date("2026-08-01T00:00:00.000Z");
+    const weekEnd = new Date("2026-08-07T23:59:59.999Z");
 
-    beforeAll(async () => {
-        await prisma.company.create({
-            data: { id: companyId, name: "Coverage Test Company" }
-        });
-    });
-
-    afterAll(async () => {
-        await prisma.company.delete({ where: { id: companyId } });
-    });
-
-    beforeEach(async () => {
-        await prisma.bankImportManifestAccount.deleteMany({ where: { BankImportManifest: { companyId } } });
-        await prisma.bankImportManifest.deleteMany({ where: { companyId } });
-        await prisma.bankAccount.deleteMany({ where: { companyId } });
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockPrisma.bankAccount.findMany.mockResolvedValue([]);
+        mockPrisma.bankImportManifestAccount.findMany.mockResolvedValue([]);
+        mockPrisma.dataReadinessAttestation.findMany.mockResolvedValue([]);
+        mockPrisma.bankTransaction.findFirst.mockResolvedValue(null);
     });
 
     it("fails when there are no active bank accounts", async () => {
         const result = await verifyBankCoverage(companyId, weekStart, weekEnd);
-        expect(result.isVerified).toBe(false);
-        expect(result.reasons[0]).toMatch(/No active bank accounts/);
-    });
 
-    it("ignores inactive bank accounts", async () => {
-        await prisma.bankAccount.create({
-            data: { companyId, isActive: false, name: "Inactive Account" }
-        });
-        const result = await verifyBankCoverage(companyId, weekStart, weekEnd);
         expect(result.isVerified).toBe(false);
         expect(result.totalActiveAccounts).toBe(0);
+        expect(result.reasons[0]).toMatch(/No active bank accounts/);
+        expect(mockPrisma.bankAccount.findMany).toHaveBeenCalledWith({
+            where: { companyId, isActive: true }
+        });
     });
 
     it("fails when an active account lacks coverage", async () => {
-        await prisma.bankAccount.create({
-            data: { companyId, isActive: true, name: "Active Account" }
-        });
+        mockPrisma.bankAccount.findMany.mockResolvedValue([account]);
+
         const result = await verifyBankCoverage(companyId, weekStart, weekEnd);
+
         expect(result.isVerified).toBe(false);
-        expect(result.uncoveredAccountIds.length).toBe(1);
+        expect(result.uncoveredAccountIds).toEqual([account.id]);
     });
 
-    it("succeeds when all active accounts have certified, clean, complete coverage", async () => {
-        const acc = await prisma.bankAccount.create({
-            data: { companyId, isActive: true, name: "Active Account" }
-        });
-        const manifest = await prisma.bankImportManifest.create({
-            data: { id: "test-manifest-1", companyId, userCertified: true }
-        });
-        await prisma.bankImportManifestAccount.create({
-            data: {
-                id: "test-manifest-acc-1",
-                manifestId: manifest.id,
-                bankAccountId: acc.id,
-                coveredStartDate: new Date("2026-07-01T00:00:00Z"), // before weekStart
-                coveredEndDate: new Date("2026-08-10T00:00:00Z"), // after weekEnd
-                importSuccess: true,
-                rejectedRowCount: 0,
-                userCertifiedAt: new Date()
-            }
-        });
+    it("accepts a clean certified manifest covering the full week", async () => {
+        mockPrisma.bankAccount.findMany.mockResolvedValue([account]);
+        mockPrisma.bankImportManifestAccount.findMany.mockResolvedValue([{
+            coveredStartDate: new Date("2026-07-31T00:00:00.000Z"),
+            coveredEndDate: new Date("2026-08-07T00:00:00.000Z")
+        }]);
 
         const result = await verifyBankCoverage(companyId, weekStart, weekEnd);
+
+        expect(result.isVerified).toBe(true);
+        expect(result.coveredAccounts).toBe(1);
+        expect(mockPrisma.bankImportManifestAccount.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    bankAccountId: account.id,
+                    importSuccess: true,
+                    rejectedRowCount: 0,
+                    userCertifiedAt: { not: null },
+                    BankImportManifest: { userCertified: true, companyId }
+                })
+            })
+        );
+    });
+
+    it("combines adjacent certified manifest intervals", async () => {
+        mockPrisma.bankAccount.findMany.mockResolvedValue([account]);
+        mockPrisma.bankImportManifestAccount.findMany.mockResolvedValue([
+            {
+                coveredStartDate: weekStart,
+                coveredEndDate: new Date("2026-08-03T00:00:00.000Z")
+            },
+            {
+                coveredStartDate: new Date("2026-08-04T00:00:00.000Z"),
+                coveredEndDate: new Date("2026-08-07T00:00:00.000Z")
+            }
+        ]);
+
+        const result = await verifyBankCoverage(companyId, weekStart, weekEnd);
+
+        expect(result.isVerified).toBe(true);
+    });
+
+    it("fails if certified manifest coverage ends before the week", async () => {
+        mockPrisma.bankAccount.findMany.mockResolvedValue([account]);
+        mockPrisma.bankImportManifestAccount.findMany.mockResolvedValue([{
+            coveredStartDate: weekStart,
+            coveredEndDate: new Date("2026-08-05T00:00:00.000Z")
+        }]);
+
+        const result = await verifyBankCoverage(companyId, weekStart, weekEnd);
+
+        expect(result.isVerified).toBe(false);
+    });
+
+    it("combines a certified partial manifest with exact no-activity evidence", async () => {
+        mockPrisma.bankAccount.findMany.mockResolvedValue([account]);
+        mockPrisma.bankImportManifestAccount.findMany.mockResolvedValue([{
+            coveredStartDate: weekStart,
+            coveredEndDate: new Date("2026-08-05T00:00:00.000Z")
+        }]);
+        mockPrisma.dataReadinessAttestation.findMany.mockResolvedValue([{
+            evidenceJson: JSON.stringify({
+                coveredStartDate: "2026-08-06T00:00:00.000Z",
+                coveredEndDate: weekEnd.toISOString()
+            })
+        }]);
+
+        const result = await verifyBankCoverage(companyId, weekStart, weekEnd);
+
         expect(result.isVerified).toBe(true);
         expect(result.coveredAccounts).toBe(1);
     });
 
-    it("fails if coverage has rejected rows", async () => {
-        const acc = await prisma.bankAccount.create({
-            data: { companyId, isActive: true, name: "Active Account" }
-        });
-        const manifest = await prisma.bankImportManifest.create({
-            data: { id: "test-manifest-2", companyId, userCertified: true }
-        });
-        await prisma.bankImportManifestAccount.create({
-            data: {
-                id: "test-manifest-acc-2",
-                manifestId: manifest.id,
-                bankAccountId: acc.id,
-                coveredStartDate: weekStart,
-                coveredEndDate: weekEnd,
-                importSuccess: true,
-                rejectedRowCount: 1, // <--- Fail
-                userCertifiedAt: new Date()
-            }
-        });
+    it("accepts exact full-week no-activity evidence when the account has no transactions", async () => {
+        mockPrisma.bankAccount.findMany.mockResolvedValue([account]);
+        mockPrisma.dataReadinessAttestation.findMany.mockResolvedValue([{
+            evidenceJson: JSON.stringify({
+                coveredStartDate: weekStart.toISOString(),
+                coveredEndDate: weekEnd.toISOString()
+            })
+        }]);
 
         const result = await verifyBankCoverage(companyId, weekStart, weekEnd);
-        expect(result.isVerified).toBe(false);
+
+        expect(result.isVerified).toBe(true);
+        expect(mockPrisma.bankTransaction.findFirst).toHaveBeenCalledWith({
+            where: {
+                companyId,
+                accountId: account.id,
+                txDate: { gte: weekStart, lte: weekEnd }
+            },
+            select: { id: true }
+        });
     });
 
-    it("fails if manifest is uncertified (forged UI bypass)", async () => {
-        const acc = await prisma.bankAccount.create({
-            data: { companyId, isActive: true, name: "Active Account" }
-        });
-        const manifest = await prisma.bankImportManifest.create({
-            data: { id: "test-manifest-3", companyId, userCertified: false } // <--- Fail
-        });
-        await prisma.bankImportManifestAccount.create({
-            data: {
-                id: "test-manifest-acc-3",
-                manifestId: manifest.id,
-                bankAccountId: acc.id,
-                coveredStartDate: weekStart,
-                coveredEndDate: weekEnd,
-                importSuccess: true,
-                rejectedRowCount: 0,
-                userCertifiedAt: new Date()
-            }
-        });
+    it("fails when composed evidence leaves a gap", async () => {
+        mockPrisma.bankAccount.findMany.mockResolvedValue([account]);
+        mockPrisma.bankImportManifestAccount.findMany.mockResolvedValue([{
+            coveredStartDate: weekStart,
+            coveredEndDate: new Date("2026-08-03T00:00:00.000Z")
+        }]);
+        mockPrisma.dataReadinessAttestation.findMany.mockResolvedValue([{
+            evidenceJson: JSON.stringify({
+                coveredStartDate: "2026-08-05T00:00:00.000Z",
+                coveredEndDate: weekEnd.toISOString()
+            })
+        }]);
 
         const result = await verifyBankCoverage(companyId, weekStart, weekEnd);
+
         expect(result.isVerified).toBe(false);
+        expect(result.uncoveredAccountIds).toEqual([account.id]);
     });
 
-    it("fails if coverage ends before weekEnd", async () => {
-        const acc = await prisma.bankAccount.create({
-            data: { companyId, isActive: true, name: "Active Account" }
-        });
-        const manifest = await prisma.bankImportManifest.create({
-            data: { id: "test-manifest-4", companyId, userCertified: true }
-        });
-        await prisma.bankImportManifestAccount.create({
-            data: {
-                id: "test-manifest-acc-4",
-                manifestId: manifest.id,
-                bankAccountId: acc.id,
-                coveredStartDate: weekStart,
-                coveredEndDate: new Date("2026-08-05T00:00:00Z"), // <--- Fail (ends before Aug 7)
-                importSuccess: true,
-                rejectedRowCount: 0,
-                userCertifiedAt: new Date()
-            }
-        });
+    it("rejects no-activity evidence that contains a bank transaction", async () => {
+        mockPrisma.bankAccount.findMany.mockResolvedValue([account]);
+        mockPrisma.dataReadinessAttestation.findMany.mockResolvedValue([{
+            evidenceJson: JSON.stringify({
+                coveredStartDate: weekStart.toISOString(),
+                coveredEndDate: weekEnd.toISOString()
+            })
+        }]);
+        mockPrisma.bankTransaction.findFirst.mockResolvedValue({ id: "transaction-a" });
 
         const result = await verifyBankCoverage(companyId, weekStart, weekEnd);
+
         expect(result.isVerified).toBe(false);
+        expect(result.uncoveredAccountIds).toEqual([account.id]);
+    });
+
+    it("ignores malformed no-activity evidence", async () => {
+        mockPrisma.bankAccount.findMany.mockResolvedValue([account]);
+        mockPrisma.dataReadinessAttestation.findMany.mockResolvedValue([{
+            evidenceJson: "not-json"
+        }]);
+
+        const result = await verifyBankCoverage(companyId, weekStart, weekEnd);
+
+        expect(result.isVerified).toBe(false);
+        expect(mockPrisma.bankTransaction.findFirst).not.toHaveBeenCalled();
     });
 });

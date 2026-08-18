@@ -75,4 +75,30 @@ describe("readiness bank evidence UI", () => {
             expect(payload.companyId).toBeUndefined();
         });
     });
+
+    it("shows fresh uncertified manifests when the prior bank readiness status is decision ready", async () => {
+        mockFetch.mockImplementation(async (url: string) => {
+            if (url === "/api/readiness") {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        ...readiness,
+                        status: "decision_ready",
+                        dimensions: {
+                            ...readiness.dimensions,
+                            bankCoverage: { status: "decision_ready", detail: "OK" }
+                        }
+                    })
+                };
+            }
+            if (url === "/api/readiness/bank-evidence") return { ok: true, json: async () => bankEvidence };
+            throw new Error(`Unexpected fetch: ${url}`);
+        });
+
+        render(<ReadinessPage />);
+
+        await screen.findByText("Account-level bank evidence");
+        expect(screen.getByText("Manifest manifest-a")).toBeDefined();
+        expect(screen.getByRole("button", { name: "Certify uploaded manifest" })).toBeDefined();
+    });
 });

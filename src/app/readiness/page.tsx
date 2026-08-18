@@ -125,6 +125,9 @@ export default function ReadinessPage() {
 
     if (loading) return <div className="p-8">Loading readiness...</div>;
 
+    const hasUncertifiedBankManifests = bankEvidence?.manifests.some(manifest => !manifest.userCertified) ?? false;
+    const showBankEvidence = readiness?.dimensions?.bankCoverage?.status !== 'decision_ready' || hasUncertifiedBankManifests;
+
     return (
         <div className="p-8 max-w-4xl mx-auto">
             <h1 className="text-2xl font-bold mb-6">Company Data Readiness Certification</h1>
@@ -160,7 +163,7 @@ export default function ReadinessPage() {
                 })}
             </div>
 
-            {readiness?.dimensions?.bankCoverage?.status !== 'decision_ready' && (
+            {showBankEvidence && (
                 <section className="mt-8 border rounded p-4 space-y-5">
                     <div>
                         <h2 className="font-semibold">Account-level bank evidence</h2>
