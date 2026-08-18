@@ -141,4 +141,43 @@ describe("Package 2B readiness tenant binding", () => {
         expect(prisma.bankAccount.findFirst).not.toHaveBeenCalled();
         expect(prisma.dataReadinessAttestation.create).not.toHaveBeenCalled();
     });
+
+    it("preserves distinct bank no-activity intervals and replaces only an exact duplicate", async () => {
+        vi.mocked(prisma.bankAccount.findFirst).mockResolvedValue({ id: "bank-account-a" } as any);
+        vi.mocked(prisma.dataReadinessAttestation.create).mockResolvedValue({ id: "attestation-a" } as any);
+        const coveredStartDate = "2026-08-09T00:00:00.000Z";
+        const coveredEndDate = "2026-08-11T23:59:59.999Z";
+        const canonicalEvidence = JSON.stringify({ coveredStartDate, coveredEndDate });
+        const sourceStateHash = Buffer.from(canonicalEvidence).toString("base64");
+
+        const response = await POST(makePostRequest({
+            scopeType: "bank_no_activity",
+            scopeKey: "bank-account-a",
+            asOfDate: coveredEndDate,
+            evidenceJson: canonicalEvidence
+        }));
+
+        expect(response.status).toBe(201);
+        expect(prisma.dataReadinessAttestation.updateMany).toHaveBeenCalledWith({
+            where: {
+                companyId: tenantA,
+                scopeType: "bank_no_activity",
+                scopeKey: "bank-account-a",
+                status: "active",
+                sourceStateHash
+            },
+            data: { status: "revoked", revokedAt: expect.any(Date) }
+        });
+        expect(prisma.dataReadinessAttestation.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                companyId: tenantA,
+                scopeType: "bank_no_activity",
+                scopeKey: "bank-account-a",
+                sourceStateHash,
+                evidenceJson: canonicalEvidence,
+                certifiedBy: "user-a",
+                status: "active"
+            })
+        });
+    });
 });

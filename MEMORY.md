@@ -16,10 +16,11 @@ Package 4A canonical evaluation safety foundation implemented and locally verifi
 - Verification: 24 focused tests, TypeScript no-emit check, targeted lint, and diff integrity all passed without production database access.
 - A narrow weekly bank-coverage correction is implemented and locally verified, pending commit and release:
   - clean, certified manifest intervals and valid account-specific no-activity intervals compose into continuous weekly coverage;
+  - distinct no-activity intervals for the same bank account remain active together, while an exact duplicate replaces only its prior duplicate;
   - no-activity evidence is ignored when current bank transactions contradict it;
   - any uncovered time gap still fails closed;
   - fresh uncertified bank manifests remain visible for certification even when an older cash snapshot reports bank coverage as decision-ready;
-  - 12 focused isolated tests and the TypeScript no-emit check passed without production database mutation.
+  - 17 focused isolated route/service tests, the preceding readiness UI regression tests, and the TypeScript no-emit check passed without production database mutation.
 
 ## 2. Current State vs. Product Vision
 

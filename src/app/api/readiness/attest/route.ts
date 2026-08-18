@@ -75,16 +75,21 @@ export async function POST(req: NextRequest) {
             if (!bankAccount) {
                 return NextResponse.json({ error: "Forbidden" }, { status: 403 });
             }
-            // For bank no activity, the "source state" is just the interval which is captured in evidence
-            // We can hash the evidence to create a deterministic hash
-            sourceStateHash = Buffer.from(evidenceJson).toString('base64');
+            // Canonicalize the exact interval so semantically identical evidence replaces only its duplicate.
+            sourceStateHash = Buffer.from(JSON.stringify({
+                coveredStartDate: coveredStartDate.toISOString(),
+                coveredEndDate: coveredEndDate.toISOString()
+            })).toString('base64');
         } else {
             return NextResponse.json({ error: "Invalid scopeType" }, { status: 400 });
         }
 
-        // Invalidate previous active attestations for this scope
+        // AR/AP/recurring keep one current attestation. Bank no-activity evidence may
+        // require multiple distinct intervals around real activity, so only replace
+        // an exact duplicate interval for that account.
         const scopeFilter: any = { companyId, scopeType, status: 'active' };
         if (scopeKey) scopeFilter.scopeKey = scopeKey;
+        if (scopeType === 'bank_no_activity') scopeFilter.sourceStateHash = sourceStateHash;
 
         await prisma.dataReadinessAttestation.updateMany({
             where: scopeFilter,

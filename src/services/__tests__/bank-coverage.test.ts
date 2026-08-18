@@ -120,6 +120,33 @@ describe("Bank Coverage Verification", () => {
         expect(result.coveredAccounts).toBe(1);
     });
 
+    it("combines two distinct no-activity intervals around certified activity", async () => {
+        mockPrisma.bankAccount.findMany.mockResolvedValue([account]);
+        mockPrisma.bankImportManifestAccount.findMany.mockResolvedValue([{
+            coveredStartDate: new Date("2026-08-03T00:00:00.000Z"),
+            coveredEndDate: new Date("2026-08-05T00:00:00.000Z")
+        }]);
+        mockPrisma.dataReadinessAttestation.findMany.mockResolvedValue([
+            {
+                evidenceJson: JSON.stringify({
+                    coveredStartDate: weekStart.toISOString(),
+                    coveredEndDate: "2026-08-02T23:59:59.999Z"
+                })
+            },
+            {
+                evidenceJson: JSON.stringify({
+                    coveredStartDate: "2026-08-06T00:00:00.000Z",
+                    coveredEndDate: weekEnd.toISOString()
+                })
+            }
+        ]);
+
+        const result = await verifyBankCoverage(companyId, weekStart, weekEnd);
+
+        expect(result.isVerified).toBe(true);
+        expect(mockPrisma.bankTransaction.findFirst).toHaveBeenCalledTimes(2);
+    });
+
     it("accepts exact full-week no-activity evidence when the account has no transactions", async () => {
         mockPrisma.bankAccount.findMany.mockResolvedValue([account]);
         mockPrisma.dataReadinessAttestation.findMany.mockResolvedValue([{
