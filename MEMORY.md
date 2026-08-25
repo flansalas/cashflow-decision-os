@@ -1,6 +1,6 @@
 # Project Memory
 
-**Last Updated:** 2026-08-17 / Weekly bank-coverage evidence fix
+**Last Updated:** 2026-08-25 / In-roll bank-coverage review
 
 ## 1. Last Completed Milestone
 
@@ -21,6 +21,12 @@ Package 4A canonical evaluation safety foundation implemented and locally verifi
   - any uncovered time gap still fails closed;
   - fresh uncertified bank manifests remain visible for certification even when an older cash snapshot reports bank coverage as decision-ready;
   - 17 focused isolated route/service tests, the preceding readiness UI regression tests, and the TypeScript no-emit check passed without production database mutation.
+- A narrow weekly-roll account-coverage review is implemented and locally verified, pending commit and release:
+  - Step 2 and the unverified pre-roll preview now open the existing tenant-bound manifest-certification and account-specific no-activity evidence flow inside the roll;
+  - certified transaction-date intervals are preserved, and the UI derives only the exact uncovered periods before or after them for explicit management confirmation;
+  - the existing `verifyBankCoverage` result remains the only authority that can label the week verified; the UI cannot promote incomplete evidence by itself;
+  - 17 focused tests, TypeScript no-emit, lint for the new component/tests, diff integrity, and isolated rendered desktop/mobile interaction checks passed without production database mutation;
+  - `next build` remains locally blocked by the installation's missing native Apple-silicon SWC package because Turbopack cannot build through the WASM fallback; no dependency change was made.
 
 ## 2. Current State vs. Product Vision
 
@@ -47,7 +53,7 @@ Current gaps:
 
 ## 3. Active Focus / Current Constraint
 
-Release the weekly bank-coverage evidence fix without disrupting the working production app, then complete Cascio's verified weekly close using only certified source evidence.
+Commit and release the in-roll bank-coverage review without disrupting the working production app, then complete Cascio's currently unfinished verified weekly close using only certified source evidence.
 
 Current movement:
 
@@ -59,7 +65,7 @@ sealed forecast → actual attribution → verified evaluation → proposed lear
 
 ## 4. Next Safest Implementation Slice
 
-Commit and release the weekly bank-coverage evidence fix, verify the exact production SHA and authenticated tenant behavior, then certify the real Cascio bank manifests and exact no-activity intervals before advancing the week.
+Commit and release the in-roll bank-coverage review, verify the exact production SHA and authenticated tenant behavior, then resume Cascio's existing roll. Certify the retained bank manifest and confirm the exact no-activity periods for the remaining active accounts before advancing; AR/AP and bank imports should not need to be repeated.
 
 Advance only when the closing week has continuous verified coverage across every active account. After that, design Package 4B around the existing attribution and evaluation authorities rather than creating a parallel learning path.
 
@@ -68,7 +74,7 @@ No implementation should begin until explicitly approved.
 ## 5. Near-Term Roadmap
 
 NOW:
-- Release and smoke-verify the weekly bank-coverage evidence fix.
+- Release and smoke-verify the in-roll bank-coverage review.
 - Complete Cascio's evidence-backed weekly close without synthetic financial records.
 - Preserve production stability and existing Cascio financial records.
 - Establish the first legitimate sealed weekly forecast before evaluating or learning from it.

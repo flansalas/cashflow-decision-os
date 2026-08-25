@@ -6,6 +6,7 @@ import { VarianceDriverPanel } from "@/ui/VarianceDriverPanel";
 import type { UnifiedVarianceResult } from "@/types/variance";
 import { ARAPUploadStep } from "@/ui/ARAPUploadStep";
 import { BankUploadStep } from "@/ui/BankUploadStep";
+import { BankCoverageReview } from "@/ui/BankCoverageReview";
 
 export type TriageItem = {
     id: string;
@@ -69,6 +70,7 @@ export function UpdateBalanceDialog({
     const [arapUploaded, setArapUploaded] = useState(false);
     // Controls whether BankUploadStep is revealed in the bank step
     const [showBankUploadWidget, setShowBankUploadWidget] = useState(false);
+    const [showBankCoverageReview, setShowBankCoverageReview] = useState(false);
     const [bankDataDetected, setBankDataDetected] = useState<boolean | null>(null);
     const [bankDataRowCount, setBankDataRowCount] = useState<number | null>(null);
     const [bankCoverageVerified, setBankCoverageVerified] = useState<boolean | null>(null);
@@ -338,14 +340,37 @@ export function UpdateBalanceDialog({
 
             <div className="px-8 pt-8 pb-4 border-b border-slate-100/60 bg-white z-0">
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-lg border bg-indigo-50 text-indigo-600 border-indigo-100 italic">Roll Protocol • Step 2 of 4</span>
-                <h2 className="text-2xl font-bold mt-3 tracking-tight" style={{ color: "var(--text-primary)" }}>Upload Bank Transactions</h2>
+                <h2 className="text-2xl font-bold mt-3 tracking-tight" style={{ color: "var(--text-primary)" }}>
+                    {showBankCoverageReview ? "Review Bank Account Coverage" : "Upload Bank Transactions"}
+                </h2>
                 <p className="text-[13px] mt-1.5" style={{ color: "var(--text-muted)" }}>
-                    Upload your bank statement for the week being closed. This allows the app to verify your forecast and teach Macro-Memory from actual results.
+                    {showBankCoverageReview
+                        ? "Account for every active bank account so this week can qualify for verified accuracy and learning."
+                        : "Upload your bank statement for the week being closed. This allows the app to verify your forecast and teach Macro-Memory from actual results."}
                 </p>
             </div>
 
             <div className="flex-1 overflow-y-auto px-8 py-6 custom-scrollbar bg-slate-50/50">
-                {!showBankUploadWidget ? (
+                {showBankCoverageReview ? (
+                    <BankCoverageReview
+                        companyId={companyId}
+                        weekStart={priorWeekData?.weekStart}
+                        weekEnd={priorWeekData?.weekEnd}
+                        onBackToUpload={() => {
+                            setShowBankCoverageReview(false);
+                            setShowBankUploadWidget(true);
+                        }}
+                        onContinue={(coverageStatus) => {
+                            setBankDataDetected(coverageStatus.hasData);
+                            setBankDataRowCount(coverageStatus.rowCount);
+                            setBankCoverageVerified(coverageStatus.isVerified);
+                            setBankUploaded(coverageStatus.hasData);
+                            setBankSkipped(!coverageStatus.hasData);
+                            setShowBankCoverageReview(false);
+                            setStep("balance");
+                        }}
+                    />
+                ) : !showBankUploadWidget ? (
                     // ── Intro prompt — not yet chosen ──────────────────────────────
                     <div className="space-y-4">
                         <div className="rounded-xl border p-4 bg-indigo-50/60 border-indigo-100 space-y-2">
@@ -360,7 +385,10 @@ export function UpdateBalanceDialog({
                             </div>
                         </div>
                         <button
-                            onClick={() => setShowBankUploadWidget(true)}
+                            onClick={() => {
+                                setShowBankCoverageReview(false);
+                                setShowBankUploadWidget(true);
+                            }}
                             className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all active:scale-95 shadow-lg shadow-indigo-200"
                             style={{ background: "var(--color-primary)" }}
                         >
@@ -368,7 +396,23 @@ export function UpdateBalanceDialog({
                             Upload Bank Transactions
                         </button>
                         <button
-                            onClick={() => { setBankSkipped(true); setBankUploaded(false); setShowBankUploadWidget(false); setStep("balance"); }}
+                            onClick={() => {
+                                setShowBankUploadWidget(false);
+                                setShowBankCoverageReview(true);
+                            }}
+                            className="w-full py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                            style={{ background: "var(--bg-surface)", color: "var(--color-primary)", borderColor: "var(--color-primary)" }}
+                        >
+                            Review Account Coverage
+                        </button>
+                        <button
+                            onClick={() => {
+                                setBankSkipped(true);
+                                setBankUploaded(false);
+                                setShowBankUploadWidget(false);
+                                setShowBankCoverageReview(false);
+                                setStep("balance");
+                            }}
                             className="w-full py-2.5 rounded-xl text-sm font-medium border transition-colors"
                             style={{ background: "var(--bg-raised)", color: "var(--text-secondary)", borderColor: "var(--border-default)" }}
                         >
@@ -396,13 +440,13 @@ export function UpdateBalanceDialog({
                             } catch (e) {
                                 console.error(e);
                             }
-                            setStep("balance");
+                            setShowBankCoverageReview(true);
                         }}
                     />
                 )}
             </div>
 
-            {!showBankUploadWidget && (
+            {!showBankUploadWidget && !showBankCoverageReview && (
                 <div className="px-8 py-4 border-t border-slate-100/60 bg-white flex justify-start">
                     <button
                         onClick={() => setStep("upload")}
@@ -874,11 +918,15 @@ export function UpdateBalanceDialog({
                                 </p>
                             </div>
                             <button
-                                onClick={() => { setShowBankUploadWidget(false); setStep("bank"); }}
+                                onClick={() => {
+                                    setShowBankUploadWidget(false);
+                                    setShowBankCoverageReview(true);
+                                    setStep("bank");
+                                }}
                                 className="w-full py-2 rounded-xl text-sm font-semibold border transition-colors"
                                 style={{ background: "var(--bg-surface)", color: "var(--color-primary)", borderColor: "var(--color-primary)" }}
                             >
-                                Upload Bank Transactions Now
+                                Review Account Coverage
                             </button>
                         </div>
                     )}
