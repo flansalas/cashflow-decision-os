@@ -33,6 +33,16 @@ function fmt(n: number): string {
     return "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+export function formatWeekRange(weekStart?: string, weekEnd?: string, fallback = ""): string {
+    if (!weekStart || !weekEnd) return fallback;
+
+    const start = new Date(weekStart);
+    const end = new Date(weekEnd);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return fallback;
+
+    return `${start.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}`;
+}
+
 interface Props {
     currentBalance: number;
     currentAdjustments: Array<{ type: string; amount: number; note: string | null }>;
@@ -817,9 +827,7 @@ export function UpdateBalanceDialog({
 
     // ── Pre-Roll Preview Step ─────────────────────────────────────────────────
     if (step === "preview") {
-        const weekLabel = priorWeekData?.weekStart && priorWeekData?.weekEnd
-            ? `${new Date(priorWeekData.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(priorWeekData.weekEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-            : asOfDate;
+        const weekLabel = formatWeekRange(priorWeekData?.weekStart, priorWeekData?.weekEnd, asOfDate);
         const variance = priorWeekData?.endCashExpected != null
             ? (parsedBalance + adjTotal) - priorWeekData.endCashExpected
             : null;

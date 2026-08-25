@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UpdateBalanceDialog } from "../UpdateBalanceDialog";
+import { formatWeekRange, UpdateBalanceDialog } from "../UpdateBalanceDialog";
 import type { BankCoverageStatus } from "../BankCoverageReview";
 
 vi.mock("lucide-react", () => ({
@@ -66,5 +66,12 @@ describe("UpdateBalanceDialog bank coverage integration", () => {
 
         fireEvent.click(screen.getByRole("button", { name: "Finish coverage review" }));
         expect(screen.getByText("Check-in Terminal")).toBeDefined();
+    });
+
+    it("formats canonical UTC week boundaries without shifting them into the prior local day", () => {
+        expect(formatWeekRange(
+            "2026-08-17T00:00:00.000Z",
+            "2026-08-23T00:00:00.000Z",
+        )).toBe("Aug 17 – Aug 23, 2026");
     });
 });
