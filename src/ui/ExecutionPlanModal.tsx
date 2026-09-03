@@ -237,6 +237,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
     const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
     const [mode, setMode] = useState<"select" | "approved" | "live">(initialMode);
     const [isApproving, setIsApproving] = useState(false);
+    const [approvalError, setApprovalError] = useState<string | null>(null);
     const [eligibleCheckpoints, setEligibleCheckpoints] = useState<any[] | null>(null);
     const [selectedCheckpointId, setSelectedCheckpointId] = useState<string>("");
     const [revisionReason, setRevisionReason] = useState("");
@@ -285,6 +286,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
 
     const handleApproveAndPrint = async () => {
         setIsApproving(true);
+        setApprovalError(null);
         try {
             const actions = [];
 
@@ -385,8 +387,13 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                 }),
             });
 
-            if (res.ok) {
-                const data = await res.json();
+            const data = await res.json().catch(() => null);
+            if (!res.ok) {
+                setApprovalError(data?.error || `Unable to approve the plan (${res.status}).`);
+                return;
+            }
+
+            if (data) {
                 const planId = data.plan?.id || data.id;
 
                 if (planId) {
@@ -405,7 +412,11 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                 onApprove?.();
                 setMode("approved");
                 // Do not print if we couldn't fetch valid persisted data
+            } else {
+                setApprovalError("The approval completed without returning the approved plan. Refresh and try again.");
             }
+        } catch {
+            setApprovalError("Unable to approve the plan because the request failed. Check your connection and try again.");
         } finally {
             setIsApproving(false);
         }
@@ -413,7 +424,14 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
 
 
     const isLive = mode === "live" || mode === "select";
-    const planForecast = persistedPlanData?.forecastCheckpoint?.canonicalPayloadJson ? JSON.parse(persistedPlanData.forecastCheckpoint.canonicalPayloadJson) : null;
+    let planForecast = null;
+    if (persistedPlanData?.forecastCheckpoint?.canonicalPayloadJson) {
+        try {
+            planForecast = JSON.parse(persistedPlanData.forecastCheckpoint.canonicalPayloadJson);
+        } catch {
+            planForecast = null;
+        }
+    }
 
     // Resolve which data to render
     const activeWeeks = isLive ? weeks : persistedPlanData?.forecastCheckpoint?.forecastWeeks;
@@ -446,6 +464,18 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
         totalPay,
         totalAutoOutflows
     } = useMemo(() => {
+        const emptyResult = {
+            approvedToPay: [] as GridItem[],
+            collectionTargets: [] as GridItem[],
+            holdItems: [] as { item: GridItem; originalDue: string | null }[],
+            manualOutflows: [] as WeekBreakdownItem[],
+            manualInflows: [] as WeekBreakdownItem[],
+            automatedOutflows: [] as WeekBreakdownItem[],
+            totalCollect: 0,
+            totalPay: 0,
+            totalAutoOutflows: 0
+        };
+
         if (!isLive && persistedPlanData && persistedPlanData.actionItems) {
             const ap: GridItem[] = [];
             const ar: GridItem[] = [];
@@ -495,6 +525,10 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
             };
         }
 
+        if (!week1 || !Array.isArray(activeInvoices) || !Array.isArray(activeBills)) {
+            return emptyResult;
+        }
+
         // Active Week 1 items
         const collectionTargets = activeInvoices
             .filter((i: GridItem) => i.effectiveWeek === 1)
@@ -527,12 +561,12 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
         const automatedOutflows: WeekBreakdownItem[] = [];
 
         if (activeBreakdown) {
-            for (const item of activeBreakdown.outflows) {
+            for (const item of Array.isArray(activeBreakdown.outflows) ? activeBreakdown.outflows : []) {
                 if (item.sourceType === "baseline" || item.sourceType === "assumption" || item.sourceType === "bill") continue;
                 if (item.sourceType === "manual") {
                     manualOutflows.push(item);
                 } else if (item.sourceType === "recurring") {
-                    const l = item.label.toLowerCase();
+                    const l = String(item.label ?? "").toLowerCase();
                     if (l.includes("payroll") || l.includes("rent") || l.includes("tax")) {
                         manualOutflows.push(item);
                     } else {
@@ -540,7 +574,7 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                     }
                 }
             }
-            for (const item of activeBreakdown.inflows) {
+            for (const item of Array.isArray(activeBreakdown.inflows) ? activeBreakdown.inflows : []) {
                 if (item.sourceType === "baseline" || item.sourceType === "invoice") continue;
                 if (item.sourceType === "manual") {
                     manualInflows.push(item);
@@ -649,6 +683,11 @@ export function ExecutionPlanModal({ weeks, invoices, bills, openingCash, breakd
                                         />
                                     </div>
                                 </div>
+                                {approvalError && (
+                                    <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+                                        {approvalError}
+                                    </div>
+                                )}
                                 <button
                                     onClick={() => handleApproveAndPrint()}
                                     disabled={isApproving || eligibleCheckpoints?.length === 0 || (!defaultOwner || !defaultDueDate) || Boolean(executionPlan && !revisionReason)}

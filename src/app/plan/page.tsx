@@ -226,7 +226,7 @@ function PlanContent() {
     const [forecastDiff, setForecastDiff] = useState<Map<number, number>>(new Map());
     const [isScrolled, setIsScrolled] = useState(false);
     const [showExecutionPlan, setShowExecutionPlan] = useState(false);
-    const [planModalMode, setPlanModalMode] = useState<'select' | 'approved'>('approved');
+    const [planModalMode, setPlanModalMode] = useState<'select' | 'approved'>('select');
     const otherViewsRef = useRef<HTMLDetailsElement>(null);
     // Tracks the last time we fetched the dashboard — used to decide whether to
     // re-fetch when the user returns from the Ledger after moving items.
