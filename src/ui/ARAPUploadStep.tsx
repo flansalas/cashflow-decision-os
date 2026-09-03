@@ -54,6 +54,8 @@ interface ImportResult {
     ap?: { staged: number; newCount: number; changedCount: number; possibleMatchCount: number; batchId: string; };
 }
 
+const TENANT_CONTEXT_ERROR = "Your company session changed. Refresh the page and try the import again.";
+
 function fmt(n: number) {
     return "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
@@ -389,27 +391,50 @@ export function ARAPUploadStep({ companyId, onDone, doneButtonText }: Props) {
         setSubmitError(null);
         const res: ImportResult = {};
 
+        const stageRows = async (
+            kind: "ar" | "ap",
+            rows: NormalizedARRow[] | NormalizedAPRow[],
+            mappingJson: Record<string, string>,
+        ) => {
+            const send = () => fetch(`/api/upload/${kind}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ companyId, rows, mappingJson }),
+            });
+
+            let response = await send();
+
+            // A Clerk organization can finish synchronizing after the page data
+            // has loaded. A 403 is safe to retry only after the server confirms
+            // that the active authenticated tenant still matches this screen.
+            if (response.status === 403) {
+                const statusResponse = await fetch("/api/company/status", { cache: "no-store" });
+                const status = await statusResponse.json().catch(() => ({}));
+
+                if (!statusResponse.ok || !status.exists || status.companyId !== companyId) {
+                    throw new Error(TENANT_CONTEXT_ERROR);
+                }
+
+                response = await send();
+            }
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                if (response.status === 403) throw new Error(TENANT_CONTEXT_ERROR);
+                throw new Error(data.error ?? `${kind.toUpperCase()} stage failed`);
+            }
+            return data;
+        };
+
         try {
             if (arRows.length > 0) {
-                const r = await fetch("/api/upload/ar", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ companyId, rows: arRows, mappingJson: ar.mapping }),
-                });
-                const d = await r.json();
-                if (!r.ok) throw new Error(d.error ?? "AR stage failed");
+                const d = await stageRows("ar", arRows, ar.mapping);
                 res.ar = { staged: d.staged, newCount: d.newCount, changedCount: d.changedCount, possibleMatchCount: d.possibleMatchCount ?? 0, batchId: d.batchId };
                 setBatchIdAR(d.batchId);
             }
 
             if (apRows.length > 0) {
-                const r = await fetch("/api/upload/ap", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ companyId, rows: apRows, mappingJson: ap.mapping }),
-                });
-                const d = await r.json();
-                if (!r.ok) throw new Error(d.error ?? "AP stage failed");
+                const d = await stageRows("ap", apRows, ap.mapping);
                 res.ap = { staged: d.staged, newCount: d.newCount, changedCount: d.changedCount, possibleMatchCount: d.possibleMatchCount ?? 0, batchId: d.batchId };
                 setBatchIdAP(d.batchId);
             }

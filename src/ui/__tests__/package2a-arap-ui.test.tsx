@@ -366,4 +366,85 @@ describe("Package 2A - AR/AP Upload UI Flow", () => {
         const applyCall = mockFetch.mock.calls.find(c => c[0] === "/api/upload/apply" && JSON.parse(c[1].body).importBatchId === "ar_batch_3");
         expect(applyCall).toBeDefined();
     });
+
+    it("retries a transient tenant 403 only after the authenticated tenant matches", async () => {
+        const onDone = vi.fn();
+        const { container } = render(<ARAPUploadStep companyId="c_test" onDone={onDone} />);
+
+        const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+        fireEvent.change(fileInput, { target: { files: [new File(["dummy"], "ar.csv", { type: "text/csv" })] } });
+
+        await waitFor(() => expect(screen.getByText(/Review Column Mapping/i)).toBeDefined());
+        fireEvent.click(screen.getByText(/Review Column Mapping/i));
+        await waitFor(() => expect(screen.getByText(/Preview Import/i)).toBeDefined());
+        fireEvent.click(screen.getByText(/Preview Import/i));
+        await waitFor(() => expect(screen.getByText(/Confirm & Import/i)).toBeDefined());
+
+        let stageAttempts = 0;
+        mockFetch.mockImplementation(async (url: string) => {
+            if (url.includes("/mapping")) return { ok: true, status: 200, json: async () => ({ found: false }) };
+            if (url === "/api/upload/ar") {
+                stageAttempts++;
+                if (stageAttempts === 1) {
+                    return { ok: false, status: 403, json: async () => ({ error: "Forbidden" }) };
+                }
+                return {
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        batchId: "ar_batch_retry",
+                        staged: 1,
+                        newCount: 1,
+                        changedCount: 0,
+                        possibleMatchCount: 0,
+                    }),
+                };
+            }
+            if (url === "/api/company/status") {
+                return { ok: true, status: 200, json: async () => ({ exists: true, companyId: "c_test" }) };
+            }
+            if (url === "/api/upload/apply") {
+                return { ok: true, status: 200, json: async () => ({ ok: true }) };
+            }
+            return { ok: true, status: 200, json: async () => ({}) };
+        });
+
+        fireEvent.click(screen.getByText(/Confirm & Import/i));
+
+        await waitFor(() => expect(screen.getByText(/Import Complete/i)).toBeDefined());
+        expect(stageAttempts).toBe(2);
+        expect(mockFetch.mock.calls.some(c => c[0] === "/api/company/status")).toBe(true);
+    });
+
+    it("blocks a tenant retry when the authenticated company differs", async () => {
+        const onDone = vi.fn();
+        const { container } = render(<ARAPUploadStep companyId="c_stale" onDone={onDone} />);
+
+        const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+        fireEvent.change(fileInput, { target: { files: [new File(["dummy"], "ar.csv", { type: "text/csv" })] } });
+
+        await waitFor(() => expect(screen.getByText(/Review Column Mapping/i)).toBeDefined());
+        fireEvent.click(screen.getByText(/Review Column Mapping/i));
+        await waitFor(() => expect(screen.getByText(/Preview Import/i)).toBeDefined());
+        fireEvent.click(screen.getByText(/Preview Import/i));
+        await waitFor(() => expect(screen.getByText(/Confirm & Import/i)).toBeDefined());
+
+        mockFetch.mockImplementation(async (url: string) => {
+            if (url.includes("/mapping")) return { ok: true, status: 200, json: async () => ({ found: false }) };
+            if (url === "/api/upload/ar") {
+                return { ok: false, status: 403, json: async () => ({ error: "Forbidden" }) };
+            }
+            if (url === "/api/company/status") {
+                return { ok: true, status: 200, json: async () => ({ exists: true, companyId: "c_other" }) };
+            }
+            return { ok: true, status: 200, json: async () => ({}) };
+        });
+
+        fireEvent.click(screen.getByText(/Confirm & Import/i));
+
+        await waitFor(() => expect(screen.getByText(/Your company session changed/i)).toBeDefined());
+        expect(screen.queryByText(/Import Complete/i)).toBeNull();
+        expect(mockFetch.mock.calls.filter(c => c[0] === "/api/upload/ar")).toHaveLength(1);
+        expect(mockFetch.mock.calls.some(c => c[0] === "/api/upload/apply")).toBe(false);
+    });
 });
