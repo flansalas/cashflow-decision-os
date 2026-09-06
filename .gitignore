@@ -25,3 +25,25 @@ Thumbs.db
 # Keys
 preview_keys.txt
 prod_keys.txt
+
+# Incident containment: local-only diagnostics and customer-data outputs.
+# Database credentials belong in ignored environment files, never scripts.
+/check_lucky_salad.js
+/compare.js
+/compare2.js
+/debug2.js
+/drop_migrations.js
+/invalidate-cache.js
+/invalidate-single-cache.js
+/run-pg.js
+/scratch_*.js
+/src/scripts/check-user-click.js
+/sum.js
+/test-date.js
+/dashboard-new.json
+/dashboard-old.json
+/summary.json
+/roll-audits/
+/scratch/cascio_production_backup.json
+/scratch/dashboard_diag_out.json
+/scratch/full_diag_out.txt
